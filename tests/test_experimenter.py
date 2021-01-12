@@ -142,21 +142,28 @@ def test_run_efficiency(problem, algorithm):
     assert result.metrics['IGD'].results()['indicator'][-1] == pytest.approx(.347, abs=1e-2)
 
     metric_termination_converged = MetricTermination(igd_metric, lower_limit=.6)
-    with pytest.raises(RuntimeError):
-        exp.run_efficiency(metric_termination_converged, repeat_idx=1)
+    assert exp.run_efficiency(metric_termination_converged, repeat_idx=1) is None
 
     result_converged = exp.run_efficiency(metric_termination_converged, repeat_idx=0)
     assert result_converged.metric_converged
     assert len(result_converged.history) == 54
     assert result_converged.metrics['IGD'].results()['indicator'][-1] == pytest.approx(.595, abs=1e-2)
 
+    assert isinstance(result_converged.termination, MetricTermination)
+    assert result_converged.termination is not metric_termination_converged
+    assert len(result_converged.termination.metric.results()['indicator']) == 54
+
     result_pkl = exp.get_efficiency_result(metric_termination_converged, repeat_idx=0)
     assert result_pkl.metric_converged
     assert result_pkl.metrics['IGD'].results()['indicator'][-1] == pytest.approx(.595, abs=1e-2)
     assert exp.get_efficiency_result(metric_termination_converged, repeat_idx=1) is None
+
+    results = exp.run_efficiency_repeated(metric_termination_converged)
+    assert len(results) == 1
 
     metric_termination_not_converged = MetricTermination(igd_metric, lower_limit=.3)
     result_not_converged = exp.run_efficiency(metric_termination_not_converged, repeat_idx=0)
     assert not result_not_converged.metric_converged
     assert len(result_not_converged.history) == 100
     assert result_not_converged.metrics['IGD'].results()['indicator'][-1] == pytest.approx(.347, abs=1e-2)
+    assert len(result_not_converged.termination.metric.results()['indicator']) == 100

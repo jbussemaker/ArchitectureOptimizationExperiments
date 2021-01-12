@@ -60,6 +60,7 @@ class ExperimenterResult(Result):
 
         self.metrics: Dict[str, Metric] = []
         self.metric_converged = None
+        self.termination: Optional[MetricTermination] = None
 
     @classmethod
     def from_result(cls, result: Result) -> 'ExperimenterResult':
@@ -75,14 +76,14 @@ class Experimenter:
     results_folder: Optional[str] = None
 
     def __init__(self, problem: Problem, algorithm: Algorithm, n_eval_max: int, algorithm_name: str = None,
-                 metrics: List[Metric] = None, log_level='INFO'):
+                 metrics: List[Metric] = None, log_level='INFO', results_folder: str = None):
         self.problem = problem
         self.algorithm = algorithm
         self.algorithm_name = algorithm_name or algorithm.__class__.__name__
         self.n_eval_max = n_eval_max
         self.metrics = metrics
 
-        self._res_folder = self.results_folder
+        self.results_folder = results_folder or self.results_folder  # Turn class attr into instance attr
         self._log_level = log_level
 
     ### EFFECTIVENESS EXPERIMENTATION ###
@@ -140,7 +141,22 @@ class Experimenter:
 
     ### EFFICIENCY EXPERIMENTATION ###
 
-    def run_efficiency(self, metric_termination: MetricTermination, repeat_idx: int) -> ExperimenterResult:
+    def run_efficiency_repeated(self, metric_termination: MetricTermination) -> List[ExperimenterResult]:
+        """Run efficiency experiments for the amount of previously generated effectiveness results available."""
+        results = []
+
+        i = 0
+        while True:
+            result = self.run_efficiency(metric_termination, repeat_idx=i)
+            if result is None:
+                break
+
+            results.append(result)
+            i += 1
+
+        return results
+
+    def run_efficiency(self, metric_termination: MetricTermination, repeat_idx: int) -> Optional[ExperimenterResult]:
         """
         Run the efficiency experiment: determine after how many steps an algorithm would terminate if a certain metric
         would have been used to detect convergence. Uses effectiveness results to "replay" an optimization session and
@@ -150,7 +166,7 @@ class Experimenter:
 
         effectiveness_result = self.get_effectiveness_result(repeat_idx=repeat_idx)
         if effectiveness_result is None:
-            raise RuntimeError('Effectiveness result not available: %d' % repeat_idx)
+            return
 
         termination = copy.deepcopy(metric_termination)
 
@@ -174,6 +190,8 @@ class Experimenter:
                 # Modify metrics to reflect number of steps
                 result = ExperimenterResult.from_result(result)
                 result.metric_converged = True
+                result.termination = termination
+
                 result.metrics = metrics = {}
                 for name, metric in effectiveness_result.metrics.items():
                     mod_metric = copy.deepcopy(metric)
@@ -184,6 +202,7 @@ class Experimenter:
         if result is None:  # Metric not converged
             result = copy.deepcopy(effectiveness_result)
             result.metric_converged = False
+            result.termination = termination
 
         # Store results and return
         result_path = self._get_efficiency_result_path(metric_termination, repeat_idx=repeat_idx)
@@ -215,10 +234,10 @@ class Experimenter:
         return self._get_results_path(sub_path)
 
     def _get_results_path(self, sub_path: str = None) -> str:
-        if self._res_folder is None:
+        if self.results_folder is None:
             raise ValueError('Must set results_folder on the class!')
 
-        path = self._res_folder
+        path = self.results_folder
         if sub_path is not None:
             path = os.path.join(path, sub_path)
 
