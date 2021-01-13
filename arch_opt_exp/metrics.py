@@ -30,6 +30,7 @@ class Metric:
 
     def __init__(self):
         self.values = {name: [] for name in self.value_names}
+        self.values_std = None  # Used in ExperimenterResults
 
     def calculate_step(self, algorithm: Algorithm):
         values = self._calculate_values(algorithm)

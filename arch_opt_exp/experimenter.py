@@ -19,6 +19,7 @@ import os
 import copy
 import pickle
 import logging
+import numpy as np
 from typing import *
 import logging.config
 import concurrent.futures
@@ -58,16 +59,93 @@ class ExperimenterResult(Result):
     def __init__(self):
         super(ExperimenterResult, self).__init__()
 
-        self.metrics: Dict[str, Metric] = []
+        self.metrics: Dict[str, Metric] = {}
         self.metric_converged = None
         self.termination: Optional[MetricTermination] = None
 
+        self.n_steps = None
+        self.n_steps_std = None
+
+        self.exec_time_std = None
+
     @classmethod
     def from_result(cls, result: Result) -> 'ExperimenterResult':
-        obj = cls()
+        """Create from a Result class as output by an Algorithm."""
+        exp_result = cls()
         for key in result.__dict__.keys():
-            setattr(obj, key, getattr(result, key))
-        return obj
+            setattr(exp_result, key, getattr(result, key))
+
+        exp_result.n_steps = len(exp_result.history) if exp_result.history is not None else None
+
+        return exp_result
+
+    @classmethod
+    def from_results(cls, results: List['ExperimenterResult']) -> 'ExperimenterResult':
+        """Create from multiple ExperimenterResult instances, replacing metrics values with the mean and adding
+        standard deviations."""
+        result = cls()
+
+        result.exec_time, result.exec_time_std = cls._get_mean_std(results, lambda r: r.exec_time)
+        result.n_steps, result.n_steps_std = cls._get_mean_std(results, lambda r: r.n_steps)
+
+        for name, metric in results[0].metrics.items():
+            result.metrics[name] = metric = copy.deepcopy(metric)
+
+            metric.values, metric.values_std = {}, {}
+            for key in metric.value_names:
+                metric.values[key], metric.values_std[key] = \
+                    cls._get_mean_std(results, lambda r: r.metrics[name].values[key])
+
+        return result
+
+    @staticmethod
+    def _get_mean_std(results: List['ExperimenterResult'],
+                      getter: Callable[['ExperimenterResult'], Optional[np.ndarray]]) -> Tuple[np.ndarray, np.ndarray]:
+        """Get mean and standard deviation for several repeated experimenter results."""
+
+        results_data = None
+        for result in results:
+            res_data = getter(result)
+            if res_data is None:
+                continue
+            res_data = np.atleast_3d(res_data)
+            if results_data is None:
+                results_data = res_data
+            else:
+
+                # Make sure results shapes are the same
+                # Align data points at the end, so that mean values can be compared for steps from end
+                # (e.g. upon termination)
+                if results_data.shape[:2] != res_data.shape[:2]:
+                    rs, r = results_data.shape, res_data.shape
+                    new_shape = (max(rs[0], r[0]), max(rs[1], r[1]))
+
+                    results_data_ = np.zeros(new_shape+(rs[2],))*np.nan
+                    results_data_[-rs[0]:, -rs[1]:, :] = results_data
+                    results_data = results_data_
+
+                    res_data_ = np.zeros(new_shape+(1,))*np.nan
+                    res_data_[-r[0]:, -r[1]:, :] = res_data
+                    res_data = res_data_
+
+                results_data = np.concatenate([results_data, res_data], axis=2)
+
+        if results_data is None:
+            return None, None
+
+        mean_data = np.nanmean(results_data, axis=2)
+        if mean_data.shape[0] == 1:
+            mean_data = mean_data[0, :]
+        if len(mean_data) == 1:
+            mean_data = mean_data[0]
+
+        std_data = np.nanstd(results_data, axis=2)
+        if std_data.shape[0] == 1:
+            std_data = std_data[0, :]
+        if len(std_data) == 1:
+            std_data = std_data[0]
+
+        return mean_data, std_data
 
 
 class Experimenter:
@@ -135,6 +213,20 @@ class Experimenter:
             return
         with open(result_path, 'rb') as fp:
             return pickle.load(fp)
+
+    def get_effectiveness_results(self) -> ExperimenterResult:
+        """Returns results summarized for all individual runs, using mean and std."""
+        results = []
+        i = 0
+        while True:
+            result = self.get_effectiveness_result(repeat_idx=i)
+            if result is None:
+                break
+
+            results.append(result)
+            i += 1
+
+        return ExperimenterResult.from_results(results)
 
     def _get_effectiveness_result_path(self, repeat_idx: int) -> str:
         return self._get_problem_algo_results_path('result_%d.pkl' % repeat_idx)
@@ -220,6 +312,20 @@ class Experimenter:
             return
         with open(result_path, 'rb') as fp:
             return pickle.load(fp)
+
+    def get_efficiency_results(self, metric_termination: MetricTermination) -> ExperimenterResult:
+        """Get efficiency results summarized for all efficiency experiment runs."""
+        results = []
+        i = 0
+        while True:
+            result = self.get_efficiency_result(metric_termination, repeat_idx=i)
+            if result is None:
+                break
+
+            results.append(result)
+            i += 1
+
+        return ExperimenterResult.from_results(results)
 
     def _get_efficiency_result_path(self, metric_termination: MetricTermination, repeat_idx: int) -> str:
         return self._get_problem_algo_results_path(
