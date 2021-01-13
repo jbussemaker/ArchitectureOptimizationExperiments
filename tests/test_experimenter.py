@@ -116,6 +116,8 @@ def test_metrics(problem, algorithm):
 
     assert len(result.metrics[gd_metric.name].results()['indicator']) == 100
 
+    result.metrics[gd_metric.name].plot(show=False)
+
     result = exp.get_effectiveness_result(repeat_idx=0)
     assert isinstance(result, ExperimenterResult)
     assert len(result.metrics) == 2
@@ -218,6 +220,8 @@ def test_exp_result_from_results(problem, algorithm):
     assert np.all(summary_result.metrics['IGD'].values_std['indicator'] ==
                   np.std([[results[i].metrics['IGD'].results()['indicator'] for i in range(4)]], axis=1))
 
+    summary_result.metrics['IGD'].plot(show=False)
+
     metric_termination = MetricTermination(igd_metric, lower_limit=1.3)
     exp.run_efficiency_repeated(metric_termination)
     eff_results = [exp.get_efficiency_result(metric_termination, repeat_idx=i) for i in range(4)]
@@ -232,3 +236,5 @@ def test_exp_result_from_results(problem, algorithm):
     assert sum_eff_result.metrics['IGD'].values['indicator'][-1] == np.mean(last_metric_values)
     assert len(sum_eff_result.metrics['IGD'].values_std['indicator']) == 19
     assert sum_eff_result.metrics['IGD'].values_std['indicator'][-1] == np.std(last_metric_values)
+
+    sum_eff_result.metrics['IGD'].plot(show=False)

@@ -17,6 +17,7 @@ Contact: jasper.bussemaker@dlr.de
 
 import numpy as np
 from typing import *
+import matplotlib.pyplot as plt
 
 from pymoo.model.algorithm import Algorithm
 from pymoo.model.indicator import Indicator
@@ -43,6 +44,31 @@ class Metric:
 
     def results(self) -> Dict[str, np.ndarray]:
         return {key: np.array(value) for key, value in self.values.items()}
+
+    def plot(self, std_sigma=1., show=True):
+        for value_name in self.value_names:
+            plt.figure()
+
+            y = self.values[value_name]
+            x = list(range(len(y)))
+            y_err = np.array(self.values_std[value_name]) if self.values_std is not None else None
+
+            kwargs = {'linewidth': 1}
+            plt.plot(x, y, '-k', **kwargs)
+
+            err_title = ''
+            if y_err is not None:
+                err_title = ' (std $\sigma$ = %.2f)' % std_sigma
+                plt.errorbar(x, y+y_err*std_sigma, fmt='--k', **kwargs)
+                plt.errorbar(x, y-y_err*std_sigma, fmt='--k', **kwargs)
+
+            plt.title('Metric: %s.%s%s' % (self.name, value_name, err_title))
+            plt.xlim([0, x[-1]])
+            plt.xlabel('Iteration')
+            plt.ylabel(value_name)
+
+        if show:
+            plt.show()
 
     @property
     def name(self) -> str:
