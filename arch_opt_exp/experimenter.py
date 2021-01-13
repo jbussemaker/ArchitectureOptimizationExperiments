@@ -23,7 +23,7 @@ import numpy as np
 from typing import *
 import logging.config
 import concurrent.futures
-from arch_opt_exp.metrics import *
+from arch_opt_exp.metrics_base import *
 from werkzeug.utils import secure_filename
 
 from pymoo.optimize import minimize

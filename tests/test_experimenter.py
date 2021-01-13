@@ -25,7 +25,7 @@ from pymoo.model.population import Population
 from pymoo.performance_indicator.gd import GD
 from pymoo.performance_indicator.igd import IGD
 
-from arch_opt_exp.metrics import *
+from arch_opt_exp.metrics_base import *
 from arch_opt_exp.experimenter import *
 
 
