@@ -205,7 +205,7 @@ def test_exp_result_from_results(problem, algorithm):
         exp.run_effectiveness(repeat_idx=i, seed=i)
 
     results = [exp.get_effectiveness_result(repeat_idx=i) for i in range(4)]
-    summary_result = exp.get_effectiveness_results()
+    summary_result = exp.get_aggregate_effectiveness_results()
     assert isinstance(summary_result, ExperimenterResult)
     assert summary_result.exec_time == np.mean([results[i].exec_time for i in range(4)])
     assert summary_result.exec_time_std is not None
@@ -227,7 +227,7 @@ def test_exp_result_from_results(problem, algorithm):
     eff_results = [exp.get_efficiency_result(metric_termination, repeat_idx=i) for i in range(4)]
     assert [len(res.history) for res in eff_results] == [9, 15, 16, 19]
 
-    sum_eff_result = exp.get_efficiency_results(metric_termination)
+    sum_eff_result = exp.get_aggregate_efficiency_results(metric_termination)
     assert sum_eff_result.n_steps == 14.75
     assert sum_eff_result.n_steps_std == pytest.approx(3.63, abs=1e-2)
 

@@ -80,9 +80,9 @@ class ExperimenterResult(Result):
         return exp_result
 
     @classmethod
-    def from_results(cls, results: List['ExperimenterResult']) -> 'ExperimenterResult':
-        """Create from multiple ExperimenterResult instances, replacing metrics values with the mean and adding
-        standard deviations."""
+    def aggregate_results(cls, results: List['ExperimenterResult']) -> 'ExperimenterResult':
+        """Aggregate results from multiple ExperimenterResult instances, replacing metrics values with the mean and
+        adding standard deviations."""
         result = cls()
 
         result.exec_time, result.exec_time_std = cls._get_mean_std(results, lambda r: r.exec_time)
@@ -214,8 +214,8 @@ class Experimenter:
         with open(result_path, 'rb') as fp:
             return pickle.load(fp)
 
-    def get_effectiveness_results(self) -> ExperimenterResult:
-        """Returns results summarized for all individual runs, using mean and std."""
+    def get_aggregate_effectiveness_results(self) -> ExperimenterResult:
+        """Returns results aggregated for all individual runs, using mean and std."""
         results = []
         i = 0
         while True:
@@ -226,7 +226,7 @@ class Experimenter:
             results.append(result)
             i += 1
 
-        return ExperimenterResult.from_results(results)
+        return ExperimenterResult.aggregate_results(results)
 
     def _get_effectiveness_result_path(self, repeat_idx: int) -> str:
         return self._get_problem_algo_results_path('result_%d.pkl' % repeat_idx)
@@ -313,8 +313,8 @@ class Experimenter:
         with open(result_path, 'rb') as fp:
             return pickle.load(fp)
 
-    def get_efficiency_results(self, metric_termination: MetricTermination) -> ExperimenterResult:
-        """Get efficiency results summarized for all efficiency experiment runs."""
+    def get_aggregate_efficiency_results(self, metric_termination: MetricTermination) -> ExperimenterResult:
+        """Get efficiency results aggregated for all efficiency experiment runs."""
         results = []
         i = 0
         while True:
@@ -325,7 +325,7 @@ class Experimenter:
             results.append(result)
             i += 1
 
-        return ExperimenterResult.from_results(results)
+        return ExperimenterResult.aggregate_results(results)
 
     def _get_efficiency_result_path(self, metric_termination: MetricTermination, repeat_idx: int) -> str:
         return self._get_problem_algo_results_path(

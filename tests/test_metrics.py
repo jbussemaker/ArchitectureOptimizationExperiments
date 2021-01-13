@@ -89,7 +89,7 @@ def test_igd(problem, algorithm):
     result.metrics[igd_plus.name].plot(show=False)
 
     results = exp.run_effectiveness_parallel(n_repeat=5)
-    result = ExperimenterResult.from_results(results)
+    result = ExperimenterResult.aggregate_results(results)
     result.metrics[igd.name].plot(show=False)
     result.metrics[igd_plus.name].plot(show=False)
 
