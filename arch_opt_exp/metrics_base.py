@@ -97,6 +97,11 @@ class Metric:
         return algorithm.pop.get('G')
 
     @staticmethod
+    def _get_pop_cv(algorithm: Algorithm) -> np.ndarray:
+        """Constraint violation values of the population: (n_pop, n_g)"""
+        return algorithm.pop.get('CV')
+
+    @staticmethod
     def _get_opt_x(algorithm: Algorithm) -> np.ndarray:
         """Design vectors of the optimum population (non-dominated current Pareto front): (n_opt, n_x)"""
         return algorithm.opt.get('X')
@@ -110,6 +115,11 @@ class Metric:
     def _get_opt_g(algorithm: Algorithm) -> np.ndarray:
         """Constraint values of the optimum population: (n_opt, n_g)"""
         return algorithm.opt.get('G')
+
+    @staticmethod
+    def _get_opt_cv(algorithm: Algorithm) -> np.ndarray:
+        """Constraint violation values of the optimum population: (n_opt, n_g)"""
+        return algorithm.opt.get('CV')
 
 
 class IndicatorMetric(Metric):
