@@ -58,7 +58,7 @@ class Metric:
 
             err_title = ''
             if y_err is not None:
-                err_title = ' (std $\sigma$ = %.2f)' % std_sigma
+                err_title = ' (std $\\sigma$ = %.2f)' % std_sigma
                 plt.errorbar(x, y+y_err*std_sigma, fmt='--k', **kwargs)
                 plt.errorbar(x, y-y_err*std_sigma, fmt='--k', **kwargs)
 
