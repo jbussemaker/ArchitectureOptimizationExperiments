@@ -24,7 +24,7 @@ from pymoo.model.indicator import Indicator
 from pymoo.model.termination import Termination
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
-__all__ = ['Metric', 'IndicatorMetric', 'MetricTermination', 'FilteredMetric']
+__all__ = ['Metric', 'IndicatorMetric', 'MetricTermination', 'MetricDiffTermination', 'FilteredMetric']
 
 
 class Metric:
@@ -197,6 +197,71 @@ class MetricTermination(Termination):
         if self.upper_limit is not None and value >= self.upper_limit:
             return False
         return True
+
+    def plot(self, show=True):
+        plt.figure()
+        plt.title('Metric termination: %s.%s' % (self.metric_name, self.value_name))
+
+        y = self.metric.values[self.value_name]
+        x = list(range(len(y)))
+
+        plt.plot(x, y, '-k', linewidth=1)
+        if self.lower_limit is not None:
+            plt.plot(x, np.ones((len(x),))*self.lower_limit, '--k', linewidth=1)
+        if self.upper_limit is not None:
+            plt.plot(x, np.ones((len(x),))*self.upper_limit, '--k', linewidth=1)
+
+        plt.xlim([0, x[-1]])
+        plt.xlabel('Iteration')
+        plt.ylabel(self.value_name)
+
+        if show:
+            plt.show()
+
+
+class MetricDiffTermination(MetricTermination):
+    """Termination based on the rate of change of a metric."""
+
+    def __init__(self, metric: Metric, value_name: str = None, limit: float = None):
+        super(MetricDiffTermination, self).__init__(metric, value_name=value_name, lower_limit=limit)
+
+        self.diff_values = []
+
+    def _do_continue(self, algorithm: Algorithm, **kwargs):
+
+        self.metric.calculate_step(algorithm)
+        values = np.array(self.metric.values[self.value_name])
+        real_values = values[~np.isnan(values)]
+
+        if len(real_values) < 2:
+            self.diff_values.append(np.nan)
+            return True
+
+        diff = abs(real_values[-1]-real_values[-2])
+        self.diff_values.append(diff)
+        return diff > self.lower_limit
+
+    def plot(self, show=True):
+        _ll = self.lower_limit
+        self.lower_limit = None
+        super(MetricDiffTermination, self).plot(show=False)
+        self.lower_limit = _ll
+
+        plt.figure()
+        plt.title('Metric termination (diff): %s.%s' % (self.metric_name, self.value_name))
+
+        y = self.diff_values
+        x = list(range(len(y)))
+
+        plt.semilogy(x, y, '-k', linewidth=1)
+        plt.semilogy(x, np.ones((len(x),))*self.lower_limit, '--k', linewidth=1)
+
+        plt.xlim([0, x[-1]])
+        plt.xlabel('Iteration')
+        plt.ylabel(self.value_name+' diff')
+
+        if show:
+            plt.show()
 
 
 class FilteredMetric(Metric):

@@ -20,6 +20,7 @@ from typing import *
 from arch_opt_exp.metrics_base import *
 from pymoo.model.algorithm import Algorithm
 from pymoo.performance_indicator.gd import GD
+from pymoo.util.normalization import normalize
 from pymoo.performance_indicator.igd import IGD
 from pymoo.performance_indicator.hv import Hypervolume
 from pymoo.algorithms.nsga2 import calc_crowding_distance
@@ -35,11 +36,11 @@ class HVMetric(Metric):
     """Hypervolume as a metric, without needing to know the location of the true Pareto front. Value rises until it
     stabilizes at an a-priori unknown value."""
 
-    def __init__(self, ref_point=None):
+    def __init__(self):
         super(HVMetric, self).__init__()
 
-        self.ref_point = ref_point
-        self.running_ref_point = None
+        self.nadir_point = None
+        self.ideal_point = None
 
     @property
     def name(self) -> str:
@@ -52,17 +53,12 @@ class HVMetric(Metric):
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         f = self._get_pop_f(algorithm)
 
-        ref_point = self.ref_point
-        if ref_point is None:
-            # Keep the reference point at the maximum value ever seen
-            if self.running_ref_point is None:
-                self.running_ref_point = ref_point = np.max(f, axis=0)
-            else:
-                self.running_ref_point = ref_point = \
-                    np.max(np.concatenate([f, self.running_ref_point[None, :]], axis=0), axis=0)
+        if self.nadir_point is None or self.ideal_point is None:
+            self.nadir_point = np.max(f, axis=0)
+            self.ideal_point = np.min(f, axis=0)
 
-        hv_obj = Hypervolume(ref_point=ref_point)
-        hv = hv_obj.calc(f)
+        hv_obj = Hypervolume(ref_point=np.ones(f.shape[1]))
+        hv = hv_obj.calc(normalize(f, x_max=self.nadir_point, x_min=self.ideal_point))
 
         return [hv]
 

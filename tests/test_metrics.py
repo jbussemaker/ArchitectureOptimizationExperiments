@@ -27,6 +27,7 @@ from arch_opt_exp.experimenter import *
 from arch_opt_exp.metrics.filters import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.metrics.convergence import *
+from arch_opt_exp.metrics.termination import *
 
 
 @pytest.fixture
@@ -58,6 +59,11 @@ def test_spread(problem, problem_3obj, algorithm):
     assert len(values) == 50
 
     result.metrics[spread.name].plot(show=False)
+
+    spread_termination = SpreadTermination(limit=1e-3)
+    eff_res = exp.run_efficiency(spread_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
 
 
 def test_delta_hv(problem, algorithm):
@@ -128,6 +134,11 @@ def test_hv(problem, algorithm):
 
     result.metrics[hv.name].plot(show=False)
 
+    hv_termination = HVTermination(limit=5e-3)
+    eff_res = exp.run_efficiency(hv_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
+
 
 def test_distance_metrics(problem, algorithm):
     metrics = [
@@ -143,6 +154,16 @@ def test_distance_metrics(problem, algorithm):
         assert values[-1] > values[0]
         result.metrics[metric.name].plot(show=False)
 
+    gd_termination = GDTermination(limit=1e-4)
+    eff_res = exp.run_efficiency(gd_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
+
+    igd_termination = IGDTermination(limit=1e-4)
+    eff_res = exp.run_efficiency(igd_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
+
 
 def test_crowding_distance_metric(problem, algorithm):
     cd = CrowdingDistanceMetric()
@@ -154,6 +175,11 @@ def test_crowding_distance_metric(problem, algorithm):
     assert max_values[-1] < max_values[0]
 
     result.metrics[cd.name].plot(show=False)
+
+    mcd_termination = MCDTermination(limit=7e-4)
+    eff_res = exp.run_efficiency(mcd_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
 
 
 def test_crowding_distance_metric_non_nsga2(problem):
@@ -185,6 +211,11 @@ def test_steady_performance_indicator(problem, algorithm):
 
     result.metrics[spi.name].plot(show=False)
 
+    spi_termination = SPITermination(n=10, limit=.03)
+    eff_res = exp.run_efficiency(spi_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
+
 
 def test_fh_indicator(problem, algorithm):
     fhi = FitnessHomogeneityIndicator()
@@ -198,6 +229,11 @@ def test_fh_indicator(problem, algorithm):
     assert max_values[-1] > max_values[0]
 
     result.metrics[fhi.name].plot(show=False)
+
+    fhi_termination = FHITermination(limit=6e-4)
+    eff_res = exp.run_efficiency(fhi_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
 
 
 def test_consolidation_ratio_metric(problem, algorithm):
@@ -213,6 +249,11 @@ def test_consolidation_ratio_metric(problem, algorithm):
 
     result.metrics[cr.name].plot(show=False)
 
+    cr_termination = CRTermination(limit=.68)
+    eff_res = exp.run_efficiency(cr_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
+
 
 def test_mutual_domination_rate_metric(problem, algorithm):
     mdr = MutualDominationRateMetric()
@@ -226,6 +267,16 @@ def test_mutual_domination_rate_metric(problem, algorithm):
     assert max_values[-1] < max_values[0]
 
     result.metrics[mdr.name].plot(show=False)
+
+    mdr_termination = MDRTermination(limit=.35)
+    eff_res = exp.run_efficiency(mdr_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
+
+    mgbm_termination = MGBMTermination(limit=.3)
+    eff_res = exp.run_efficiency(mgbm_termination, repeat_idx=0)
+    assert len(eff_res.history) < 50
+    eff_res.termination.plot(show=False)
 
 
 def test_moving_average_filter(problem, algorithm):
