@@ -24,7 +24,7 @@ from pymoo.model.indicator import Indicator
 from pymoo.model.termination import Termination
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
-__all__ = ['Metric', 'IndicatorMetric', 'MetricTermination']
+__all__ = ['Metric', 'IndicatorMetric', 'MetricTermination', 'FilteredMetric']
 
 
 class Metric:
@@ -63,6 +63,9 @@ class Metric:
                 plt.errorbar(x, y+y_err*std_sigma, fmt='--k', **kwargs)
                 plt.errorbar(x, y-y_err*std_sigma, fmt='--k', **kwargs)
 
+            if self._plot_fig_callback is not None:
+                self._plot_fig_callback(x, value_name)
+
             plt.title('Metric: %s.%s%s' % (self.name, value_name, err_title))
             plt.xlim([0, x[-1]])
             plt.xlabel('Iteration')
@@ -70,6 +73,9 @@ class Metric:
 
         if show:
             plt.show()
+
+    def _plot_fig_callback(self, x, value_name: str):
+        pass
 
     @property
     def name(self) -> str:
@@ -191,3 +197,47 @@ class MetricTermination(Termination):
         if self.upper_limit is not None and value >= self.upper_limit:
             return False
         return True
+
+
+class FilteredMetric(Metric):
+    """Base class for a metric that filters another metrics output."""
+
+    def __init__(self, underlying_metric: Metric, filtered_values: List[str] = None):
+        self.metric = underlying_metric
+        self.filtered_values = set(filtered_values or underlying_metric.value_names)
+
+        super(FilteredMetric, self).__init__()
+
+    @property
+    def name(self) -> str:
+        return '%s(%s)' % (self.filter_name, self.metric.name)
+
+    @property
+    def value_names(self) -> List[str]:
+        return self.metric.value_names
+
+    def _calculate_values(self, algorithm: Algorithm) -> List[float]:
+        metric = self.metric
+        metric.calculate_step(algorithm)
+
+        values = []
+        filtered_values = self.filtered_values
+        for value_name in metric.value_names:
+            if value_name in filtered_values:
+                values.append(self._filter_values(value_name, metric.values[value_name], self.values[value_name]))
+            else:
+                values.append(metric.values[value_name][-1])
+
+        return values
+
+    def _plot_fig_callback(self, x, value_name: str):
+        underlying_values = self.metric.values[value_name]
+        plt.plot(x, underlying_values, '--b', linewidth=1)
+
+    @property
+    def filter_name(self) -> str:
+        raise NotImplementedError
+
+    def _filter_values(self, value_name: str, values: List[float], previous_filtered_values: List[float]) -> float:
+        """Get the next filtered value for a list of values of length n (previous filtered values are length n-1)."""
+        raise NotImplementedError

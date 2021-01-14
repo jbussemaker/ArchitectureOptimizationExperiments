@@ -24,6 +24,7 @@ from pymoo.model.algorithm import Algorithm
 from pymoo.factory import get_problem, get_reference_directions
 
 from arch_opt_exp.experimenter import *
+from arch_opt_exp.metrics.filters import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.metrics.convergence import *
 
@@ -225,3 +226,41 @@ def test_mutual_domination_rate_metric(problem, algorithm):
     assert max_values[-1] < max_values[0]
 
     result.metrics[mdr.name].plot(show=False)
+
+
+def test_moving_average_filter(problem, algorithm):
+    igd_filtered = MovingAverageFilter(IGDConvergenceMetric(), n=5)
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[igd_filtered])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+    assert igd_filtered.name in result.metrics
+    values = result.metrics[igd_filtered.name].results()['d']
+    assert np.isnan(values[0])
+    assert not np.isnan(values[4])
+    assert values[-1] > values[4]
+
+    result.metrics[igd_filtered.name].plot(show=False)
+
+
+def test_exp_moving_average_filter(problem, algorithm):
+    igd_filtered = ExpMovingAverageFilter(IGDConvergenceMetric(), n=3)
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[igd_filtered])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+    assert igd_filtered.name in result.metrics
+    values = result.metrics[igd_filtered.name].results()['d']
+    assert values[-1] > values[0]
+
+    result.metrics[igd_filtered.name].plot(show=False)
+
+
+def test_kalman_filter(problem, algorithm):
+    igd_filtered = KalmanFilter(IGDConvergenceMetric(), r=.1, q=.1)
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[igd_filtered])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+    assert igd_filtered.name in result.metrics
+    values = result.metrics[igd_filtered.name].results()['d']
+    assert values[-1] > values[0]
+
+    result.metrics[igd_filtered.name].plot(show=False)
