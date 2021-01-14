@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 from pymoo.model.algorithm import Algorithm
 from pymoo.model.indicator import Indicator
 from pymoo.model.termination import Termination
+from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
 __all__ = ['Metric', 'IndicatorMetric', 'MetricTermination']
 
@@ -81,45 +82,67 @@ class Metric:
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         raise NotImplementedError
 
-    @staticmethod
-    def _get_pop_x(algorithm: Algorithm) -> np.ndarray:
+    @classmethod
+    def _get_pop_x(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Design vectors of the population: (n_pop, n_x)"""
-        return algorithm.pop.get('X')
+        return cls._get_pop(algorithm, feasible_only=feasible_only).get('X')
 
-    @staticmethod
-    def _get_pop_f(algorithm: Algorithm) -> np.ndarray:
+    @classmethod
+    def _get_pop_f(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Objective values of the population: (n_pop, n_f)"""
-        return algorithm.pop.get('F')
+        return cls._get_pop(algorithm, feasible_only=feasible_only).get('F')
 
-    @staticmethod
-    def _get_pop_g(algorithm: Algorithm) -> np.ndarray:
+    @classmethod
+    def _get_pop_g(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Constraint values of the population: (n_pop, n_g)"""
-        return algorithm.pop.get('G')
+        return cls._get_pop(algorithm, feasible_only=feasible_only).get('G')
 
-    @staticmethod
-    def _get_pop_cv(algorithm: Algorithm) -> np.ndarray:
+    @classmethod
+    def _get_pop_cv(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Constraint violation values of the population: (n_pop, n_g)"""
-        return algorithm.pop.get('CV')
+        return cls._get_pop(algorithm, feasible_only=feasible_only).get('CV')
 
     @staticmethod
-    def _get_opt_x(algorithm: Algorithm) -> np.ndarray:
+    def _get_pop(algorithm: Algorithm, feasible_only=False):
+        pop = algorithm.pop
+        if feasible_only:
+            i_feasible = np.where(pop.get('feasible'))[0]
+            return pop[i_feasible]
+        return pop
+
+    @classmethod
+    def _get_opt_x(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Design vectors of the optimum population (non-dominated current Pareto front): (n_opt, n_x)"""
-        return algorithm.opt.get('X')
+        return cls._get_opt(algorithm, feasible_only=feasible_only).get('X')
 
-    @staticmethod
-    def _get_opt_f(algorithm: Algorithm) -> np.ndarray:
+    @classmethod
+    def _get_opt_f(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Objective values of the optimum population: (n_opt, n_f)"""
-        return algorithm.opt.get('F')
+        return cls._get_opt(algorithm, feasible_only=feasible_only).get('F')
 
-    @staticmethod
-    def _get_opt_g(algorithm: Algorithm) -> np.ndarray:
+    @classmethod
+    def _get_opt_g(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Constraint values of the optimum population: (n_opt, n_g)"""
-        return algorithm.opt.get('G')
+        return cls._get_opt(algorithm, feasible_only=feasible_only).get('G')
+
+    @classmethod
+    def _get_opt_cv(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
+        """Constraint violation values of the optimum population: (n_opt, n_g)"""
+        return cls._get_opt(algorithm, feasible_only=feasible_only).get('CV')
 
     @staticmethod
-    def _get_opt_cv(algorithm: Algorithm) -> np.ndarray:
-        """Constraint violation values of the optimum population: (n_opt, n_g)"""
-        return algorithm.opt.get('CV')
+    def _get_opt(algorithm: Algorithm, feasible_only=False):
+        opt = algorithm.opt
+        if feasible_only:
+            i_feasible = np.where(opt.get('feasible'))[0]
+            return opt[i_feasible]
+        return opt
+
+    @staticmethod
+    def get_pareto_front(f: np.ndarray) -> np.ndarray:
+        """Get the non-dominated set of objective values (the Pareto front)."""
+        i_non_dom = NonDominatedSorting().do(f, only_non_dominated_front=True)
+        return np.copy(f[i_non_dom, :])
 
 
 class IndicatorMetric(Metric):

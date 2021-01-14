@@ -17,13 +17,15 @@ Contact: jasper.bussemaker@dlr.de
 
 import pytest
 import numpy as np
-from pymoo.factory import get_problem
 from pymoo.model.problem import Problem
+from pymoo.algorithms.moead import MOEAD
 from pymoo.algorithms.nsga2 import NSGA2
 from pymoo.model.algorithm import Algorithm
+from pymoo.factory import get_problem, get_reference_directions
 
 from arch_opt_exp.experimenter import *
 from arch_opt_exp.metrics.performance import *
+from arch_opt_exp.metrics.convergence import *
 
 
 @pytest.fixture
@@ -111,3 +113,115 @@ def test_max_cv(problem, algorithm):
     assert len(values) == 50
 
     result.metrics[max_cv.name].plot(show=False)
+
+
+def test_hv(problem, algorithm):
+    hv = HVMetric()
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[hv])
+    result = exp.run_effectiveness(repeat_idx=0, seed=1)
+    assert hv.name in result.metrics
+
+    values = result.metrics[hv.name].results()['hv']
+    assert values[-1] > values[0]
+
+    result.metrics[hv.name].plot(show=False)
+
+
+def test_distance_metrics(problem, algorithm):
+    metrics = [
+        GDConvergenceMetric(),
+        IGDConvergenceMetric(),
+    ]
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=metrics)
+    result = exp.run_effectiveness(repeat_idx=0, seed=1)
+    for metric in metrics:
+        assert metric.name in result.metrics
+        values = result.metrics[metric.name].results()['d']
+        assert values[-1] > values[0]
+        result.metrics[metric.name].plot(show=False)
+
+
+def test_crowding_distance_metric(problem, algorithm):
+    cd = CrowdingDistanceMetric()
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[cd])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+    assert cd.name in result.metrics
+    max_values = result.metrics[cd.name].results()['max']
+    assert max_values[-1] < max_values[0]
+
+    result.metrics[cd.name].plot(show=False)
+
+
+def test_crowding_distance_metric_non_nsga2(problem):
+    cd = CrowdingDistanceMetric()
+
+    algorithm = MOEAD(get_reference_directions('das-dennis', 3, n_partitions=12), n_neighbors=15, decomposition='pbi',
+                      prob_neighbor_mating=.7)
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[cd])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+    assert cd.name in result.metrics
+    max_values = result.metrics[cd.name].results()['max']
+    assert max_values[-1] < max_values[0]
+
+    result.metrics[cd.name].plot(show=False)
+
+
+def test_steady_performance_indicator(problem, algorithm):
+    spi = SteadyPerformanceIndicator(n_last_steps=10)
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[spi])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+    assert spi.name in result.metrics
+
+    max_values = result.metrics[spi.name].results()['std']
+    assert len(max_values) == 50
+    assert np.isnan(max_values[0])
+    assert not np.isnan(max_values[9])
+    assert max_values[-1] < max_values[9]
+
+    result.metrics[spi.name].plot(show=False)
+
+
+def test_fh_indicator(problem, algorithm):
+    fhi = FitnessHomogeneityIndicator()
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[fhi])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+    assert fhi.name in result.metrics
+
+    max_values = result.metrics[fhi.name].results()['fhi']
+    assert len(max_values) == 50
+    assert max_values[-1] > max_values[0]
+
+    result.metrics[fhi.name].plot(show=False)
+
+
+def test_consolidation_ratio_metric(problem, algorithm):
+    cr = ConsolidationRatioMetric(n_delta=1)
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[cr])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+    assert cr.name in result.metrics
+
+    max_values = result.metrics[cr.name].results()['cr']
+    assert len(max_values) == 50
+    assert max_values[-1] > max_values[0]
+
+    result.metrics[cr.name].plot(show=False)
+
+
+def test_mutual_domination_rate_metric(problem, algorithm):
+    mdr = MutualDominationRateMetric()
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[mdr])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+    assert mdr.name in result.metrics
+
+    max_values = result.metrics[mdr.name].results()['mdr']
+    assert len(max_values) == 50
+    assert max_values[-1] < max_values[0]
+
+    result.metrics[mdr.name].plot(show=False)
