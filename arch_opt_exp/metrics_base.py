@@ -231,6 +231,9 @@ class FilteredMetric(Metric):
         return values
 
     def _plot_fig_callback(self, x, value_name: str):
+        if self.values_std is not None:  # Aggregated results
+            return
+
         underlying_values = self.metric.values[value_name]
         plt.plot(x, underlying_values, '--b', linewidth=1)
 
