@@ -22,12 +22,14 @@ from pymoo.algorithms.nsga2 import NSGA2
 from pymoo.util.dominator import Dominator
 from pymoo.problems.many.dtlz import DTLZ2
 from pymoo.factory import get_problem, get_reference_directions
+from pymoo.operators.selection.random_selection import RandomSelection
 
 from arch_opt_exp.experimenter import *
 from arch_opt_exp.algorithms.mdr import *
 from arch_opt_exp.metrics.filters import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.metrics.convergence import *
+from arch_opt_exp.algorithms.infill_based import *
 from arch_opt_exp.algorithms.random_search import *
 from arch_opt_exp.algorithms.hill_climbing import *
 
@@ -192,3 +194,17 @@ def test_nsga2_mdr():
 
     ExperimenterResult.plot_compare_metrics(
         [result, result_mdr], metric.name, titles=['MDR', 'ND'], plot_value_names=['delta_hv'], show=False)
+
+
+def test_infill_based_algorithm(problem):
+    mating_infill = NSGA2().mating
+    mating_infill.selection = RandomSelection()
+    algorithm = InfillBasedAlgorithm(mating_infill, infill_size=5, init_size=20)
+
+    metric = DeltaHVMetric(problem.pareto_front())
+    exp = Experimenter(problem, algorithm, n_eval_max=500, metrics=[metric])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+
+    values = result.metrics[metric.name].values['delta_hv']
+    assert len(values) == 97
+    assert values[-1] < values[0]
