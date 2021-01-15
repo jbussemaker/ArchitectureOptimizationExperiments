@@ -117,6 +117,7 @@ def test_metrics(problem, algorithm):
     assert len(result.metrics[gd_metric.name].results()['indicator']) == 100
 
     result.metrics[gd_metric.name].plot(show=False)
+    eff_res_metric = result.metrics[gd_metric.name]
 
     result = exp.get_effectiveness_result(repeat_idx=0)
     assert isinstance(result, ExperimenterResult)
@@ -131,6 +132,8 @@ def test_metrics(problem, algorithm):
         assert 'indicator' in met_results
         assert len(met_results['indicator']) == 100
         assert met_results['indicator'][0] > met_results['indicator'][-1]
+
+    Metric.plot_multiple([eff_res_metric, result.metrics[gd_metric.name]], ['Effectiveness', 'Efficiency'], show=False)
 
 
 def test_run_efficiency(problem, algorithm):

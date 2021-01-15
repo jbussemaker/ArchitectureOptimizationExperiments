@@ -147,6 +147,11 @@ class ExperimenterResult(Result):
 
         return mean_data, std_data
 
+    @staticmethod
+    def plot_compare_metrics(results: List['ExperimenterResult'], metric_name: str, titles: List[str] = None, **kwargs):
+        metrics = [res.metrics[metric_name] for res in results]
+        Metric.plot_multiple(metrics, titles=titles, **kwargs)
+
 
 class Experimenter:
     """Main class that handles the experiment for a given problem and algorithm."""

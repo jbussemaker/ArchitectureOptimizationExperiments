@@ -47,34 +47,68 @@ class Metric:
         return {key: np.array(value) for key, value in self.values.items()}
 
     def plot(self, std_sigma=1., show=True):
-        for value_name in self.value_names:
+        self.plot_multiple([self], std_sigma=std_sigma, show=show)
+
+    @staticmethod
+    def plot_multiple(metrics: List['Metric'], titles: List[str] = None, colors: List[str] = None, std_sigma=1.,
+                      show=True):
+        """Function for plotting multiple metrics of the same kind, but coming from different optimization runs."""
+
+        type_ = type(metrics[0])
+        if not all([isinstance(m, type_) for m in metrics]):
+            raise ValueError('Metrics should be of same type!')
+
+        if colors is not None and len(colors) != len(metrics):
+            raise ValueError('Provide same amount of colors as metrics!')
+
+        if titles is not None and len(titles) != len(metrics):
+            raise ValueError('Provide same amount of titles as metrics!')
+
+        for value_name in metrics[0].value_names:
             plt.figure()
 
-            y = self.values[value_name]
-            x = list(range(len(y)))
-            y_err = np.array(self.values_std[value_name]) if self.values_std is not None else None
-
-            kwargs = {'linewidth': 1}
-            plt.plot(x, y, '-k', **kwargs)
-
+            x_max = None
             err_title = ''
-            if y_err is not None:
-                err_title = ' (std $\\sigma$ = %.2f)' % std_sigma
-                plt.errorbar(x, y+y_err*std_sigma, fmt='--k', **kwargs)
-                plt.errorbar(x, y-y_err*std_sigma, fmt='--k', **kwargs)
+            for i, metric in enumerate(metrics):
+                y = metric.values[value_name]
+                x = list(range(len(y)))
+                y_err = np.array(metric.values_std[value_name]) if metric.values_std is not None else None
 
-            if self._plot_fig_callback is not None:
-                self._plot_fig_callback(x, value_name)
+                kwargs = {'linewidth': 1}
+                if len(metrics) == 1:
+                    kwargs['color'] = 'k'
+                elif colors is not None:
+                    kwargs['color'] = colors[i]
 
-            plt.title('Metric: %s.%s%s' % (self.name, value_name, err_title))
-            plt.xlim([0, x[-1]])
+                if titles is not None:
+                    kwargs['label'] = titles[i]
+
+                l, = plt.plot(x, y, '-', **kwargs)
+                color = l.get_color()
+                kwargs['color'] = color
+
+                if y_err is not None:
+                    err_title = ' (std $\\sigma$ = %.2f)' % std_sigma
+                    plt.errorbar(x, y+y_err*std_sigma, fmt='--', **kwargs)
+                    plt.errorbar(x, y-y_err*std_sigma, fmt='--', **kwargs)
+
+                metric.plot_fig_callback(x, value_name, color=None if len(metrics) == 1 else color)
+
+                if x_max is None or x[-1] > x_max:
+                    x_max = x[-1]
+
+            plt.title('Metric: %s.%s%s' % (metrics[0].name, value_name, err_title))
+            plt.xlim([0, x_max])
             plt.xlabel('Iteration')
             plt.ylabel(value_name)
+
+            if titles is not None:
+                plt.legend()
 
         if show:
             plt.show()
 
-    def _plot_fig_callback(self, x, value_name: str):
+    def plot_fig_callback(self, x, value_name: str, color=None):
         pass
 
     @property
@@ -295,12 +329,19 @@ class FilteredMetric(Metric):
 
         return values
 
-    def _plot_fig_callback(self, x, value_name: str):
+    def plot_fig_callback(self, x, value_name: str, color=None):
         if self.values_std is not None:  # Aggregated results
             return
 
+        kwargs = {}
+        if color is None:
+            style = '--b'
+        else:
+            style = '-.'
+            kwargs['color'] = color
+
         underlying_values = self.metric.values[value_name]
-        plt.plot(x, underlying_values, '--b', linewidth=1)
+        plt.plot(x, underlying_values, style, linewidth=1, **kwargs)
 
     @property
     def filter_name(self) -> str:

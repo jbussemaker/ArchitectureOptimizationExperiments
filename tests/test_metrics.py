@@ -124,8 +124,9 @@ def test_max_cv(problem, algorithm):
 
 def test_hv(problem, algorithm):
     hv = HVMetric()
+    filtered_hv = MovingAverageFilter(HVMetric(), n=5)
 
-    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[hv])
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[hv, filtered_hv])
     result = exp.run_effectiveness(repeat_idx=0, seed=1)
     assert hv.name in result.metrics
 
@@ -138,6 +139,13 @@ def test_hv(problem, algorithm):
     eff_res = exp.run_efficiency(hv_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
     eff_res.termination.plot(show=False)
+
+    algorithm2 = NSGA2(pop_size=30)
+    exp2 = Experimenter(problem, algorithm2, n_eval_max=1000, metrics=[hv, filtered_hv])
+    result2 = exp2.run_effectiveness(repeat_idx=0, seed=2)
+
+    ExperimenterResult.plot_compare_metrics([result, result2], hv.name, titles=['20', '30'], show=False)
+    ExperimenterResult.plot_compare_metrics([result, result2], filtered_hv.name, titles=['20', '30'], show=False)
 
 
 def test_distance_metrics(problem, algorithm):
