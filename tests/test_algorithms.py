@@ -21,8 +21,10 @@ from pymoo.model.problem import Problem
 
 from arch_opt_exp.experimenter import *
 from arch_opt_exp.metrics.filters import *
+from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.metrics.convergence import *
 from arch_opt_exp.algorithms.random_search import *
+from arch_opt_exp.algorithms.hill_climbing import *
 
 
 @pytest.fixture
@@ -32,10 +34,44 @@ def problem() -> Problem:
 
 def test_random_search(problem):
     cr_metric = ExpMovingAverageFilter(ConsolidationRatioMetric(), n=5)
+    igd_metric = IGDMetric(problem.pareto_front())
 
     algorithm = RandomSearchAlgorithm(pop_size=100)
-    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[cr_metric])
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[cr_metric, igd_metric])
     res = exp.run_effectiveness(repeat_idx=0)
 
     cr = res.metrics[cr_metric.name].results()['cr']
     assert cr[-1] > cr[0]
+
+    igd = res.metrics[igd_metric.name].results()['indicator']
+    assert igd[0] != 0
+
+
+def test_hill_climbing(problem):
+    cr_metric = ExpMovingAverageFilter(ConsolidationRatioMetric(), n=5)
+    igd_metric = IGDMetric(problem.pareto_front())
+
+    algorithm = HillClimbingAlgorithm(pop_size=100)
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[cr_metric, igd_metric])
+    res = exp.run_effectiveness(repeat_idx=0)
+
+    cr = res.metrics[cr_metric.name].results()['cr']
+    assert cr[-1] > cr[0]
+
+    igd = res.metrics[igd_metric.name].results()['indicator']
+    assert igd[0] != 0
+
+
+def test_simulated_annealing(problem):
+    cr_metric = ExpMovingAverageFilter(ConsolidationRatioMetric(), n=5)
+    igd_metric = IGDMetric(problem.pareto_front())
+
+    algorithm = SimulatedAnnealingAlgorithm(pop_size=100)
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[cr_metric, igd_metric])
+    res = exp.run_effectiveness(repeat_idx=0)
+
+    cr = res.metrics[cr_metric.name].results()['cr']
+    assert cr[-1] > cr[0]
+
+    igd = res.metrics[igd_metric.name].results()['indicator']
+    assert igd[0] != 0

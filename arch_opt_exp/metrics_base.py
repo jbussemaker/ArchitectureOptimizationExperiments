@@ -46,12 +46,12 @@ class Metric:
     def results(self) -> Dict[str, np.ndarray]:
         return {key: np.array(value) for key, value in self.values.items()}
 
-    def plot(self, std_sigma=1., show=True):
-        self.plot_multiple([self], std_sigma=std_sigma, show=show)
+    def plot(self, std_sigma=1., show=True, **kwargs):
+        self.plot_multiple([self], std_sigma=std_sigma, show=show, **kwargs)
 
     @staticmethod
     def plot_multiple(metrics: List['Metric'], titles: List[str] = None, colors: List[str] = None,
-                      plot_value_names: List[str] = None, std_sigma=1., show=True):
+                      plot_value_names: List[str] = None, std_sigma=1., n_eval: List[List[float]] = None, show=True):
         """Function for plotting multiple metrics of the same kind, but coming from different optimization runs."""
 
         type_ = type(metrics[0])
@@ -74,7 +74,14 @@ class Metric:
             err_title = ''
             for i, metric in enumerate(metrics):
                 y = metric.values[value_name]
-                x = list(range(len(y)))
+
+                if n_eval is not None:
+                    x = n_eval[i]
+                    if len(x) != len(y):
+                        raise ValueError('List with evaluations should be same length as number of steps!')
+                else:
+                    x = list(range(len(y)))
+
                 y_err = np.array(metric.values_std[value_name]) if metric.values_std is not None else None
 
                 kwargs = {'linewidth': 1}
@@ -102,7 +109,7 @@ class Metric:
 
             plt.title('Metric: %s.%s%s' % (metrics[0].name, value_name, err_title))
             plt.xlim([0, x_max])
-            plt.xlabel('Iteration')
+            plt.xlabel('Iterations' if n_eval is None else 'Function evaluations')
             plt.ylabel(value_name)
 
             if titles is not None:

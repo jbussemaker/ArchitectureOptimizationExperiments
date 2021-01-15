@@ -122,6 +122,22 @@ def test_max_cv(problem, algorithm):
     result.metrics[max_cv.name].plot(show=False)
 
 
+def test_nr_evaluations_metric(problem, algorithm):
+    nr_eval = NrEvaluationsMetric()
+
+    exp = Experimenter(problem, algorithm, n_eval_max=1000, metrics=[nr_eval])
+    result = exp.run_effectiveness(repeat_idx=0, seed=1)
+    assert nr_eval.name in result.metrics
+
+    values = result.metrics[nr_eval.name].results()
+    assert 'n_eval' in values
+    assert len(values['n_eval']) == 50
+    assert values['n_eval'][-1] > values['n_eval'][0]
+    assert values['n_eval'][-1] == 1000
+
+    result.metrics[nr_eval.name].plot(show=False)
+
+
 def test_hv(problem, algorithm):
     hv = HVMetric()
     filtered_hv = MovingAverageFilter(HVMetric(), n=5)

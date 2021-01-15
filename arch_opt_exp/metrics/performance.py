@@ -24,7 +24,8 @@ from pymoo.performance_indicator.hv import Hypervolume
 from pymoo.performance_indicator.igd_plus import IGDPlus
 from pymoo.performance_indicator.distance_indicator import euclidean_distance
 
-__all__ = ['SpreadMetric', 'DeltaHVMetric', 'IGDMetric', 'IGDPlusMetric', 'MaxConstraintViolationMetric']
+__all__ = ['SpreadMetric', 'DeltaHVMetric', 'IGDMetric', 'IGDPlusMetric', 'MaxConstraintViolationMetric',
+           'NrEvaluationsMetric']
 
 
 class SpreadMetric(Metric):
@@ -107,14 +108,14 @@ class IGDMetric(IndicatorMetric):
     """Inverse generational distance to the known pareto front."""
 
     def __init__(self, pf):
-        super(IGDMetric, self).__init__(IGD(pf))
+        super(IGDMetric, self).__init__(IGD(pf, normalize=True))
 
 
 class IGDPlusMetric(IndicatorMetric):
     """Inverse generational distance (improved) to the known pareto front."""
 
     def __init__(self, pf):
-        super(IGDPlusMetric, self).__init__(IGDPlus(pf))
+        super(IGDPlusMetric, self).__init__(IGDPlus(pf, normalize=True))
 
 
 class MaxConstraintViolationMetric(Metric):
@@ -135,3 +136,18 @@ class MaxConstraintViolationMetric(Metric):
             return [0.]
 
         return [np.nanmax(cv)]
+
+
+class NrEvaluationsMetric(Metric):
+    """Metric that tracks the number of function evaluations after each algorithm step."""
+
+    @property
+    def name(self) -> str:
+        return 'n_eval'
+
+    @property
+    def value_names(self) -> List[str]:
+        return ['n_eval']
+
+    def _calculate_values(self, algorithm: Algorithm) -> List[float]:
+        return [algorithm.evaluator.n_eval]

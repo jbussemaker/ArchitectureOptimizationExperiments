@@ -76,6 +76,10 @@ def test_run_effectiveness(problem, algorithm):
     assert len(res.history) == 100
     assert res.n_steps == 100
 
+    assert len(res.n_eval) == 100
+    assert res.n_eval[0] == 20
+    assert res.n_eval[-1] == 2000
+
     assert res.X.shape == (20, 30)
     assert np.min(res.X) >= 0
     assert np.max(res.X) <= 1

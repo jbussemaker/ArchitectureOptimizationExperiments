@@ -94,6 +94,13 @@ if __name__ == '__main__':
     from arch_opt_exp.metrics.performance import *
 
     with Experimenter.temp_results():
+        # Define algorithms to run
+        algorithms = [
+            RandomSearchAlgorithm(pop_size=100),
+            NSGA2(pop_size=100),
+        ]
+
+        # Define problem and metrics
         problem = ZDT1()
         metrics = [
             # Metrics for evaluating the algorithm performance
@@ -106,19 +113,13 @@ if __name__ == '__main__':
         ]
         plot_names = [['delta_hv'], None, ['cr'], ['mdr']]
 
-        # Run the algorithm
-        algo = RandomSearchAlgorithm(pop_size=100)
-        exp = Experimenter(problem, algo, n_eval_max=10000, metrics=metrics)
-        res = exp.run_effectiveness()
-
-        # Run the comparison algorithm: NSGA2
-        algo_compare = NSGA2(pop_size=100)
-        exp_compare = Experimenter(problem, algo_compare, n_eval_max=10000, metrics=metrics)
-        res_compare = exp_compare.run_effectiveness()
+        # Run algorithms
+        results = [Experimenter(problem, algorithm, n_eval_max=10000, metrics=metrics).run_effectiveness()
+                   for algorithm in algorithms]
 
         # Plot metrics
         for ii, metric in enumerate(metrics):
             ExperimenterResult.plot_compare_metrics(
-                [res, res_compare], metric.name, titles=[algo.__class__.__name__, 'NSGA2'],
-                plot_value_names=plot_names[ii], show=False)
+                results, metric.name, titles=[algo.__class__.__name__ for algo in algorithms],
+                plot_value_names=plot_names[ii], plot_evaluations=True, show=False)
         plt.show()

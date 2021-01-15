@@ -68,6 +68,9 @@ class ExperimenterResult(Result):
         self.n_steps = None
         self.n_steps_std = None
 
+        self.n_eval = None
+        self.n_eval_std = None
+
         self.exec_time_std = None
 
     @classmethod
@@ -79,6 +82,8 @@ class ExperimenterResult(Result):
 
         exp_result.n_steps = len(exp_result.history) if exp_result.history is not None else None
 
+        exp_result.n_eval = [algo.evaluator.n_eval for algo in exp_result.history]
+
         return exp_result
 
     @classmethod
@@ -89,6 +94,7 @@ class ExperimenterResult(Result):
 
         result.exec_time, result.exec_time_std = cls._get_mean_std(results, lambda r: r.exec_time)
         result.n_steps, result.n_steps_std = cls._get_mean_std(results, lambda r: r.n_steps)
+        result.n_eval, result.n_eval_std = cls._get_mean_std(results, lambda r: r.n_eval)
 
         for name, metric in results[0].metrics.items():
             result.metrics[name] = metric = copy.deepcopy(metric)
@@ -150,9 +156,10 @@ class ExperimenterResult(Result):
         return mean_data, std_data
 
     @staticmethod
-    def plot_compare_metrics(results: List['ExperimenterResult'], metric_name: str, **kwargs):
+    def plot_compare_metrics(results: List['ExperimenterResult'], metric_name: str, plot_evaluations=False, **kwargs):
         metrics = [res.metrics[metric_name] for res in results]
-        Metric.plot_multiple(metrics, **kwargs)
+        n_eval = [res.n_eval for res in results] if plot_evaluations else None
+        Metric.plot_multiple(metrics, n_eval=n_eval, **kwargs)
 
 
 class Experimenter:
