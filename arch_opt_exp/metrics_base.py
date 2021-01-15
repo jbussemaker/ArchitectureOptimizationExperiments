@@ -50,8 +50,8 @@ class Metric:
         self.plot_multiple([self], std_sigma=std_sigma, show=show)
 
     @staticmethod
-    def plot_multiple(metrics: List['Metric'], titles: List[str] = None, colors: List[str] = None, std_sigma=1.,
-                      show=True):
+    def plot_multiple(metrics: List['Metric'], titles: List[str] = None, colors: List[str] = None,
+                      plot_value_names: List[str] = None, std_sigma=1., show=True):
         """Function for plotting multiple metrics of the same kind, but coming from different optimization runs."""
 
         type_ = type(metrics[0])
@@ -64,7 +64,10 @@ class Metric:
         if titles is not None and len(titles) != len(metrics):
             raise ValueError('Provide same amount of titles as metrics!')
 
-        for value_name in metrics[0].value_names:
+        if plot_value_names is None:
+            plot_value_names = metrics[0].value_names
+
+        for value_name in plot_value_names:
             plt.figure()
 
             x_max = None

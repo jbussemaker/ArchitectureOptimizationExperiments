@@ -19,6 +19,8 @@ import os
 import copy
 import pickle
 import logging
+import tempfile
+import contextlib
 import numpy as np
 from typing import *
 import logging.config
@@ -148,9 +150,9 @@ class ExperimenterResult(Result):
         return mean_data, std_data
 
     @staticmethod
-    def plot_compare_metrics(results: List['ExperimenterResult'], metric_name: str, titles: List[str] = None, **kwargs):
+    def plot_compare_metrics(results: List['ExperimenterResult'], metric_name: str, **kwargs):
         metrics = [res.metrics[metric_name] for res in results]
-        Metric.plot_multiple(metrics, titles=titles, **kwargs)
+        Metric.plot_multiple(metrics, **kwargs)
 
 
 class Experimenter:
@@ -337,6 +339,25 @@ class Experimenter:
             '%s/result_%d.pkl' % (secure_filename(metric_termination.metric_name), repeat_idx))
 
     ### HELPER FUNCTIONS ###
+
+    @staticmethod
+    @contextlib.contextmanager
+    def temp_results():
+        """
+        Sets a temporary folder as results folder. Useful for running experiments and directly analyzing the
+        results. Usage:
+
+        with Experimenter.temp_results():
+            ...
+        """
+
+        orig_res_folder = Experimenter.results_folder
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            Experimenter.results_folder = tmp_dir
+            yield
+
+        Experimenter.results_folder = orig_res_folder
 
     def _get_problem_algo_results_path(self, sub_path: str = None) -> str:
         problem_algo_path = '%s/%s' % (secure_filename(self.problem.name()), secure_filename(self.algorithm_name))

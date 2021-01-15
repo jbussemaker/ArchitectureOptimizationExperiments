@@ -15,6 +15,7 @@ Copyright: (c) 2020, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 
+import os
 import pytest
 import numpy as np
 from pymoo.factory import get_problem
@@ -44,6 +45,22 @@ def test_instantiate(problem, algorithm):
     assert exp.algorithm_name
 
     assert exp._get_effectiveness_result_path(repeat_idx=0)
+
+
+def test_temp_results_context(problem, algorithm):
+    Experimenter.results_folder = None
+    with pytest.raises(ValueError):
+        Experimenter(problem, algorithm, n_eval_max=2000)._get_effectiveness_result_path(repeat_idx=0)
+
+    with Experimenter.temp_results():
+        exp = Experimenter(problem, algorithm, n_eval_max=2000)
+        assert exp._get_effectiveness_result_path(repeat_idx=0)
+
+        res_folder = exp.results_folder
+        assert os.path.exists(res_folder)
+
+    assert Experimenter.results_folder is None
+    assert not os.path.exists(res_folder)
 
 
 def test_run_effectiveness(problem, algorithm):
