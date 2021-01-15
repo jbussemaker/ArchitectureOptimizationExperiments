@@ -168,6 +168,7 @@ if __name__ == '__main__':
             NSGA2MultiDR(multi_dr_, pop_size=100),
             NSGA2(pop_size=100),
         ]
+        n_eval, n_repeat = 10000, 8
 
         # Define problem and metrics
         problem = DTLZ2(n_var=13, n_obj=4)
@@ -185,8 +186,9 @@ if __name__ == '__main__':
         plot_names = [['delta_hv'], None, ['cr'], ['mdr']]
 
         # Run algorithms
-        results = [Experimenter(problem, algorithm, n_eval_max=10000, metrics=metrics).run_effectiveness()
-                   for algorithm in algorithms]
+        results = [ExperimenterResult.aggregate_results(
+            Experimenter(problem, algorithm, n_eval_max=n_eval, metrics=metrics)
+                .run_effectiveness_parallel(n_repeat=n_repeat)) for algorithm in algorithms]
 
         # Plot metrics
         for ii, metric in enumerate(metrics):
