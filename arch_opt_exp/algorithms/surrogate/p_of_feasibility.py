@@ -20,7 +20,7 @@ from typing import *
 from scipy.stats import norm
 from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
 
-__all__ = ['ProbabilityOfFeasibilityInfill', 'FunctionEstimatePoFInfill']
+__all__ = ['ProbabilityOfFeasibilityInfill', 'FunctionEstimatePoFInfill', 'FunctionVariancePoFInfill']
 
 
 class ProbabilityOfFeasibilityInfill(SurrogateInfill):
@@ -80,6 +80,16 @@ class FunctionEstimatePoFInfill(ProbabilityOfFeasibilityInfill):
 
     def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
         return f_predict
+
+
+class FunctionVariancePoFInfill(ProbabilityOfFeasibilityInfill):
+    """Probability of Feasible combined with function variance estimate for the objectives."""
+
+    def get_n_infill_objectives(self) -> int:
+        return self.problem.n_obj
+
+    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+        return -f_var_predict
 
 
 if __name__ == '__main__':

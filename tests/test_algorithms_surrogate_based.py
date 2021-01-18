@@ -113,11 +113,42 @@ def test_dist(problem):
     assert values[-1] < values[0]
 
 
-def test_pof():
+def test_pof(problem, kriging_model):
     g = np.array([[0, 0, 1, 1, -1, -1]]).T
     g_var = np.array([[1, 2, 1, 2, 1, 2]]).T
     pof = ProbabilityOfFeasibilityInfill._pof(g, g_var)
     assert np.all(pof[:, 0]-[.5, .5, .159, .309, 1-.159, 1-.309] < 1e-2)
+
+    sbo = SurrogateBasedInfill(
+        surrogate_model=kriging_model,
+        infill=FunctionEstimatePoFInfill(),
+        termination=5,
+    )
+    algorithm = sbo.algorithm(infill_size=10, init_size=20)
+
+    metric = IGDMetric(problem.pareto_front())
+    exp = Experimenter(problem, algorithm, n_eval_max=100, algorithm_name=sbo.name, metrics=[metric])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+
+    values = result.metrics[metric.name].values['indicator']
+    assert len(values) == 9
+    assert values[-1] < values[0]
+
+
+def test_pof_variance_infill(problem, kriging_model):
+    sbo = SurrogateBasedInfill(
+        surrogate_model=kriging_model,
+        infill=FunctionVariancePoFInfill(),
+        termination=5,
+    )
+    algorithm = sbo.algorithm(infill_size=10, init_size=20)
+
+    metric = IGDMetric(problem.pareto_front())
+    exp = Experimenter(problem, algorithm, n_eval_max=100, algorithm_name=sbo.name, metrics=[metric])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+
+    values = result.metrics[metric.name].values['indicator']
+    assert len(values) == 9
 
 
 def test_poi(problem, kriging_model):

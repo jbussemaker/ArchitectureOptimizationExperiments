@@ -19,7 +19,8 @@ import numpy as np
 from scipy.stats import norm
 from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
 
-__all__ = ['ProbabilityOfImprovementInfill', 'LowerConfidenceBoundInfill', 'ExpectedImprovementInfill']
+__all__ = ['ProbabilityOfImprovementInfill', 'LowerConfidenceBoundInfill', 'EstimateVarianceInfill',
+           'ExpectedImprovementInfill']
 
 
 class ProbabilityOfImprovementInfill(ProbabilityOfFeasibilityInfill):
@@ -92,6 +93,35 @@ class LowerConfidenceBoundInfill(ProbabilityOfFeasibilityInfill):
         return lcb
 
 
+class EstimateVarianceInfill(ProbabilityOfFeasibilityInfill):
+    """Add the function estimate and the variances directly as objectives for the infill problem, so that the trade-off
+    between exploration and exploitation is automatically satisfied."""
+
+    def __init__(self, **kwargs):
+        super(EstimateVarianceInfill, self).__init__(**kwargs)
+
+        self.var_max = None
+
+    def get_n_infill_objectives(self) -> int:
+        return self.problem.n_obj*2
+
+    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+        n_f = f_predict.shape[1]
+        f = np.empty((f_predict.shape[0], n_f*2))
+
+        # Function estimates as first set of objectives
+        f[:, :n_f] = f_predict[:, :]
+
+        # Variances as second set of objectives
+        if self.var_max is None:
+            self.var_max = np.max(f_var_predict, axis=0)
+            self.var_max[self.var_max == 0] = 1.
+
+        f[:, n_f:] = 1.-f_var_predict/self.var_max
+
+        return f
+
+
 class ExpectedImprovementInfill(ProbabilityOfFeasibilityInfill):
     """
     The Expected Improvement (EI) naturally balances exploitation and exploration by representing the expected amount
@@ -156,6 +186,11 @@ if __name__ == '__main__':
             infill=LowerConfidenceBoundInfill(alpha=2.),
             termination=100, verbose=True,
         )
+        sbo_est_var = SurrogateBasedInfill(
+            surrogate_model=surrogate_model,
+            infill=EstimateVarianceInfill(),
+            termination=100, verbose=True,
+        )
         sbo_ei = SurrogateBasedInfill(
             surrogate_model=surrogate_model,
             infill=ExpectedImprovementInfill(),
@@ -172,6 +207,7 @@ if __name__ == '__main__':
             (NSGA2(pop_size=100), 'NSGA2', n_eval),
             (sbo_y.algorithm(infill_size=50, init_size=100), sbo_y.name, n_eval_sbo),
             (sbo_lcb.algorithm(infill_size=50, init_size=100), sbo_lcb.name, n_eval_sbo),
+            (sbo_est_var.algorithm(infill_size=50, init_size=100), sbo_est_var.name, n_eval_sbo),
             # (sbo_poi.algorithm(infill_size=50, init_size=100), sbo_poi.name, n_eval_sbo),
             # (sbo_ei.algorithm(infill_size=50, init_size=100), sbo_ei.name, n_eval_sbo),
         ]
