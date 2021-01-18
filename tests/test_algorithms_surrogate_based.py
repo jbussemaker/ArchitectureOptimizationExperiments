@@ -21,17 +21,24 @@ from pymoo.model.problem import Problem
 from pymoo.factory import get_problem, get_reference_directions
 
 from smt.surrogate_models.rbf import RBF
+from smt.surrogate_models.kpls import KPLS
 
 from arch_opt_exp.experimenter import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.algorithms.surrogate.func_estimate import *
 from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
 from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
+from arch_opt_exp.algorithms.surrogate.so_probabilities import *
 
 
 @pytest.fixture
 def problem() -> Problem:
     return get_problem('zdt1')
+
+
+@pytest.fixture
+def kriging_model() -> KPLS:
+    return KPLS(n_comp=5, theta0=[1e-2]*5)
 
 
 def test_surrogate_infill(problem):
@@ -93,3 +100,54 @@ def test_pof():
     g_var = np.array([[1, 2, 1, 2, 1, 2]]).T
     pof = ProbabilityOfFeasibilityInfill._pof(g, g_var)
     assert np.all(pof[:, 0]-[.5, .5, .159, .309, 1-.159, 1-.309] < 1e-2)
+
+
+def test_poi(problem, kriging_model):
+    sbo = SurrogateBasedInfill(
+        surrogate_model=kriging_model,
+        infill=ProbabilityOfImprovementInfill(f_min_offset=0.),
+        termination=5,
+    )
+    algorithm = sbo.algorithm(infill_size=10, init_size=20)
+
+    metric = IGDMetric(problem.pareto_front())
+    exp = Experimenter(problem, algorithm, n_eval_max=100, algorithm_name=sbo.name, metrics=[metric])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+
+    values = result.metrics[metric.name].values['indicator']
+    assert len(values) == 9
+    assert values[-1] < values[0]
+
+
+def test_lcb(problem, kriging_model):
+    sbo = SurrogateBasedInfill(
+        surrogate_model=kriging_model,
+        infill=LowerConfidenceBoundInfill(alpha=2.),
+        termination=5,
+    )
+    algorithm = sbo.algorithm(infill_size=10, init_size=20)
+
+    metric = IGDMetric(problem.pareto_front())
+    exp = Experimenter(problem, algorithm, n_eval_max=100, algorithm_name=sbo.name, metrics=[metric])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+
+    values = result.metrics[metric.name].values['indicator']
+    assert len(values) == 9
+    assert values[-1] < values[0]
+
+
+def test_ei(problem, kriging_model):
+    sbo = SurrogateBasedInfill(
+        surrogate_model=kriging_model,
+        infill=ExpectedImprovementInfill(),
+        termination=5,
+    )
+    algorithm = sbo.algorithm(infill_size=10, init_size=20)
+
+    metric = IGDMetric(problem.pareto_front())
+    exp = Experimenter(problem, algorithm, n_eval_max=100, algorithm_name=sbo.name, metrics=[metric])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+
+    values = result.metrics[metric.name].values['indicator']
+    assert len(values) == 9
+    assert values[-1] < values[0]

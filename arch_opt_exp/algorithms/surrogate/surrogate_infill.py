@@ -49,6 +49,9 @@ class SurrogateInfill:
         self.surrogate_model: SurrogateModel = None
         self.n_constr = 0
 
+        self.x_train = None
+        self.y_train = None
+
     def __getstate__(self):
         state = self.__dict__.copy()
         for key in self._exclude:
@@ -58,6 +61,10 @@ class SurrogateInfill:
     @property
     def needs_variance(self):
         return False
+
+    def set_training_values(self, x_train: np.ndarray, y_train: np.ndarray):
+        self.x_train = x_train
+        self.y_train = y_train
 
     def predict(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         y = self.surrogate_model.predict_values(x)
@@ -195,6 +202,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
     def _train_model(self):
         self.surrogate_model.set_training_values(self.x_train, self.y_train)
         self.surrogate_model.train()
+
+        self.infill.set_training_values(self.x_train, self.y_train)
 
     def _normalize(self, x: np.ndarray) -> np.ndarray:
         xl, xu = self.problem.xl, self.problem.xu
