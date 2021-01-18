@@ -217,8 +217,8 @@ class Experimenter:
         with open(result_path, 'wb') as fp:
             pickle.dump(result, fp)
 
-        log.info('Effectiveness experiment finished: %s / %s / %d' %
-                 (self.problem.name(), self.algorithm_name, repeat_idx))
+        # log.info('Effectiveness experiment finished: %s / %s / %d' %
+        #          (self.problem.name(), self.algorithm_name, repeat_idx))
         return result
 
     def get_effectiveness_result(self, repeat_idx: int) -> Optional[ExperimenterResult]:
