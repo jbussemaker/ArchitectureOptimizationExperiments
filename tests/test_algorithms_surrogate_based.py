@@ -45,6 +45,7 @@ def test_surrogate_infill(problem):
     sbo = SurrogateBasedInfill(
         surrogate_model=RBF(d0=1., poly_degree=-1, reg=1e-10),
         infill=FunctionEstimateInfill(),
+        termination=5,
     )
     algorithm = sbo.algorithm(infill_size=10, init_size=20)
 
@@ -93,6 +94,23 @@ def test_surrogate_infill_constrained():
 
     max_cv_values = result.metrics[max_cv.name].values['max_cv']
     assert max_cv_values[0] > max_cv_values[-1]
+
+
+def test_dist(problem):
+    sbo = SurrogateBasedInfill(
+        surrogate_model=RBF(d0=1., poly_degree=-1, reg=1e-10),
+        infill=FunctionEstimateDistanceInfill(),
+        termination=5,
+    )
+    algorithm = sbo.algorithm(infill_size=10, init_size=20)
+
+    metric = IGDMetric(problem.pareto_front())
+    exp = Experimenter(problem, algorithm, n_eval_max=100, algorithm_name=sbo.name, metrics=[metric])
+    result = exp.run_effectiveness(repeat_idx=0, seed=0)
+
+    values = result.metrics[metric.name].values['indicator']
+    assert len(values) == 9
+    assert values[-1] < values[0]
 
 
 def test_pof():
