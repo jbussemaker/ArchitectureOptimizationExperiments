@@ -94,8 +94,14 @@ class LowerConfidenceBoundInfill(ProbabilityOfFeasibilityInfill):
 
 
 class EstimateVarianceInfill(ProbabilityOfFeasibilityInfill):
-    """Add the function estimate and the variances directly as objectives for the infill problem, so that the trade-off
-    between exploration and exploitation is automatically satisfied."""
+    """
+    Add the function estimate and the variances directly as objectives for the infill problem, so that the trade-off
+    between exploration and exploitation is automatically satisfied.
+
+    This is similar to the Multiobjective Infill Criterion (MIC) of:
+    Tian, J., "Multiobjective Infill Criterion Driven Gaussian Process-Assisted Particle Swarm Optimization of
+        High-Dimensional Expensive Problems", 2019, 10.1109/TEVC.2018.2869247
+    """
 
     def __init__(self, **kwargs):
         super(EstimateVarianceInfill, self).__init__(**kwargs)
