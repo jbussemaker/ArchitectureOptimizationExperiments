@@ -16,6 +16,7 @@ Contact: jasper.bussemaker@dlr.de
 """
 
 import pytest
+import numpy as np
 from pymoo.model.problem import Problem
 from pymoo.factory import get_problem, get_reference_directions
 
@@ -25,6 +26,7 @@ from arch_opt_exp.experimenter import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.algorithms.surrogate.func_estimate import *
 from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
+from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
 
 
 @pytest.fixture
@@ -84,3 +86,10 @@ def test_surrogate_infill_constrained():
 
     max_cv_values = result.metrics[max_cv.name].values['max_cv']
     assert max_cv_values[0] > max_cv_values[-1]
+
+
+def test_pof():
+    g = np.array([[0, 0, 1, 1, -1, -1]]).T
+    g_var = np.array([[1, 2, 1, 2, 1, 2]]).T
+    pof = ProbabilityOfFeasibilityInfill._pof(g, g_var)
+    assert np.all(pof[:, 0]-[.5, .5, .159, .309, 1-.159, 1-.309] < 1e-2)

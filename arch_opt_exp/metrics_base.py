@@ -73,10 +73,10 @@ class Metric:
             x_max = None
             err_title = ''
             for i, metric in enumerate(metrics):
-                y = metric.values[value_name]
+                y = np.atleast_1d(metric.values[value_name])
 
                 if n_eval is not None:
-                    x = n_eval[i]
+                    x = np.atleast_1d(n_eval[i])
                     if len(x) != len(y):
                         raise ValueError('List with evaluations should be same length as number of steps!')
                 else:

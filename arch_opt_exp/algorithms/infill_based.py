@@ -15,6 +15,8 @@ Copyright: (c) 2020, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 
+from typing import *
+
 from pymoo.model.repair import Repair
 from pymoo.model.problem import Problem
 from pymoo.model.sampling import Sampling
@@ -86,6 +88,7 @@ class ModelBasedInfillCriterion(InfillCriterion):
         self._is_init = None
         self.problem: Problem = None
         self.total_pop: Population = None
+        self._algorithm: Optional[Algorithm] = None
 
     def algorithm(self, infill_size=None, init_sampling: Sampling = None, init_size=100, survival: Survival = None,
                   **kwargs) -> InfillBasedAlgorithm:
@@ -93,6 +96,8 @@ class ModelBasedInfillCriterion(InfillCriterion):
                                     survival=survival, **kwargs)
 
     def do(self, problem, pop, n_offsprings, **kwargs):
+        self._algorithm = kwargs.pop('algorithm', None)
+
         # Check if we need to initialize
         if self._is_init is None:
             self.problem = problem

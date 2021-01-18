@@ -184,7 +184,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
         y = f = self._normalize_y(self.total_pop.get('F'))
         if self.problem.n_constr > 0:
-            g = self._normalize_y(self.total_pop.get('G'))
+            g = self._normalize_y(self.total_pop.get('G'), keep_centered=True)
             y = np.append(f, g, axis=1)
 
         self.x_train = x_norm
@@ -205,13 +205,15 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         return x_norm*(xu-xl)+xl
 
     @staticmethod
-    def _normalize_y(y: np.ndarray) -> np.ndarray:
+    def _normalize_y(y: np.ndarray, keep_centered=False) -> np.ndarray:
         y_min = np.min(y, axis=0)
         y_max = np.max(y, axis=0)
 
         norm = y_max-y_min
         norm[norm < 1e-6] = 1e-6
 
+        if keep_centered:
+            return y/norm
         return (y-y_min)/norm
 
     def _generate_infill_points(self, n_infill: int) -> Population:
@@ -221,10 +223,12 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         termination = self._get_termination()
 
         # Run infill problem
+        n_eval_outer = self._algorithm.evaluator.n_eval if self._algorithm is not None else -1
         result = minimize(
             problem, algorithm,
             termination=termination,
-            callback=SurrogateInfillCallback(verbose=self.verbose, n_points_outer=len(self.total_pop)),
+            callback=SurrogateInfillCallback(verbose=self.verbose, n_points_outer=len(self.total_pop),
+                                             n_eval_outer=n_eval_outer),
         )
         self.opt_results.append(result)
 
@@ -241,7 +245,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
     def _get_termination(self):
         termination = self.termination
         if termination is None or not isinstance(termination, Termination):
-            termination = MaximumGenerationTermination(n_max_gen=termination or 20)
+            termination = MaximumGenerationTermination(n_max_gen=termination or 100)
         return termination
 
     def _get_infill_algorithm(self):
@@ -346,16 +350,17 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 class SurrogateInfillCallback(Callback):
     """Callback for printing infill optimization progress."""
 
-    def __init__(self, n_gen_report=5, verbose=False, n_points_outer=0):
+    def __init__(self, n_gen_report=20, verbose=False, n_points_outer=0, n_eval_outer=0):
         super(SurrogateInfillCallback, self).__init__()
         self.n_gen_report = n_gen_report
         self.verbose = verbose
         self.n_points_outer = n_points_outer
+        self.n_eval_outer = n_eval_outer
 
     def notify(self, algorithm: Algorithm, **kwargs):
         if self.verbose and algorithm.n_gen % self.n_gen_report == 0:
-            log.info('Surrogate infill gen %d @ %d points evaluated (%d real unique)' %
-                     (algorithm.n_gen, algorithm.evaluator.n_eval, self.n_points_outer))
+            log.info('Surrogate infill gen %d @ %d points evaluated (%d real unique, %d eval)' %
+                     (algorithm.n_gen, algorithm.evaluator.n_eval, self.n_points_outer, self.n_eval_outer))
 
 
 class SurrogateInfillOptimizationProblem(Problem):
