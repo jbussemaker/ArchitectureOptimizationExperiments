@@ -19,10 +19,13 @@ import copy
 import logging
 import numpy as np
 from typing import *
+import matplotlib.pyplot as plt
+from matplotlib.colors import SymLogNorm
 from smt.surrogate_models.surrogate_model import SurrogateModel
 from arch_opt_exp.algorithms.infill_based import ModelBasedInfillCriterion
 
 from pymoo.optimize import minimize
+from pymoo.model.result import Result
 from pymoo.model.problem import Problem
 from pymoo.model.callback import Callback
 from pymoo.model.algorithm import Algorithm
@@ -128,11 +131,6 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
                  pop_size=None, termination: Union[Termination, int] = None, verbose=False, **kwargs):
         super(SurrogateBasedInfill, self).__init__(**kwargs)
 
-        if infill.needs_variance and not surrogate_model.supports['variances']:
-            raise ValueError(
-                'Provided surrogate infill (%s) needs variances, but these are not supported by the underlying '
-                'surrogate model (%s)!' % (infill.__class__.__name__, surrogate_model.__class__.__name__))
-
         if isinstance(surrogate_model, SurrogateModel):
             surrogate_model = SurrogateModelFactory.from_surrogate_model(surrogate_model)
         self.surrogate_model_factory = surrogate_model
@@ -145,6 +143,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self.pop_size = pop_size or 100
         self.termination = termination
         self.verbose = verbose
+
+        self.opt_results: List[Result] = []
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -161,7 +161,17 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         if self._surrogate_model is None:
             self._surrogate_model = self.surrogate_model_factory.get()
             self._surrogate_model.options['print_global'] = False
+
+            if self.infill.needs_variance and not self.supports_variances:
+                raise ValueError(
+                    'Provided surrogate infill (%s) needs variances, but these are not supported by the underlying '
+                    'surrogate model (%s)!' % (self.infill.__class__.__name__, self.surrogate_model.__class__.__name__))
+
         return self._surrogate_model
+
+    @property
+    def supports_variances(self):
+        return self.surrogate_model.supports['variances']
 
     def _initialize(self):
         self.infill.initialize(self.problem, self.surrogate_model)
@@ -172,24 +182,37 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         x = self.total_pop.get('X')
         x_norm = self._normalize(x)
 
-        y = f = self.total_pop.get('F')
+        y = f = self._normalize_y(self.total_pop.get('F'))
         if self.problem.n_constr > 0:
-            g = self.total_pop.get('G')
+            g = self._normalize_y(self.total_pop.get('G'))
             y = np.append(f, g, axis=1)
 
         self.x_train = x_norm
         self.y_train = y
 
-        self.surrogate_model.set_training_values(x_norm, y)
+        self._train_model()
+
+    def _train_model(self):
+        self.surrogate_model.set_training_values(self.x_train, self.y_train)
         self.surrogate_model.train()
 
-    def _normalize(self, x) -> np.ndarray:
+    def _normalize(self, x: np.ndarray) -> np.ndarray:
         xl, xu = self.problem.xl, self.problem.xu
         return (x-xl)/(xu-xl)
 
-    def _denormalize(self, x_norm) -> np.ndarray:
+    def _denormalize(self, x_norm: np.ndarray) -> np.ndarray:
         xl, xu = self.problem.xl, self.problem.xu
         return x_norm*(xu-xl)+xl
+
+    @staticmethod
+    def _normalize_y(y: np.ndarray) -> np.ndarray:
+        y_min = np.min(y, axis=0)
+        y_max = np.max(y, axis=0)
+
+        norm = y_max-y_min
+        norm[norm < 1e-6] = 1e-6
+
+        return (y-y_min)/norm
 
     def _generate_infill_points(self, n_infill: int) -> Population:
         # Create infill problem and algorithm
@@ -203,11 +226,13 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
             termination=termination,
             callback=SurrogateInfillCallback(verbose=self.verbose, n_points_outer=len(self.total_pop)),
         )
+        self.opt_results.append(result)
 
         # Select infill points and denormalize the design vectors
-        pop = self.infill.select_infill_solutions(result.pop, problem, n_infill)
+        selected_pop = self.infill.select_infill_solutions(result.pop, problem, n_infill)
+        result.opt = selected_pop
 
-        x = self._denormalize(pop.get('X'))
+        x = self._denormalize(selected_pop.get('X'))
         return Population.new(X=x)
 
     def _get_infill_problem(self):
@@ -221,6 +246,101 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
     def _get_infill_algorithm(self):
         return NSGA2(pop_size=self.pop_size)
+
+    def plot_infill_selection(self, show=True):
+        has_warned = False
+        for i, result in enumerate(self.opt_results):
+            obj = result.pop.get('F')
+            obj_selected = result.opt.get('F')
+
+            if obj.shape[1] < 2:
+                log.warning('Less than 2 objectives: cannot plot solution selection')
+                return
+            if obj.shape[1] > 2 and not has_warned:
+                has_warned = True
+                log.warning('More than 2 objectives: solution selection plots might be affected')
+
+            plt.figure()
+            plt.title('Infill criteria new solutions: %d (n_obj = %d)' % (i, obj.shape[1]))
+            plt.scatter(obj[:, 0], obj[:, 1], s=5, c='k', label='Identified')
+            plt.scatter(obj_selected[:, 0], obj_selected[:, 1], s=5, c='g', label='Selected')
+            plt.xlabel('Infill objective 1'), plt.ylabel('Infill objective 2'), plt.legend()
+
+        if show:
+            plt.show()
+
+    def plot_model(self, i_x: List[int] = None, i_y: int = None, line_at_level: float = None, show=True):
+
+        has_var = self.supports_variances
+        is_one_dim = self.problem.n_var == 1 or (i_x is not None and len(i_x) == 1)
+        if i_x is None:
+            i_x = [0] if is_one_dim else [0, 1]
+        if i_y is None:
+            i_y = 0
+
+        x_train, y_train = self.x_train, self.y_train
+        self._train_model()
+
+        x = np.linspace(0, 1, 100)
+        if is_one_dim:
+            xx = np.ones((len(x), self.problem.n_var))*.5
+            xx[:, i_x[0]] = x
+            y = self.surrogate_model.predict_values(xx)[:, i_y]
+
+            plt.figure()
+            plt.plot(x, y, 'k', linewidth=1.)
+            if has_var:
+                y_var = self.surrogate_model.predict_variances(xx)[:, i_y]
+                plt.plot(x, y+y_var, '--k', linewidth=1.)
+                plt.plot(x, y-y_var, '--k', linewidth=1.)
+            plt.scatter(x_train[:, i_x[0]], y_train[:, i_y], c='k', marker='x')
+            plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$y_{%d}$' % i_y)
+
+        else:
+            x2 = np.linspace(0, 1, 100)
+            xx1, xx2 = np.meshgrid(x, x2)
+
+            xx = np.ones((xx1.size, self.problem.n_var))*.5
+            xx[:, i_x[0]] = xx1.ravel()
+            xx[:, i_x[1]] = xx2.ravel()
+            y = self.surrogate_model.predict_values(xx)[:, i_y]
+            yy = y.reshape(xx1.shape)
+
+            # Contour
+            plt.figure()
+            c = plt.contourf(xx1, xx2, yy, 50)
+
+            if line_at_level is not None:
+                plt.contour(xx1, xx2, yy, [line_at_level], colors='k', linewidth=1.)
+
+            plt.scatter(x_train[:, i_x[0]], x_train[:, i_x[1]], c='k', marker='x')
+
+            plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$x_{%d}$' % i_x[1])
+            cb = plt.colorbar(c)
+            cb.set_label('$y_{%d}$' % i_y)
+
+            # Contour (variance)
+            if has_var:
+                yy_var = self.surrogate_model.predict_variances(xx)[:, i_y].reshape(xx1.shape)
+
+                plt.figure()
+                c = plt.contourf(xx1, xx2, yy_var, 50)
+                plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$x_{%d}$' % i_x[1])
+                cb = plt.colorbar(c)
+                cb.set_label('$var_{%d}$' % i_y)
+
+            # Error
+            plt.figure()
+            y_err = y_train[:, i_y]-self.surrogate_model.predict_values(x_train)[:, i_y]
+            c = plt.scatter(x_train[:, i_x[0]], x_train[:, i_x[1]], s=1, c=y_err, cmap='RdYlBu',
+                            norm=SymLogNorm(linthresh=1e-3, base=10.))
+
+            plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$x_{%d}$' % i_x[1])
+            cb = plt.colorbar(c)
+            cb.set_label('$err_{%d}$' % i_y)
+
+        if show:
+            plt.show()
 
 
 class SurrogateInfillCallback(Callback):

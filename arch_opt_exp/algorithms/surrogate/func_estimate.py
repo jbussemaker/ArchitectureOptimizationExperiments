@@ -55,7 +55,7 @@ if __name__ == '__main__':
             verbose=True,
         )
 
-        n_eval, n_eval_sbo, n_repeat = 10000, 250, 8
+        n_eval, n_eval_sbo, n_repeat = 10000, 500, 8
         algorithms = [
             (RandomSearchAlgorithm(pop_size=100), 'Random search', n_eval),
             (NSGA2(pop_size=100), 'NSGA2', n_eval),
@@ -74,6 +74,16 @@ if __name__ == '__main__':
             ExpMovingAverageFilter(MutualDominationRateMetric(), n=5),
         ]
         plot_names = [['delta_hv'], None, ['cr'], ['mdr']]
+
+        # # Plot infill selection
+        # res_infill: SurrogateBasedInfill = Experimenter(problem, algorithms[2][0], n_eval_max=algorithms[2][2])\
+        #     .run_effectiveness().algorithm.infill
+        # res_infill.plot_infill_selection(show=False)
+        # for ii in range(problem.n_obj):
+        #     res_infill.plot_model(i_y=ii, show=False)
+        # for ii in range(problem.n_constr):
+        #     res_infill.plot_model(i_y=problem.n_obj+ii, show=False)
+        # plt.show(), exit()
 
         # Run algorithms
         results = [ExperimenterResult.aggregate_results(
