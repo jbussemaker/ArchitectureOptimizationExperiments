@@ -28,9 +28,9 @@ from pymoo.optimize import minimize
 from pymoo.model.result import Result
 from pymoo.model.problem import Problem
 from pymoo.model.callback import Callback
-from pymoo.model.algorithm import Algorithm
 from pymoo.model.population import Population
 from pymoo.model.termination import Termination
+from pymoo.model.algorithm import Algorithm, filter_optimum
 from pymoo.algorithms.nsga2 import NSGA2, RankAndCrowdingSurvival
 from pymoo.util.termination.max_gen import MaximumGenerationTermination
 
@@ -48,6 +48,7 @@ class SurrogateInfill:
         self.problem: Problem = None
         self.surrogate_model: SurrogateModel = None
         self.n_constr = 0
+        self.n_f_ic = None
 
         self.x_train = None
         self.y_train = None
@@ -87,9 +88,16 @@ class SurrogateInfill:
 
         self._initialize()
 
+        self.n_f_ic = self.get_n_infill_objectives()
+
     def select_infill_solutions(self, population: Population, infill_problem: Problem, n_infill) -> Population:
         """Select infill solutions from resulting population using rank and crowding selection (from NSGA2) algorithm.
         This method can be overwritten to implement a custom selection strategy."""
+
+        # If there is only one objective, select the best point to prevent selecting duplicate points
+        if self.n_f_ic == 1:
+            return filter_optimum(population, least_infeasible=True)
+
         survival = RankAndCrowdingSurvival()
         return survival.do(infill_problem, population, n_infill)
 

@@ -209,7 +209,7 @@ if __name__ == '__main__':
         algorithms = [
             (NSGA2(pop_size=100), 'NSGA2', n_eval),
             (sbo_y.algorithm(infill_size=25, init_size=50), sbo_y.name, n_eval_sbo),
-            # (sbo_epoi.algorithm(infill_size=25, init_size=50), sbo_epoi.name, n_eval_sbo),
+            (sbo_epoi.algorithm(init_size=50), sbo_epoi.name, 60),  # SO infill only generates 1 pt per iteration
             (sbo_mo_epoi.algorithm(infill_size=25, init_size=50), sbo_mo_epoi.name, n_eval_sbo),
         ]
 

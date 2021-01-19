@@ -92,8 +92,8 @@ if __name__ == '__main__':
         n_eval, n_eval_sbo, n_repeat = 10000, 500, 8
         algorithms = [
             (NSGA2(pop_size=100), 'NSGA2', n_eval),
-            (sbo_y.algorithm(infill_size=50, init_size=100), sbo_y.name, n_eval_sbo),
-            (sbo_mvpf.algorithm(infill_size=50, init_size=100), sbo_mvpf.name, n_eval_sbo),
+            (sbo_y.algorithm(infill_size=25, init_size=50), sbo_y.name, n_eval_sbo),
+            (sbo_mvpf.algorithm(infill_size=25, init_size=50), sbo_mvpf.name, n_eval_sbo),
         ]
 
         # Define problem and metrics
