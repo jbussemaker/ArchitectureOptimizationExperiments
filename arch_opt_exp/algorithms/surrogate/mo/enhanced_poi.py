@@ -214,7 +214,7 @@ if __name__ == '__main__':
         ]
 
         # Define problem and metrics
-        problem = get_problem('dtlz2', n_var=11, n_obj=3)
+        problem = get_problem('dtlz2', n_var=11, n_obj=2)
         pf = problem.pareto_front(get_reference_directions('das-dennis', problem.n_obj, n_partitions=12))
         metrics = [
             # Metrics for evaluating the algorithm performance

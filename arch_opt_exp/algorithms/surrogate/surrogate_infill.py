@@ -87,8 +87,7 @@ class SurrogateInfill:
 
         self._initialize()
 
-    @classmethod
-    def select_infill_solutions(cls, population: Population, infill_problem: Problem, n_infill) -> Population:
+    def select_infill_solutions(self, population: Population, infill_problem: Problem, n_infill) -> Population:
         """Select infill solutions from resulting population using rank and crowding selection (from NSGA2) algorithm.
         This method can be overwritten to implement a custom selection strategy."""
         survival = RankAndCrowdingSurvival()
