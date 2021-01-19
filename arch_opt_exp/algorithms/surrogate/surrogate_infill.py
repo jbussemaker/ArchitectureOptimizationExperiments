@@ -231,13 +231,17 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         algorithm = self._get_infill_algorithm()
         termination = self._get_termination()
 
+        n_callback = 20
+        if isinstance(termination, MaximumGenerationTermination):
+            n_callback = int(termination.n_max_gen/5)
+
         # Run infill problem
         n_eval_outer = self._algorithm.evaluator.n_eval if self._algorithm is not None else -1
         result = minimize(
             problem, algorithm,
             termination=termination,
-            callback=SurrogateInfillCallback(verbose=self.verbose, n_points_outer=len(self.total_pop),
-                                             n_eval_outer=n_eval_outer),
+            callback=SurrogateInfillCallback(n_gen_report=n_callback, verbose=self.verbose,
+                                             n_points_outer=len(self.total_pop), n_eval_outer=n_eval_outer),
         )
         self.opt_results.append(result)
 
