@@ -32,6 +32,7 @@ from pymoo.model.population import Population
 from pymoo.model.termination import Termination
 from pymoo.model.algorithm import Algorithm, filter_optimum
 from pymoo.algorithms.nsga2 import NSGA2, RankAndCrowdingSurvival
+from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 from pymoo.util.termination.max_gen import MaximumGenerationTermination
 
 __all__ = ['SurrogateInfill', 'SurrogateModelFactory', 'SurrogateBasedInfill', 'SurrogateInfillOptimizationProblem']
@@ -100,6 +101,12 @@ class SurrogateInfill:
 
         survival = RankAndCrowdingSurvival()
         return survival.do(infill_problem, population, n_infill)
+
+    @staticmethod
+    def get_pareto_front(f: np.ndarray) -> np.ndarray:
+        """Get the non-dominated set of objective values (the Pareto front)."""
+        i_non_dom = NonDominatedSorting().do(f, only_non_dominated_front=True)
+        return np.copy(f[i_non_dom, :])
 
     def _initialize(self):
         pass

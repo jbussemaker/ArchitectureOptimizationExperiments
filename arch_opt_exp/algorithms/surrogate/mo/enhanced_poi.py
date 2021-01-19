@@ -21,7 +21,6 @@ from scipy.special import ndtr
 import matplotlib.pyplot as plt
 from arch_opt_exp.algorithms.surrogate.mo.mo_modulate import *
 from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
-from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
 __all__ = ['EnhancedPOIInfill', 'MOEnhancedPOIInfill', 'EuclideanEIInfill', 'MOEuclideanEIInfill']
 
@@ -53,12 +52,6 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
         self.f_pareto = self.get_pareto_front(y_train[:, :self.problem.n_obj])
         self.f_pareto_sorted = self._get_f_sorted(self.f_pareto)
         self.i_pts_list = self._get_i_pts_list(self.f_pareto, self.k)
-
-    @staticmethod
-    def get_pareto_front(f: np.ndarray) -> np.ndarray:
-        """Get the non-dominated set of objective values (the Pareto front)."""
-        i_non_dom = NonDominatedSorting().do(f, only_non_dominated_front=True)
-        return np.copy(f[i_non_dom, :])
 
     def get_n_infill_objectives(self) -> int:
         return 1
@@ -240,10 +233,10 @@ class EuclideanEIInfill(EnhancedPOIInfill):
 
 class MOEuclideanEIInfill(ModulatedMOInfill):
     """
-    Modulate the single-objective Enhanced POI criterion to a multi-objective criterion to increase spread along the
-    currently existing Pareto front.
+    Modulate the single-objective EEI criterion to a multi-objective criterion to increase spread along the currently
+    existing Pareto front.
 
-    Note that the Enhanced PoI is a relatively computationally expensive infill criterion.
+    Note that the EEI is a relatively computationally expensive infill criterion.
     """
 
     def __init__(self, **kwargs):

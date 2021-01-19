@@ -19,7 +19,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from arch_opt_exp.algorithms.surrogate.mo.mo_modulate import *
 from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
-from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
 __all__ = ['ExpectedMaximinFitnessInfill', 'MOExpectedMaximinFitnessInfill']
 
@@ -45,12 +44,6 @@ class ExpectedMaximinFitnessInfill(ProbabilityOfFeasibilityInfill):
         super(ExpectedMaximinFitnessInfill, self).set_training_values(x_train, y_train)
 
         self.f_pareto = self.get_pareto_front(y_train[:, :self.problem.n_obj])
-
-    @staticmethod
-    def get_pareto_front(f: np.ndarray) -> np.ndarray:
-        """Get the non-dominated set of objective values (the Pareto front)."""
-        i_non_dom = NonDominatedSorting().do(f, only_non_dominated_front=True)
-        return np.copy(f[i_non_dom, :])
 
     def get_n_infill_objectives(self) -> int:
         return 1
