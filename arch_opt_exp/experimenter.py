@@ -25,6 +25,7 @@ import numpy as np
 from typing import *
 import logging.config
 import concurrent.futures
+import matplotlib.pyplot as plt
 from arch_opt_exp.metrics_base import *
 from werkzeug.utils import secure_filename
 
@@ -160,6 +161,48 @@ class ExperimenterResult(Result):
         metrics = [res.metrics[metric_name] for res in results]
         n_eval = [res.n_eval for res in results] if plot_evaluations else None
         Metric.plot_multiple(metrics, n_eval=n_eval, **kwargs)
+
+    @staticmethod
+    def plot_metrics_pareto(results: List['ExperimenterResult'], metric1_name_value: Tuple[str, str],
+                            metric2_name_value: Tuple[str, str], names: List[str] = None, show=True):
+
+        def _get_end_value_std(result: ExperimenterResult, metric_name: str, value_name: str) \
+                -> Tuple[float, Optional[float]]:
+
+            if metric_name == 'n_eval':
+                value = result.n_eval[-1]
+                std = result.n_eval_std[-1] if result.n_eval_std is not None else None
+                return value, std
+
+            metric = result.metrics[metric_name]
+            value = metric.values[value_name][-1]
+            std = metric.values_std[value_name][-1] if metric.values_std is not None else None
+            return value, std
+
+        plt.figure(), plt.title('%s.%s vs %s.%s' % (metric1_name_value[0], metric1_name_value[1], metric2_name_value[0],
+                                                    metric2_name_value[1]))
+
+        for i, res in enumerate(results):
+            kwargs = {}
+            if names is not None:
+                kwargs['label'] = names[i]
+
+            val1, std1 = _get_end_value_std(res, *metric1_name_value)
+            val2, std2 = _get_end_value_std(res, *metric2_name_value)
+
+            if std1 is not None and std2 is not None:
+                plt.errorbar([val1], [val2], xerr=[std1], yerr=[std2], fmt='.k', markersize=1, elinewidth=1, capsize=5,
+                             **kwargs)
+            else:
+                plt.scatter([val1], [val2], s=1, c='k', marker='.', **kwargs)
+
+        plt.xlabel('%s.%s' % (metric1_name_value[0], metric1_name_value[1]))
+        plt.ylabel('%s.%s' % (metric2_name_value[0], metric2_name_value[1]))
+        if names is not None:
+            plt.legend()
+
+        if show:
+            plt.show()
 
 
 class Experimenter:

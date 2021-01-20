@@ -195,6 +195,13 @@ def test_run_efficiency(problem, algorithm):
     assert result_not_converged.metrics['IGD'].results()['indicator'][-1] == pytest.approx(.347, abs=1e-2)
     assert len(result_not_converged.termination.metric.results()['indicator']) == 100
 
+    ExperimenterResult.plot_metrics_pareto(
+        [result, result_converged],
+        metric1_name_value=('n_eval', ''),
+        metric2_name_value=(igd_metric.name, 'indicator'),
+        show=False,
+    )
+
 
 def test_get_mean_std():
     results = []
@@ -262,3 +269,10 @@ def test_exp_result_from_results(problem, algorithm):
     assert sum_eff_result.metrics['IGD'].values_std['indicator'][-1] == np.std(last_metric_values)
 
     sum_eff_result.metrics['IGD'].plot(show=False)
+
+    ExperimenterResult.plot_metrics_pareto(
+        [summary_result, sum_eff_result],
+        metric1_name_value=('n_eval', ''),
+        metric2_name_value=(igd_metric.name, 'indicator'),
+        show=False,
+    )
