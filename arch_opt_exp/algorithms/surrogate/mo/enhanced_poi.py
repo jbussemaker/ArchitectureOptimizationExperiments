@@ -22,7 +22,8 @@ import matplotlib.pyplot as plt
 from arch_opt_exp.algorithms.surrogate.mo.mo_modulate import *
 from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
 
-__all__ = ['EnhancedPOIInfill', 'MOEnhancedPOIInfill', 'EuclideanEIInfill', 'MOEuclideanEIInfill']
+__all__ = ['EnhancedPOIInfill', 'ModEnhancedPOIInfill', 'EuclideanEIInfill', 'ModEuclideanEIInfill', 'MinimumPOIInfill',
+           'ModMinimumPOIInfill']
 
 
 class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
@@ -62,7 +63,7 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
         for i in range(f_predict.shape[0]):
             e_poi[i, 0] = self._p_dominate(self.f_pareto_sorted, f_predict[i, :], f_var_predict[i, :], self.i_pts_list)
 
-        # Normalize tto ensure spread if even if no points with probable improvement are found
+        # Normalize to ensure spread if even if no points with probable improvement are found
         max_e_poi = np.max(e_poi)
         if max_e_poi != 0.:
             e_poi /= max_e_poi
@@ -160,17 +161,17 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
             plt.show()
 
 
-class MOEnhancedPOIInfill(ModulatedMOInfill):
+class ModEnhancedPOIInfill(ModulatedMOInfill):
     """
-    Modulate the single-objective Enhanced POI criterion to a multi-objective criterion to increase spread along the
-    currently existing Pareto front.
+    Modulate the scalar Enhanced POI criterion to a multi-objective criterion to increase spread along the currently
+    existing Pareto front.
 
     Note that the Enhanced PoI is a relatively computationally expensive infill criterion.
     """
 
     def __init__(self, **kwargs):
         underlying = EnhancedPOIInfill(**kwargs)
-        super(MOEnhancedPOIInfill, self).__init__(underlying)
+        super(ModEnhancedPOIInfill, self).__init__(underlying)
 
 
 class EuclideanEIInfill(EnhancedPOIInfill):
@@ -199,7 +200,7 @@ class EuclideanEIInfill(EnhancedPOIInfill):
             eei[i, 0] = self._eei(self.f_pareto, self.f_pareto_sorted, f_predict[i, :], f_var_predict[i, :],
                                   self.i_pts_list)
 
-        # Normalize tto ensure spread if even if no points with probable improvement are found
+        # Normalize to ensure spread if even if no points with probable improvement are found
         max_eei = np.max(eei)
         if max_eei != 0.:
             eei /= max_eei
@@ -214,14 +215,16 @@ class EuclideanEIInfill(EnhancedPOIInfill):
         # Get probability of domination
         p_dominate = cls._p_dominate(f_pareto_sorted, f_predict, var_predict, i_pts_list)
 
+        return p_dominate*cls._get_euclidean_moment(p_dominate, f_pareto, f_predict)
+
+    @classmethod
+    def _get_euclidean_moment(cls, p_dominate: float, f_pareto: np.ndarray, f_predict: np.ndarray) -> float:
+
         # If the probability of domination if less than 50%, it means we are on the wrong side of the Pareto front
         if p_dominate < .5:
             return 0.
 
-        f_pareto_min_dist = np.min(np.sqrt(np.sum((f_predict-f_pareto)**2, axis=1)))  # Parr Eq. 6.9
-
-        return p_dominate*f_pareto_min_dist
-
+        return np.min(np.sqrt(np.sum((f_predict-f_pareto) ** 2, axis=1)))  # Parr Eq. 6.9
 
     @classmethod
     def plot_eei(cls, var=None, n_dominate=1, n_pareto=5, show=True):
@@ -231,17 +234,97 @@ class EuclideanEIInfill(EnhancedPOIInfill):
         cls._plot_f_metric(_metric, var=var, n_dominate=n_dominate, n_pareto=n_pareto, show=show)
 
 
-class MOEuclideanEIInfill(ModulatedMOInfill):
+class ModEuclideanEIInfill(ModulatedMOInfill):
     """
-    Modulate the single-objective EEI criterion to a multi-objective criterion to increase spread along the currently
-    existing Pareto front.
+    Modulate the scalar EEI criterion to a multi-objective criterion to increase spread along the currently existing
+    Pareto front.
 
     Note that the EEI is a relatively computationally expensive infill criterion.
     """
 
     def __init__(self, **kwargs):
         underlying = EuclideanEIInfill(**kwargs)
-        super(MOEuclideanEIInfill, self).__init__(underlying)
+        super(ModEuclideanEIInfill, self).__init__(underlying)
+
+
+class MinimumPOIInfill(EuclideanEIInfill):
+    """
+    The Minimum Probability of Improvement (MPoI) criterion modifies the calculation of the domination probability by
+    only considering one objective dimension at a time. This should reduce computational cost.
+
+    Optionally multiplies the MPoI criteria by its first integral moment, to transform it to a EI-like metric. Uses a
+    similar implementation as `EuclideanEIInfill`.
+
+    Implementation based on:
+    Rahat, A.A.M., "Alternative Infill Strategies for Expensive Multi-Objective Optimisation", 2017,
+        10.1145/3071178.3071276
+    Parr, J.M., "Improvement Criteria for Constraint Handling and Multiobjective Optimization", 2013
+    """
+
+    def __init__(self, euclidean=False, **kwargs):
+        super(MinimumPOIInfill, self).__init__(**kwargs)
+
+        self.euclidean = euclidean
+
+    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+
+        mpoi = np.empty((f_predict.shape[0], 1))
+        for i in range(f_predict.shape[0]):
+            mpoi[i, 0] = self._mpoi(self.f_pareto, f_predict[i, :], f_var_predict[i, :], euclidean=self.euclidean)
+
+        # Normalize to ensure spread if even if no points with probable improvement are found
+        max_mpoi = np.max(mpoi)
+        if max_mpoi != 0.:
+            mpoi /= max_mpoi
+
+        mpoi[mpoi < 1e-6] = 0.
+        return 1.-mpoi
+
+    @classmethod
+    def _mpoi(cls, f_pareto: np.ndarray, f_predict: np.ndarray, var_predict: np.ndarray, euclidean: bool) -> float:
+
+        n, n_f = f_pareto.shape
+
+        # Probability of being dominated for each point in the Pareto front along each objective dimension
+        def cdf_not_better(f, f_pred, var_pred):  # Rahat 2017, Eq. 11, 12
+            return ndtr((f_pred-f)/var_pred)
+
+        p_is_dom_dim = np.empty((n, n_f))
+        for i_f in range(n_f):
+            p_is_dom_dim[:, i_f] = cdf_not_better(f_pareto[:, i_f], f_predict[i_f], var_predict[i_f])
+
+        # Probability of being dominated for each point along all dimensions: Rahat 2017, Eq. 10
+        p_is_dom = np.prod(p_is_dom_dim, axis=1)
+
+        # Probability of domination for each point: Rahat 2017, Eq. 13
+        p_dom = 1-p_is_dom
+
+        # Minimum probability of domination: Rahat 2017, Eq. 14
+        min_poi = np.min(p_dom)
+
+        # Multiply by distance to Pareto front if requested
+        if euclidean:
+            min_poi *= cls._get_euclidean_moment(min_poi, f_pareto, f_predict)
+
+        return min_poi
+
+    @classmethod
+    def plot_mpoi(cls, var=None, n_pareto=5, euclidean=False, show=True):
+        def _metric(f_pareto, _, f, f_var, __):
+            return cls._mpoi(f_pareto, f, f_var, euclidean)
+
+        cls._plot_f_metric(_metric, var=var, n_pareto=n_pareto, show=show)
+
+
+class ModMinimumPOIInfill(ModulatedMOInfill):
+    """
+    Modulate the scalar MPoI criterion to a multi-objective criterion to increase spread along the currently existing
+    Pareto front.
+    """
+
+    def __init__(self, **kwargs):
+        underlying = MinimumPOIInfill(**kwargs)
+        super(ModMinimumPOIInfill, self).__init__(underlying)
 
 
 if __name__ == '__main__':
@@ -258,45 +341,50 @@ if __name__ == '__main__':
     # EnhancedPOIInfill.plot_p_dominate(var=.05, n_dominate=1, n_pareto=5), exit()
     # EuclideanEIInfill.plot_eei(var=.05, n_dominate=1, n_pareto=5), exit()
 
+    # MinimumPOIInfill.plot_mpoi(var=.05, n_pareto=5, show=False)
+    # MinimumPOIInfill.plot_mpoi(var=.05, n_pareto=5, euclidean=True), exit()
+
     with Experimenter.temp_results():
         # Define algorithms to run
         surrogate_model = KPLS(n_comp=5, theta0=[1e-2] * 5)
-        sbo_epoi = SurrogateBasedInfill(
-            surrogate_model=surrogate_model,
-            infill=EnhancedPOIInfill(k=1),
-            termination=10, verbose=True,
-        )
-        sbo_mo_epoi = SurrogateBasedInfill(
-            surrogate_model=surrogate_model,
-            infill=MOEnhancedPOIInfill(k=1),
-            termination=10, verbose=True,
-        )
-        sbo_eei = SurrogateBasedInfill(
-            surrogate_model=surrogate_model,
-            infill=EuclideanEIInfill(k=1),
-            termination=10, verbose=True,
-        )
-        sbo_mo_eei = SurrogateBasedInfill(
-            surrogate_model=surrogate_model,
-            infill=MOEuclideanEIInfill(k=1),
-            termination=10, verbose=True,
-        )
-        sbo_y = SurrogateBasedInfill(
-            surrogate_model=surrogate_model,
-            infill=FunctionEstimateInfill(),
-            termination=100, verbose=True,
-        )
+
+        sbo_epoi = SurrogateBasedInfill(infill=EnhancedPOIInfill(k=1),
+                                        surrogate_model=surrogate_model, termination=10, verbose=True)
+        sbo_mo_epoi = SurrogateBasedInfill(infill=ModEnhancedPOIInfill(k=1),
+                                           surrogate_model=surrogate_model, termination=40, verbose=True)
+
+        sbo_eei = SurrogateBasedInfill(infill=EuclideanEIInfill(k=1),
+                                       surrogate_model=surrogate_model, termination=10, verbose=True)
+        sbo_mo_eei = SurrogateBasedInfill(infill=ModEuclideanEIInfill(k=1),
+                                          surrogate_model=surrogate_model, termination=40, verbose=True)
+        sbo_mo_eei2 = SurrogateBasedInfill(infill=ModEuclideanEIInfill(k=2),
+                                           surrogate_model=surrogate_model, termination=40, verbose=True)
+
+        sbo_mpoi = SurrogateBasedInfill(infill=MinimumPOIInfill(),
+                                        surrogate_model=surrogate_model, termination=10, verbose=True)
+        sbo_mo_mpoi = SurrogateBasedInfill(infill=ModMinimumPOIInfill(),
+                                           surrogate_model=surrogate_model, termination=40, verbose=True)
+        sbo_mo_mpoi_eu = SurrogateBasedInfill(infill=ModMinimumPOIInfill(euclidean=True),
+                                              surrogate_model=surrogate_model, termination=40, verbose=True)
+
+        sbo_y = SurrogateBasedInfill(infill=FunctionEstimateInfill(),
+                                     surrogate_model=surrogate_model, termination=100, verbose=True)
 
         n_eval, n_eval_sbo, n_repeat = 10000, 500, 8
         algorithms = [
             (NSGA2(pop_size=100), 'NSGA2', n_eval),
             (sbo_y.algorithm(infill_size=25, init_size=50), sbo_y.name, n_eval_sbo),
 
-            (sbo_epoi.algorithm(init_size=50), sbo_epoi.name, 60),  # SO infill only generates 1 pt per iteration
+            (sbo_epoi.algorithm(infill_size=10, init_size=50), sbo_epoi.name, 100),
             (sbo_mo_epoi.algorithm(infill_size=25, init_size=50), sbo_mo_epoi.name, n_eval_sbo),
 
-            (sbo_eei.algorithm(init_size=50), sbo_eei.name, 60),  # SO infill only generates 1 pt per iteration
+            (sbo_eei.algorithm(infill_size=10, init_size=50), sbo_eei.name, 100),
             (sbo_mo_eei.algorithm(infill_size=25, init_size=50), sbo_mo_eei.name, n_eval_sbo),
+            (sbo_mo_eei2.algorithm(infill_size=25, init_size=50), sbo_mo_eei2.name+' / k=2', n_eval_sbo),
+
+            (sbo_mpoi.algorithm(infill_size=10, init_size=50), sbo_mpoi.name, n_eval_sbo),
+            (sbo_mo_mpoi.algorithm(infill_size=25, init_size=50), sbo_mo_mpoi.name, n_eval_sbo),
+            (sbo_mo_mpoi_eu.algorithm(infill_size=25, init_size=50), sbo_mo_mpoi_eu.name+' / EU', n_eval_sbo),
         ]
 
         # Define problem and metrics

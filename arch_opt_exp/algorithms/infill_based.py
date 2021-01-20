@@ -60,19 +60,25 @@ class InfillBasedAlgorithm(Algorithm):
         self.pop = self.survival.do(self.problem, pop, len(pop), algorithm=self)
 
     def _next(self):
-        # Create offspring using infill criterion
-        off = self.infill.do(self.problem, self.pop, self.infill_size, algorithm=self)
+        total_off = Population.new()
 
-        # Stop if no new offspring is generated
-        if len(off) == 0:
-            self.termination.force_termination = True
-            return
+        # Repeat the steps of one iteration until we filled all infill points, to make sure we only "count" one
+        # algorithm step after all infill points have been generated
+        while len(total_off) < self.infill_size:
+            # Create offspring using infill criterion
+            off = self.infill.do(self.problem, self.pop, self.infill_size, algorithm=self)
 
-        # Evaluate and update population
-        self.evaluator.eval(self.problem, off, algorithm=self)
+            # Stop if no new offspring is generated
+            if len(off) == 0:
+                self.termination.force_termination = True
+                return
 
-        pop = Population.merge(self.pop, off)
-        self.pop = self.survival.do(self.problem, pop, self.init_size, algorithm=self)
+            # Evaluate and update population
+            self.evaluator.eval(self.problem, off, algorithm=self)
+
+            total_off = Population.merge(total_off, off)
+            pop = Population.merge(self.pop, total_off)
+            self.pop = self.survival.do(self.problem, pop, self.init_size, algorithm=self)
 
 
 class ModelBasedInfillCriterion(InfillCriterion):

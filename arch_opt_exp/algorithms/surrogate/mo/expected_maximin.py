@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from arch_opt_exp.algorithms.surrogate.mo.mo_modulate import *
 from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
 
-__all__ = ['ExpectedMaximinFitnessInfill', 'MOExpectedMaximinFitnessInfill']
+__all__ = ['ExpectedMaximinFitnessInfill', 'ModExpectedMaximinFitnessInfill']
 
 
 class ExpectedMaximinFitnessInfill(ProbabilityOfFeasibilityInfill):
@@ -146,15 +146,15 @@ class ExpectedMaximinFitnessInfill(ProbabilityOfFeasibilityInfill):
             plt.show()
 
 
-class MOExpectedMaximinFitnessInfill(ModulatedMOInfill):
+class ModExpectedMaximinFitnessInfill(ModulatedMOInfill):
     """
-    Modulate the single-objective EMFI criterion to a multi-objective criterion to increase spread along the
-    currently existing Pareto front.
+    Modulate the scalar EMFI criterion to a multi-objective criterion to increase spread along the currently existing
+    Pareto front.
     """
 
     def __init__(self, **kwargs):
         underlying = ExpectedMaximinFitnessInfill(**kwargs)
-        super(MOExpectedMaximinFitnessInfill, self).__init__(underlying)
+        super(ModExpectedMaximinFitnessInfill, self).__init__(underlying)
 
 
 if __name__ == '__main__':
@@ -181,7 +181,7 @@ if __name__ == '__main__':
         )
         sbo_mo_emfi = SurrogateBasedInfill(
             surrogate_model=surrogate_model,
-            infill=MOExpectedMaximinFitnessInfill(n_monte_carlo=1000),
+            infill=ModExpectedMaximinFitnessInfill(n_monte_carlo=1000),
             termination=100, verbose=True,
         )
         sbo_y = SurrogateBasedInfill(
@@ -194,7 +194,7 @@ if __name__ == '__main__':
         algorithms = [
             (NSGA2(pop_size=100), 'NSGA2', n_eval),
             (sbo_y.algorithm(infill_size=25, init_size=50), sbo_y.name, n_eval_sbo),
-            (sbo_emfi.algorithm(init_size=50), sbo_emfi.name, 60),  # SO infill only generates 1 pt per iteration
+            (sbo_emfi.algorithm(infill_size=10, init_size=50), sbo_emfi.name, 100),
             (sbo_mo_emfi.algorithm(infill_size=25, init_size=50), sbo_mo_emfi.name, n_eval_sbo),
         ]
 

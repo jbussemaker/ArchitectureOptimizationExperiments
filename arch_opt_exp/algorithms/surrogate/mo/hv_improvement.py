@@ -22,7 +22,7 @@ from pymoo.performance_indicator.hv import Hypervolume
 from arch_opt_exp.algorithms.surrogate.mo.mo_modulate import *
 from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
 
-__all__ = ['ExpectedHypervolumeImprovementInfill', 'MOExpectedHypervolumeImprovementInfill']
+__all__ = ['ExpectedHypervolumeImprovementInfill', 'ModExpectedHypervolumeImprovementInfill']
 
 
 class ExpectedHypervolumeImprovementInfill(ProbabilityOfFeasibilityInfill):
@@ -135,17 +135,17 @@ class ExpectedHypervolumeImprovementInfill(ProbabilityOfFeasibilityInfill):
             plt.show()
 
 
-class MOExpectedHypervolumeImprovementInfill(ModulatedMOInfill):
+class ModExpectedHypervolumeImprovementInfill(ModulatedMOInfill):
     """
-    Modulate the single-objective EHVI criterion to a multi-objective criterion to increase spread along the currently
-    existing Pareto front.
+    Modulate the scalar EHVI criterion to a multi-objective criterion to increase spread along the currently existing
+    Pareto front.
 
     Note that the EHVI is a computationally expensive infill criterion.
     """
 
     def __init__(self, **kwargs):
         underlying = ExpectedHypervolumeImprovementInfill(**kwargs)
-        super(MOExpectedHypervolumeImprovementInfill, self).__init__(underlying)
+        super(ModExpectedHypervolumeImprovementInfill, self).__init__(underlying)
 
 
 if __name__ == '__main__':
@@ -171,7 +171,7 @@ if __name__ == '__main__':
         )
         sbo_mo_ehvi = SurrogateBasedInfill(
             surrogate_model=surrogate_model,
-            infill=MOExpectedHypervolumeImprovementInfill(n_monte_carlo=200),
+            infill=ModExpectedHypervolumeImprovementInfill(n_monte_carlo=200),
             termination=10, verbose=True,
         )
         sbo_y = SurrogateBasedInfill(
@@ -185,7 +185,7 @@ if __name__ == '__main__':
             (NSGA2(pop_size=100), 'NSGA2', n_eval),
             (sbo_y.algorithm(infill_size=25, init_size=50), sbo_y.name, n_eval_sbo),
 
-            (sbo_ehvi.algorithm(init_size=50), sbo_ehvi.name, 60),  # SO infill only generates 1 pt per iteration
+            (sbo_ehvi.algorithm(infill_size=10, init_size=50), sbo_ehvi.name, 100),
             (sbo_mo_ehvi.algorithm(infill_size=25, init_size=50), sbo_mo_ehvi.name, n_eval_sbo),
         ]
 
