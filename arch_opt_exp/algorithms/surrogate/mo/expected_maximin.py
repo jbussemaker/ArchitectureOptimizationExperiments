@@ -56,7 +56,7 @@ class ExpectedMaximinFitnessInfill(ProbabilityOfFeasibilityInfill):
 
     @classmethod
     def _emf_monte_carlo(cls, f_mean, var, f_pareto, n=10000) -> float:  # Eq. 34
-        f_rand = np.random.normal(loc=f_mean, scale=var, size=(n, len(f_mean)))
+        f_rand = np.random.normal(loc=f_mean, scale=np.sqrt(var), size=(n, len(f_mean)))
         return np.mean(cls._emf(f_rand, f_pareto))
 
     @staticmethod
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
 
-    # ExpectedMaximinFitnessInfill.plot_emfi(n_pareto=5, n=1000, var=.1, n_rand=1000, contour=True, show=False)
+    # ExpectedMaximinFitnessInfill.plot_emfi(n_pareto=5, n=1000, var=.1**2, n_rand=1000, contour=True, show=False)
     # ExpectedMaximinFitnessInfill.plot_emfi(n_pareto=5, n=10000, var=None, show=True), exit()
 
     with Experimenter.temp_results():

@@ -160,6 +160,9 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
         self.x_train = None
         self.y_train = None
+        self.y_train_min = None
+        self.y_train_max = None
+        self.y_train_centered = None
 
         self.pop_size = pop_size or 100
         self.termination = termination
@@ -203,10 +206,16 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         x = self.total_pop.get('X')
         x_norm = self._normalize(x)
 
-        y = f = self._normalize_y(self.total_pop.get('F'))
+        f, self.y_train_min, self.y_train_max = self._normalize_y(self.total_pop.get('F'))
+        self.y_train_centered = [False]*f.shape[1]
+        y = f
         if self.problem.n_constr > 0:
-            g = self._normalize_y(self.total_pop.get('G'), keep_centered=True)
+            g, g_min, g_max = self._normalize_y(self.total_pop.get('G'), keep_centered=True)
             y = np.append(f, g, axis=1)
+
+            self.y_train_min = np.append(self.y_train_min, g_min, axis=1)
+            self.y_train_max = np.append(self.y_train_max, g_max, axis=1)
+            self.y_train_centered += [True]*g.shape[1]
 
         self.x_train = x_norm
         self.y_train = y
@@ -228,16 +237,18 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         return x_norm*(xu-xl)+xl
 
     @staticmethod
-    def _normalize_y(y: np.ndarray, keep_centered=False) -> np.ndarray:
-        y_min = np.min(y, axis=0)
-        y_max = np.max(y, axis=0)
+    def _normalize_y(y: np.ndarray, keep_centered=False, y_min=None, y_max=None):
+        if y_min is None:
+            y_min = np.min(y, axis=0)
+        if y_max is None:
+            y_max = np.max(y, axis=0)
 
         norm = y_max-y_min
         norm[norm < 1e-6] = 1e-6
 
         if keep_centered:
-            return y/norm
-        return (y-y_min)/norm
+            return y/norm, y_min, y_max
+        return (y-y_min)/norm, y_min, y_max
 
     def _generate_infill_points(self, n_infill: int) -> Population:
         # Create infill problem and algorithm
@@ -300,7 +311,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         if show:
             plt.show()
 
-    def plot_model(self, i_x: List[int] = None, i_y: int = None, line_at_level: float = None, show=True):
+    def plot_model(self, i_x: List[int] = None, i_y: int = None, line_at_level: float = None, plot_problem=False,
+                   show=True):
 
         has_var = self.supports_variances
         is_one_dim = self.problem.n_var == 1 or (i_x is not None and len(i_x) == 1)
@@ -312,6 +324,12 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         x_train, y_train = self.x_train, self.y_train
         self._train_model()
 
+        def _problem_eval_norm(xx_eval):
+            yy_prob = self.problem.evaluate(self._denormalize(xx_eval))[:, [i_y]]
+            yy_prob, _, _ = self._normalize_y(yy_prob, keep_centered=self.y_train_centered[i_y],
+                                              y_min=self.y_train_min[[i_y]], y_max=self.y_train_max[[i_y]])
+            return yy_prob
+
         x = np.linspace(0, 1, 100)
         if is_one_dim:
             xx = np.ones((len(x), self.problem.n_var))*.5
@@ -319,13 +337,16 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
             y = self.surrogate_model.predict_values(xx)[:, i_y]
 
             plt.figure()
-            plt.plot(x, y, 'k', linewidth=1.)
+            if plot_problem:
+                plt.plot(x, _problem_eval_norm(xx), 'b', linewidth=1., label='Problem')
+            plt.plot(x, y, 'k', linewidth=1., label='Predicted')
             if has_var:
-                y_var = self.surrogate_model.predict_variances(xx)[:, i_y]
-                plt.plot(x, y+y_var, '--k', linewidth=1.)
-                plt.plot(x, y-y_var, '--k', linewidth=1.)
-            plt.scatter(x_train[:, i_x[0]], y_train[:, i_y], c='k', marker='x')
+                y_std = np.sqrt(self.surrogate_model.predict_variances(xx)[:, i_y])
+                plt.plot(x, y+y_std, '--k', linewidth=1.)
+                plt.plot(x, y-y_std, '--k', linewidth=1.)
+            plt.scatter(x_train[:, i_x[0]], y_train[:, i_y], c='k', marker='x', label='Samples')
             plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$y_{%d}$' % i_y)
+            plt.legend()
 
         else:
             x2 = np.linspace(0, 1, 100)
@@ -347,28 +368,35 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
             plt.scatter(x_train[:, i_x[0]], x_train[:, i_x[1]], c='k', marker='x')
 
             plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$x_{%d}$' % i_x[1])
-            cb = plt.colorbar(c)
-            cb.set_label('$y_{%d}$' % i_y)
+            plt.colorbar(c).set_label('$y_{%d}$' % i_y)
 
             # Contour (variance)
             if has_var:
-                yy_var = self.surrogate_model.predict_variances(xx)[:, i_y].reshape(xx1.shape)
+                yy_std = np.sqrt(self.surrogate_model.predict_variances(xx)[:, i_y].reshape(xx1.shape))
 
                 plt.figure()
-                c = plt.contourf(xx1, xx2, yy_var, 50)
+                c = plt.contourf(xx1, xx2, yy_std, 50)
                 plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$x_{%d}$' % i_x[1])
-                cb = plt.colorbar(c)
-                cb.set_label('$var_{%d}$' % i_y)
+                plt.colorbar(c).set_label('$std_{%d}$' % i_y)
 
-            # Error
+            # Prediction error
             plt.figure()
             y_err = y_train[:, i_y]-self.surrogate_model.predict_values(x_train)[:, i_y]
             c = plt.scatter(x_train[:, i_x[0]], x_train[:, i_x[1]], s=1, c=y_err, cmap='RdYlBu',
                             norm=SymLogNorm(linthresh=1e-3, base=10.))
 
             plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$x_{%d}$' % i_x[1])
-            cb = plt.colorbar(c)
-            cb.set_label('$err_{%d}$' % i_y)
+            plt.colorbar(c).set_label('$err_{%d}$' % i_y)
+
+            # Problem error
+            if plot_problem:
+                yy_err = yy-_problem_eval_norm(xx).reshape(xx1.shape)
+                v_max = np.max(np.abs([np.max(yy_err), np.min(yy_err)]))
+
+                plt.figure()
+                c = plt.contourf(xx1, xx2, yy_err, 50, cmap='RdBu', vmin=-v_max, vmax=v_max)
+                plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$x_{%d}$' % i_x[1])
+                plt.colorbar(c).set_label('$err_{%d}$' % i_y)
 
         if show:
             plt.show()
@@ -417,3 +445,28 @@ class SurrogateInfillOptimizationProblem(Problem):
             if g.shape != (x.shape[0], self.n_constr):
                 raise RuntimeError('Wrong constraint results shape: %r != %r' % (g.shape, (x.shape[0], self.n_constr)))
             out['G'] = g
+
+
+if __name__ == '__main__':
+    from pymoo.problems.single.himmelblau import Himmelblau
+    from arch_opt_exp.algorithms.surrogate.func_estimate import FunctionEstimateInfill
+
+    prob = Himmelblau()
+    n_pts = 10
+
+    from smt.surrogate_models.krg import KRG
+    sm = KRG()
+
+    surrogate_infill = FunctionEstimateInfill()
+    sbo_infill = SurrogateBasedInfill(surrogate_model=sm, infill=surrogate_infill)
+    sbo_infill._generate_infill_points = lambda *args, **kwargs: []
+
+    algo = sbo_infill.algorithm(init_size=n_pts)
+    algo.setup(prob, termination=MaximumGenerationTermination(n_max_gen=1))
+    pop = algo.initialization.do(algo.problem, n_pts, algorithm=algo)
+    pop = algo.evaluator.eval(algo.problem, pop, algorithm=algo)
+    sbo_infill.do(algo.problem, pop, 0, algorithm=algo)
+
+    sbo_infill.plot_model(i_x=[0], plot_problem=True, show=False)
+    sbo_infill.plot_model(i_x=[1], plot_problem=True, show=False)
+    sbo_infill.plot_model(plot_problem=True)

@@ -51,9 +51,9 @@ class MinVariancePFInfill(FunctionEstimatePoFInfill):
         f_var, _ = self.predict_variance(x_pf)
 
         # Select points with highest variances
-        f_var_obj = 1.-f_var
+        f_std_obj = 1.-np.sqrt(f_var)
         survival = RankAndCrowdingSurvival()
-        pop_var = Population.new(X=x_pf, F=f_var_obj, G=g_pf)
+        pop_var = Population.new(X=x_pf, F=f_std_obj, G=g_pf)
         i_select = survival.do(infill_problem, pop_var, n_infill, return_indices=True)
 
         return pop_pf[i_select]

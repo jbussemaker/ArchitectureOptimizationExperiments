@@ -27,7 +27,7 @@ class ProbabilityOfFeasibilityInfill(SurrogateInfill):
     """
     Infill that treats all constraints using the Probability of Feasibility (PoF) criterion.
 
-    PoF(x) = Phi(-y(x)/s(x))
+    PoF(x) = Phi(-y(x)/sqrt(s(x)))
     where
     - Phi is the cumulative distribution function of the normal distribution
     - y(x) the surrogate model estimate
@@ -63,7 +63,7 @@ class ProbabilityOfFeasibilityInfill(SurrogateInfill):
 
     @staticmethod
     def _pof(g: np.ndarray, g_var: np.ndarray) -> np.ndarray:
-        return norm.cdf(-g/g_var)
+        return norm.cdf(-g/np.sqrt(g_var))
 
     def get_n_infill_objectives(self) -> int:
         raise NotImplementedError
@@ -89,7 +89,7 @@ class FunctionVariancePoFInfill(ProbabilityOfFeasibilityInfill):
         return self.problem.n_obj
 
     def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
-        return -f_var_predict
+        return -np.sqrt(f_var_predict)
 
 
 if __name__ == '__main__':

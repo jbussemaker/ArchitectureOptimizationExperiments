@@ -28,7 +28,7 @@ class ProbabilityOfImprovementInfill(ProbabilityOfFeasibilityInfill):
     Probability of Improvement represents the probability that some point will be better than the current best estimate
     with some offset:
 
-    PoI(x) = Phi((T - y(x))/s(x))
+    PoI(x) = Phi((T - y(x))/sqrt(s(x)))
     where
     - Phi is the cumulative distribution function of the normal distribution
     - T is the improvement target (current best estimate minus some offset)
@@ -62,7 +62,7 @@ class ProbabilityOfImprovementInfill(ProbabilityOfFeasibilityInfill):
 
     @staticmethod
     def _poi(f_targets: np.ndarray, f: np.ndarray, f_var: np.ndarray) -> np.ndarray:
-        return norm.cdf((f_targets-f) / f_var)
+        return norm.cdf((f_targets-f) / np.sqrt(f_var))
 
 
 class LowerConfidenceBoundInfill(ProbabilityOfFeasibilityInfill):
@@ -119,11 +119,12 @@ class EstimateVarianceInfill(ProbabilityOfFeasibilityInfill):
         f[:, :n_f] = f_predict[:, :]
 
         # Variances as second set of objectives
+        f_std_predict = np.sqrt(f_var_predict)
         if self.var_max is None:
-            self.var_max = np.max(f_var_predict, axis=0)
+            self.var_max = np.max(f_std_predict, axis=0)
             self.var_max[self.var_max == 0] = 1.
 
-        f[:, n_f:] = 1.-f_var_predict/self.var_max
+        f[:, n_f:] = 1.-f_std_predict/self.var_max
 
         return f
 
@@ -163,7 +164,7 @@ class ExpectedImprovementInfill(ProbabilityOfFeasibilityInfill):
     @staticmethod
     def _ei(f_min: np.ndarray, f: np.ndarray, f_var: np.ndarray) -> np.ndarray:
         dy = f_min-f
-        ei = dy*norm.cdf(dy/f_var) + f_var*norm.pdf(dy/f_var)
+        ei = dy*norm.cdf(dy/np.sqrt(f_var)) + f_var*norm.pdf(dy/np.sqrt(f_var))
         return ei
 
 

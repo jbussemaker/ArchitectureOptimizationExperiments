@@ -92,7 +92,7 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
         #  n+1 = point infinitely worse --> probability of domination = 1
 
         def cdf_better(f, f_pred, var_pred):  # Hawe 2007, Eq. 2, 3
-            return ndtr((f-f_pred)/var_pred)
+            return ndtr((f-f_pred)/np.sqrt(var_pred))
 
         phi_cache = np.empty((n_f, n+2))
         for i_f in range(n_f):
@@ -287,7 +287,7 @@ class MinimumPOIInfill(EuclideanEIInfill):
 
         # Probability of being dominated for each point in the Pareto front along each objective dimension
         def cdf_not_better(f, f_pred, var_pred):  # Rahat 2017, Eq. 11, 12
-            return ndtr((f_pred-f)/var_pred)
+            return ndtr((f_pred-f)/np.sqrt(var_pred))
 
         p_is_dom_dim = np.empty((n, n_f))
         for i_f in range(n_f):
@@ -338,11 +338,11 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
 
-    # EnhancedPOIInfill.plot_p_dominate(var=.05, n_dominate=1, n_pareto=5), exit()
-    # EuclideanEIInfill.plot_eei(var=.05, n_dominate=1, n_pareto=5), exit()
+    # EnhancedPOIInfill.plot_p_dominate(var=.05**2, n_dominate=1, n_pareto=5), exit()
+    # EuclideanEIInfill.plot_eei(var=.05**2, n_dominate=1, n_pareto=5), exit()
 
-    # MinimumPOIInfill.plot_mpoi(var=.05, n_pareto=5, show=False)
-    # MinimumPOIInfill.plot_mpoi(var=.05, n_pareto=5, euclidean=True), exit()
+    # MinimumPOIInfill.plot_mpoi(var=.05**2, n_pareto=5, show=False)
+    # MinimumPOIInfill.plot_mpoi(var=.05**2, n_pareto=5, euclidean=True), exit()
 
     with Experimenter.temp_results():
         # Define algorithms to run

@@ -71,7 +71,7 @@ class ExpectedHypervolumeImprovementInfill(ProbabilityOfFeasibilityInfill):
 
     @classmethod
     def _ehvi(cls, f_pareto_norm: np.ndarray, f_norm: np.ndarray, var_norm: np.ndarray, hv: float, n=10000) -> float:
-        f_rand = np.random.normal(loc=f_norm, scale=var_norm, size=(n, len(f_norm)))
+        f_rand = np.random.normal(loc=f_norm, scale=np.sqrt(var_norm), size=(n, len(f_norm)))
 
         hvi_sampled = np.empty((n,))
         for i in range(n):
@@ -159,7 +159,7 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
 
-    # ExpectedHypervolumeImprovementInfill.plot_ehvi(var=.05, n_pareto=5, n_mc=1000, n_grid=10), exit()
+    # ExpectedHypervolumeImprovementInfill.plot_ehvi(var=.05**2, n_pareto=5, n_mc=1000, n_grid=10), exit()
 
     with Experimenter.temp_results():
         # Define algorithms to run
