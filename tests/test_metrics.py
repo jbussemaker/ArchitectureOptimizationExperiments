@@ -58,7 +58,7 @@ def test_spread(problem, problem_3obj, algorithm):
     values = result.metrics[spread.name].results()['delta']
     assert len(values) == 50
 
-    result.metrics[spread.name].plot(show=False)
+    # result.metrics[spread.name].plot(show=False)
 
     spread_termination = SpreadTermination(limit=1e-3)
     eff_res = exp.run_efficiency(spread_termination, repeat_idx=0)
@@ -79,7 +79,7 @@ def test_delta_hv(problem, algorithm):
     assert len(values['delta_hv']) == 50
     assert values['delta_hv'][-1] < values['delta_hv'][0]
 
-    result.metrics[delta_hv.name].plot(show=False)
+    # result.metrics[delta_hv.name].plot(show=False)
 
 
 def test_igd(problem, algorithm):
@@ -94,8 +94,8 @@ def test_igd(problem, algorithm):
     values = result.metrics[igd.name].results()['indicator']
     assert values[-1] < values[0]
 
-    result.metrics[igd.name].plot(show=False)
-    result.metrics[igd_plus.name].plot(show=False)
+    # result.metrics[igd.name].plot(show=False)
+    # result.metrics[igd_plus.name].plot(show=False)
 
     results = exp.run_effectiveness_parallel(n_repeat=5)
     result = ExperimenterResult.aggregate_results(results)
@@ -119,7 +119,7 @@ def test_max_cv(problem, algorithm):
     values = result.metrics[max_cv.name].results()['max_cv']
     assert len(values) == 50
 
-    result.metrics[max_cv.name].plot(show=False)
+    # result.metrics[max_cv.name].plot(show=False)
 
 
 def test_nr_evaluations_metric(problem, algorithm):
@@ -135,7 +135,7 @@ def test_nr_evaluations_metric(problem, algorithm):
     assert values['n_eval'][-1] > values['n_eval'][0]
     assert values['n_eval'][-1] == 1000
 
-    result.metrics[nr_eval.name].plot(show=False)
+    # result.metrics[nr_eval.name].plot(show=False)
 
 
 def test_hv(problem, algorithm):
@@ -149,12 +149,12 @@ def test_hv(problem, algorithm):
     values = result.metrics[hv.name].results()['hv']
     assert values[-1] > values[0]
 
-    result.metrics[hv.name].plot(show=False)
+    # result.metrics[hv.name].plot(show=False)
 
     hv_termination = HVTermination(limit=5e-3)
     eff_res = exp.run_efficiency(hv_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
-    eff_res.termination.plot(show=False)
+    # eff_res.termination.plot(show=False)
 
     algorithm2 = NSGA2(pop_size=30)
     exp2 = Experimenter(problem, algorithm2, n_eval_max=1000, metrics=[hv, filtered_hv])
@@ -176,17 +176,17 @@ def test_distance_metrics(problem, algorithm):
         assert metric.name in result.metrics
         values = result.metrics[metric.name].results()['d']
         assert values[-1] > values[0]
-        result.metrics[metric.name].plot(show=False)
+        # result.metrics[metric.name].plot(show=False)
 
     gd_termination = GDTermination(limit=1e-4)
     eff_res = exp.run_efficiency(gd_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
-    eff_res.termination.plot(show=False)
+    # eff_res.termination.plot(show=False)
 
     igd_termination = IGDTermination(limit=1e-4)
     eff_res = exp.run_efficiency(igd_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
-    eff_res.termination.plot(show=False)
+    # eff_res.termination.plot(show=False)
 
 
 def test_crowding_distance_metric(problem, algorithm):
@@ -198,12 +198,12 @@ def test_crowding_distance_metric(problem, algorithm):
     max_values = result.metrics[cd.name].results()['max']
     assert max_values[-1] < max_values[0]
 
-    result.metrics[cd.name].plot(show=False)
+    # result.metrics[cd.name].plot(show=False)
 
     mcd_termination = MCDTermination(limit=7e-4)
     eff_res = exp.run_efficiency(mcd_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
-    eff_res.termination.plot(show=False)
+    # eff_res.termination.plot(show=False)
 
 
 def test_crowding_distance_metric_non_nsga2(problem):
@@ -217,7 +217,7 @@ def test_crowding_distance_metric_non_nsga2(problem):
     max_values = result.metrics[cd.name].results()['max']
     assert max_values[-1] < max_values[0]
 
-    result.metrics[cd.name].plot(show=False)
+    # result.metrics[cd.name].plot(show=False)
 
 
 def test_steady_performance_indicator(problem, algorithm):
@@ -233,12 +233,12 @@ def test_steady_performance_indicator(problem, algorithm):
     assert not np.isnan(max_values[9])
     assert max_values[-1] < max_values[9]
 
-    result.metrics[spi.name].plot(show=False)
+    # result.metrics[spi.name].plot(show=False)
 
     spi_termination = SPITermination(n=10, limit=.03)
     eff_res = exp.run_efficiency(spi_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
-    eff_res.termination.plot(show=False)
+    # eff_res.termination.plot(show=False)
 
 
 def test_fh_indicator(problem, algorithm):
@@ -252,12 +252,12 @@ def test_fh_indicator(problem, algorithm):
     assert len(max_values) == 50
     assert max_values[-1] > max_values[0]
 
-    result.metrics[fhi.name].plot(show=False)
+    # result.metrics[fhi.name].plot(show=False)
 
     fhi_termination = FHITermination(limit=6e-4)
     eff_res = exp.run_efficiency(fhi_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
-    eff_res.termination.plot(show=False)
+    # eff_res.termination.plot(show=False)
 
 
 def test_consolidation_ratio_metric(problem, algorithm):
@@ -271,12 +271,12 @@ def test_consolidation_ratio_metric(problem, algorithm):
     assert len(max_values) == 50
     assert max_values[-1] > max_values[0]
 
-    result.metrics[cr.name].plot(show=False)
+    # result.metrics[cr.name].plot(show=False)
 
     cr_termination = CRTermination(limit=.68)
     eff_res = exp.run_efficiency(cr_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
-    eff_res.termination.plot(show=False)
+    # eff_res.termination.plot(show=False)
 
 
 def test_mutual_domination_rate_metric(problem, algorithm):
@@ -290,17 +290,17 @@ def test_mutual_domination_rate_metric(problem, algorithm):
     assert len(max_values) == 50
     assert max_values[-1] < max_values[0]
 
-    result.metrics[mdr.name].plot(show=False)
+    # result.metrics[mdr.name].plot(show=False)
 
     mdr_termination = MDRTermination(limit=.35)
     eff_res = exp.run_efficiency(mdr_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
-    eff_res.termination.plot(show=False)
+    # eff_res.termination.plot(show=False)
 
     mgbm_termination = MGBMTermination(limit=.3)
     eff_res = exp.run_efficiency(mgbm_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
-    eff_res.termination.plot(show=False)
+    # eff_res.termination.plot(show=False)
 
 
 def test_moving_average_filter(problem, algorithm):
@@ -314,7 +314,7 @@ def test_moving_average_filter(problem, algorithm):
     assert not np.isnan(values[4])
     assert values[-1] > values[4]
 
-    result.metrics[igd_filtered.name].plot(show=False)
+    # result.metrics[igd_filtered.name].plot(show=False)
 
 
 def test_exp_moving_average_filter(problem, algorithm):
@@ -326,7 +326,7 @@ def test_exp_moving_average_filter(problem, algorithm):
     values = result.metrics[igd_filtered.name].results()['d']
     assert values[-1] > values[0]
 
-    result.metrics[igd_filtered.name].plot(show=False)
+    # result.metrics[igd_filtered.name].plot(show=False)
 
 
 def test_kalman_filter(problem, algorithm):
@@ -338,4 +338,4 @@ def test_kalman_filter(problem, algorithm):
     values = result.metrics[igd_filtered.name].results()['d']
     assert values[-1] > values[0]
 
-    result.metrics[igd_filtered.name].plot(show=False)
+    # result.metrics[igd_filtered.name].plot(show=False)

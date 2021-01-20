@@ -213,8 +213,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
             g, g_min, g_max = self._normalize_y(self.total_pop.get('G'), keep_centered=True)
             y = np.append(f, g, axis=1)
 
-            self.y_train_min = np.append(self.y_train_min, g_min, axis=1)
-            self.y_train_max = np.append(self.y_train_max, g_max, axis=1)
+            self.y_train_min = np.append(self.y_train_min, g_min)
+            self.y_train_max = np.append(self.y_train_max, g_max)
             self.y_train_centered += [True]*g.shape[1]
 
         self.x_train = x_norm
