@@ -68,11 +68,6 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
         for i in range(f_predict.shape[0]):
             e_poi[i, 0] = cls._p_dominate(f_pareto_sorted, f_predict[i, :], f_var_predict[i, :], i_pts_list)
 
-        # Normalize to ensure spread if even if no points with probable improvement are found
-        max_e_poi = np.max(e_poi)
-        if max_e_poi != 0.:
-            e_poi /= max_e_poi
-
         e_poi[e_poi < 1e-6] = 0.
         return 1.-e_poi
 
@@ -216,11 +211,6 @@ class EuclideanEIInfill(EnhancedPOIInfill):
         for i in range(f_predict.shape[0]):
             eei[i, 0] = cls._eei(f_pareto, f_pareto_sorted, f_predict[i, :], f_var_predict[i, :], i_pts_list)
 
-        # Normalize to ensure spread if even if no points with probable improvement are found
-        max_eei = np.max(eei)
-        if max_eei != 0.:
-            eei /= max_eei
-
         eei[eei < 1e-6] = 0.
         return 1.-eei
 
@@ -299,11 +289,6 @@ class MinimumPOIInfill(EuclideanEIInfill):
         mpoi = np.empty((f_predict.shape[0], 1))
         for i in range(f_predict.shape[0]):
             mpoi[i, 0] = cls._mpoi(f_pareto, f_predict[i, :], f_var_predict[i, :], euclidean=euclidean)
-
-        # Normalize to ensure spread if even if no points with probable improvement are found
-        max_mpoi = np.max(mpoi)
-        if max_mpoi != 0.:
-            mpoi /= max_mpoi
 
         mpoi[mpoi < 1e-6] = 0.
         return 1.-mpoi
