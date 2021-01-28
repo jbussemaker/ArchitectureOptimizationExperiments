@@ -17,6 +17,7 @@ Contact: jasper.bussemaker@dlr.de
 
 import numpy as np
 from typing import *
+import matplotlib.pyplot as plt
 from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
 
 __all__ = ['ModulatedMOInfill']
@@ -55,13 +56,60 @@ class ModulatedMOInfill(SurrogateInfill):
         return self.underlying.get_n_infill_constraints()
 
     def evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-        n_f = self.problem.n_obj
         f_underlying, g = self.underlying.evaluate(x)
-
         f_predicted, _ = self.predict(x)
+
+        f_modulated = self._get_f_modulated(f_predicted, f_underlying)
+        return f_modulated, g
+
+    @staticmethod
+    def _get_f_modulated(f_predicted: np.ndarray, f_underlying: np.ndarray) -> np.ndarray:
+        n_f = f_predicted.shape[1]
 
         f_modulated = np.empty((f_predicted.shape[0], n_f*f_underlying.shape[1]))
         for i_f_underlying in range(f_underlying.shape[1]):
             f_modulated[:, i_f_underlying*n_f:i_f_underlying*n_f+n_f] = f_underlying[:, [i_f_underlying]]*f_predicted
 
-        return f_modulated, g
+        return f_modulated
+
+    @classmethod
+    def plot(cls, var=None, n_pareto=5, show=True, **kwargs):
+        f_pareto = np.zeros((n_pareto, 2))
+        f_pareto[:, 0] = (1.-np.cos(.5*np.pi*np.linspace(0, 1, n_pareto+2)[1:-1]))**.8
+        f_pareto[:, 1] = (1.-np.cos(.5*np.pi*(1-np.linspace(0, 1, n_pareto+2)[1:-1])))**.8
+
+        if np.isscalar(var):
+            var = [var, var]
+        if var is None:
+            var = [.1, .1]
+
+        n = 25
+        x, y = np.meshgrid(np.linspace(0, 1, n), np.linspace(0, 1, n))
+        f_eval = np.column_stack([x.ravel(), y.ravel()])
+        f_var = np.ones(f_eval.shape)*var
+
+        f_underlying = cls._get_plot_f_underlying(f_eval, f_var, f_pareto, **kwargs)
+
+        for i_f in range(f_underlying.shape[1]):
+            plt.figure(), plt.title('Underlying $f_{%d}$' % i_f)
+            plt.colorbar(plt.contourf(x, y, f_underlying[:, i_f].reshape(x.shape), 50, cmap='viridis'))
+            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=5, c='k')
+            plt.ylim([0, 1]), plt.xlim([0, 1])
+
+        f_modulated = cls._get_f_modulated(f_eval, f_underlying)
+        n_f = f_underlying.shape[1]
+        for i_f_mod in range(f_modulated.shape[1]):
+            i_f_underlying = i_f_mod % n_f
+            i_f_orig = int(np.floor(i_f_mod/n_f))
+
+            plt.figure(), plt.title('Underlying $f_{%d}$ modulated over $f_{%d}$' % (i_f_underlying, i_f_orig))
+            plt.colorbar(plt.contourf(x, y, f_modulated[:, i_f_mod].reshape(x.shape), 50, cmap='viridis'))
+            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=5, c='k')
+            plt.ylim([0, 1]), plt.xlim([0, 1])
+
+        if show:
+            plt.show()
+
+    @classmethod
+    def _get_plot_f_underlying(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, **kwargs) -> np.ndarray:
+        raise RuntimeError('Not implemented')

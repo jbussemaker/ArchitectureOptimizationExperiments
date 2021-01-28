@@ -58,10 +58,15 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
         return 1
 
     def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+        return self.get_epoi_f(f_predict, f_var_predict, self.f_pareto_sorted, self.i_pts_list)
+
+    @classmethod
+    def get_epoi_f(cls, f_predict: np.ndarray, f_var_predict: np.ndarray, f_pareto_sorted: np.ndarray, i_pts_list) \
+            -> np.ndarray:
 
         e_poi = np.empty((f_predict.shape[0], 1))
         for i in range(f_predict.shape[0]):
-            e_poi[i, 0] = self._p_dominate(self.f_pareto_sorted, f_predict[i, :], f_var_predict[i, :], self.i_pts_list)
+            e_poi[i, 0] = cls._p_dominate(f_pareto_sorted, f_predict[i, :], f_var_predict[i, :], i_pts_list)
 
         # Normalize to ensure spread if even if no points with probable improvement are found
         max_e_poi = np.max(e_poi)
@@ -173,6 +178,13 @@ class ModEnhancedPOIInfill(ModulatedMOInfill):
         underlying = EnhancedPOIInfill(**kwargs)
         super(ModEnhancedPOIInfill, self).__init__(underlying)
 
+    @classmethod
+    def _get_plot_f_underlying(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, n_dominate=1, **kwargs) \
+            -> np.ndarray:
+        f_pareto_sorted = EnhancedPOIInfill._get_f_sorted(f_pareto)
+        i_pts_list = EnhancedPOIInfill._get_i_pts_list(f_pareto, n_dominate=n_dominate)
+        return EnhancedPOIInfill.get_epoi_f(f, f_var, f_pareto_sorted, i_pts_list)
+
 
 class EuclideanEIInfill(EnhancedPOIInfill):
     """
@@ -194,11 +206,15 @@ class EuclideanEIInfill(EnhancedPOIInfill):
     """
 
     def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+        return self.get_eei_f(f_predict, f_var_predict, self.f_pareto, self.f_pareto_sorted, self.i_pts_list)
+
+    @classmethod
+    def get_eei_f(cls, f_predict: np.ndarray, f_var_predict: np.ndarray, f_pareto: np.ndarray,
+                  f_pareto_sorted: np.ndarray, i_pts_list) -> np.ndarray:
 
         eei = np.empty((f_predict.shape[0], 1))
         for i in range(f_predict.shape[0]):
-            eei[i, 0] = self._eei(self.f_pareto, self.f_pareto_sorted, f_predict[i, :], f_var_predict[i, :],
-                                  self.i_pts_list)
+            eei[i, 0] = cls._eei(f_pareto, f_pareto_sorted, f_predict[i, :], f_var_predict[i, :], i_pts_list)
 
         # Normalize to ensure spread if even if no points with probable improvement are found
         max_eei = np.max(eei)
@@ -246,6 +262,13 @@ class ModEuclideanEIInfill(ModulatedMOInfill):
         underlying = EuclideanEIInfill(**kwargs)
         super(ModEuclideanEIInfill, self).__init__(underlying)
 
+    @classmethod
+    def _get_plot_f_underlying(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, n_dominate=1, **kwargs) \
+            -> np.ndarray:
+        f_pareto_sorted = EuclideanEIInfill._get_f_sorted(f_pareto)
+        i_pts_list = EuclideanEIInfill._get_i_pts_list(f_pareto, n_dominate=n_dominate)
+        return EuclideanEIInfill.get_eei_f(f, f_var, f_pareto, f_pareto_sorted, i_pts_list)
+
 
 class MinimumPOIInfill(EuclideanEIInfill):
     """
@@ -267,10 +290,15 @@ class MinimumPOIInfill(EuclideanEIInfill):
         self.euclidean = euclidean
 
     def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+        return self.get_mpoi_f(f_predict, f_var_predict, self.f_pareto, self.euclidean)
+
+    @classmethod
+    def get_mpoi_f(cls, f_predict: np.ndarray, f_var_predict: np.ndarray, f_pareto: np.ndarray, euclidean: bool) \
+            -> np.ndarray:
 
         mpoi = np.empty((f_predict.shape[0], 1))
         for i in range(f_predict.shape[0]):
-            mpoi[i, 0] = self._mpoi(self.f_pareto, f_predict[i, :], f_var_predict[i, :], euclidean=self.euclidean)
+            mpoi[i, 0] = cls._mpoi(f_pareto, f_predict[i, :], f_var_predict[i, :], euclidean=euclidean)
 
         # Normalize to ensure spread if even if no points with probable improvement are found
         max_mpoi = np.max(mpoi)
@@ -326,6 +354,11 @@ class ModMinimumPOIInfill(ModulatedMOInfill):
         underlying = MinimumPOIInfill(**kwargs)
         super(ModMinimumPOIInfill, self).__init__(underlying)
 
+    @classmethod
+    def _get_plot_f_underlying(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, euclidean=False,
+                               **kwargs) -> np.ndarray:
+        return MinimumPOIInfill.get_mpoi_f(f, f_var, f_pareto, euclidean)
+
 
 if __name__ == '__main__':
     from arch_opt_exp.experimenter import *
@@ -338,11 +371,16 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
 
-    # EnhancedPOIInfill.plot_p_dominate(var=.05**2, n_dominate=1, n_pareto=5), exit()
-    # EuclideanEIInfill.plot_eei(var=.05**2, n_dominate=1, n_pareto=5), exit()
+    # EnhancedPOIInfill.plot_p_dominate(var=.0025, n_dominate=1, n_pareto=5, show=False)
+    # ModEnhancedPOIInfill.plot(var=.0025, n_pareto=5, show=True, n_dominate=1), exit()
 
-    # MinimumPOIInfill.plot_mpoi(var=.05**2, n_pareto=5, show=False)
-    # MinimumPOIInfill.plot_mpoi(var=.05**2, n_pareto=5, euclidean=True), exit()
+    # EuclideanEIInfill.plot_eei(var=.0025, n_dominate=1, n_pareto=5, show=False)
+    # ModEuclideanEIInfill.plot(var=.0025, n_pareto=5, show=True, n_dominate=1), exit()
+
+    # # MinimumPOIInfill.plot_mpoi(var=.0025, n_pareto=5, show=False)
+    # MinimumPOIInfill.plot_mpoi(var=.0025, n_pareto=5, euclidean=True, show=False)
+    # # ModMinimumPOIInfill.plot(var=.0025, n_pareto=5, show=False)
+    # ModMinimumPOIInfill.plot(var=.0025, n_pareto=5, euclidean=True, show=True), exit()
 
     with Experimenter.temp_results():
         # Define algorithms to run
