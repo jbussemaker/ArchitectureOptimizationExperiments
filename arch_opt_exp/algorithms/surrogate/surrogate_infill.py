@@ -21,8 +21,9 @@ import numpy as np
 from typing import *
 import matplotlib.pyplot as plt
 from matplotlib.colors import SymLogNorm
+from arch_opt_exp.metrics_base import Metric
+from arch_opt_exp.algorithms.infill_based import *
 from smt.surrogate_models.surrogate_model import SurrogateModel
-from arch_opt_exp.algorithms.infill_based import ModelBasedInfillCriterion
 
 from pymoo.optimize import minimize
 from pymoo.model.result import Result
@@ -35,7 +36,8 @@ from pymoo.algorithms.nsga2 import NSGA2, RankAndCrowdingSurvival
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 from pymoo.util.termination.max_gen import MaximumGenerationTermination
 
-__all__ = ['SurrogateInfill', 'SurrogateModelFactory', 'SurrogateBasedInfill', 'SurrogateInfillOptimizationProblem']
+__all__ = ['SurrogateInfill', 'SurrogateModelFactory', 'SurrogateBasedInfill', 'SurrogateInfillOptimizationProblem',
+           'InfillMetric']
 
 log = logging.getLogger('arch_opt_exp.sur')
 
@@ -53,6 +55,9 @@ class SurrogateInfill:
 
         self.x_train = None
         self.y_train = None
+
+        self.f_infill_log = []
+        self.g_infill_log = []
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -108,6 +113,18 @@ class SurrogateInfill:
         i_non_dom = NonDominatedSorting().do(f, only_non_dominated_front=True)
         return np.copy(f[i_non_dom, :])
 
+    def reset_infill_log(self):
+        self.f_infill_log = []
+        self.g_infill_log = []
+
+    def evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        """Evaluate the surrogate infill objectives (and optionally constraints). Use the predict and predict_variance
+        methods to query the surrogate model on its objectives and constraints."""
+        f_infill, g_infill = self._evaluate(x)
+        self.f_infill_log.append(f_infill)
+        self.g_infill_log.append(g_infill)
+        return f_infill, g_infill
+
     def _initialize(self):
         pass
 
@@ -117,7 +134,7 @@ class SurrogateInfill:
     def get_n_infill_constraints(self) -> int:
         raise NotImplementedError
 
-    def evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    def _evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """Evaluate the surrogate infill objectives (and optionally constraints). Use the predict and predict_variance
         methods to query the surrogate model on its objectives and constraints."""
         raise NotImplementedError
@@ -447,6 +464,69 @@ class SurrogateInfillOptimizationProblem(Problem):
             out['G'] = g
 
 
+class InfillMetric(Metric):
+    """
+    Metric tracking the range of infill objective values encountered during the infill search. Automatically detects if
+    it is being executing on a problem with a surrogate infill algorithm.
+    """
+
+    @property
+    def name(self) -> str:
+        return 'infill'
+
+    @property
+    def value_names(self) -> List[str]:
+        return ['min', 'max', 'min_range', 'g_min', 'g_max', 'g_min_range']
+
+    def _calculate_values(self, algorithm: Algorithm) -> List[float]:
+        surrogate_infill = self._get_surrogate_infill(algorithm)
+        if surrogate_infill is None:
+            return [np.nan]*6
+
+        f_infill, g_infill = surrogate_infill.f_infill_log, surrogate_infill.g_infill_log
+
+        f_all = self._concatenated_values(f_infill)
+        f_min = f_max = f_min_range = np.nan
+        if f_all is not None:
+            f_min, f_max, f_min_range = self._get_metrics(f_all)
+
+        g_all = self._concatenated_values(g_infill)
+        g_min = g_max = g_min_range = np.nan
+        if g_all is not None:
+            g_min, g_max, g_min_range = self._get_metrics(g_all)
+
+        # Reset the infill values log to track values in the next infill iteration
+        surrogate_infill.reset_infill_log()
+
+        return f_min, f_max, f_min_range, g_min, g_max, g_min_range
+
+    @staticmethod
+    def _concatenated_values(infill_values: List[Optional[np.ndarray]]) -> Optional[np.ndarray]:
+        filtered_values = [values for values in infill_values if values is not None]
+        if len(filtered_values) == 0:
+            return
+
+        concatenated = np.concatenate(filtered_values, axis=0)
+        if concatenated.shape[1] == 0:
+            return
+        return concatenated
+
+    @staticmethod
+    def _get_metrics(concat_values: np.ndarray) -> Tuple[float, ...]:
+        min_values = np.nanmin(concat_values, axis=0)
+        max_values = np.nanmax(concat_values, axis=0)
+        ranges = max_values-min_values
+
+        min_min, max_max = np.min(min_values), np.max(max_values)
+        min_range = np.min(ranges)
+        return min_min, max_max, min_range
+
+    @staticmethod
+    def _get_surrogate_infill(algorithm: Algorithm) -> Optional[SurrogateInfill]:
+        if isinstance(algorithm, InfillBasedAlgorithm) and isinstance(algorithm.infill, SurrogateBasedInfill):
+            return algorithm.infill.infill
+
+
 if __name__ == '__main__':
     from pymoo.problems.single.himmelblau import Himmelblau
     from arch_opt_exp.algorithms.surrogate.func_estimate import FunctionEstimateInfill
@@ -457,8 +537,8 @@ if __name__ == '__main__':
     from smt.surrogate_models.krg import KRG
     sm = KRG()
 
-    surrogate_infill = FunctionEstimateInfill()
-    sbo_infill = SurrogateBasedInfill(surrogate_model=sm, infill=surrogate_infill)
+    sur_infill = FunctionEstimateInfill()
+    sbo_infill = SurrogateBasedInfill(surrogate_model=sm, infill=sur_infill)
     sbo_infill._generate_infill_points = lambda *args, **kwargs: []
 
     algo = sbo_infill.algorithm(init_size=n_pts)

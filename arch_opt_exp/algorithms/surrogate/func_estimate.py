@@ -32,7 +32,7 @@ class FunctionEstimateInfill(SurrogateInfill):
     def get_n_infill_constraints(self) -> int:
         return self.problem.n_constr
 
-    def evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    def _evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         f, g = self.predict(x)
         return f, g
 
@@ -62,7 +62,7 @@ class FunctionEstimateDistanceInfill(SurrogateInfill):
     def get_n_infill_constraints(self) -> int:
         return self.problem.n_constr
 
-    def evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    def _evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         f_predict, g = self.predict(x)
 
         f_dist = np.empty((f_predict.shape[0], f_predict.shape[1]+1))
@@ -120,12 +120,13 @@ if __name__ == '__main__':
             # Metrics for evaluating the algorithm performance
             DeltaHVMetric(problem.pareto_front()),
             IGDMetric(problem.pareto_front()),
+            InfillMetric(),
 
             # Metrics for detecting convergence
             ExpMovingAverageFilter(ConsolidationRatioMetric(), n=5),
             ExpMovingAverageFilter(MutualDominationRateMetric(), n=5),
         ]
-        plot_names = [['delta_hv'], None, ['cr'], ['mdr']]
+        plot_names = [['delta_hv'], None, ['min_range'], ['cr'], ['mdr']]
 
         # # Plot infill selection
         # algo_eval = algorithms[2]

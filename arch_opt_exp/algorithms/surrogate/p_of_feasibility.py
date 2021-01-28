@@ -49,7 +49,7 @@ class ProbabilityOfFeasibilityInfill(SurrogateInfill):
     def get_n_infill_constraints(self) -> int:
         return self.problem.n_constr
 
-    def evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    def _evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         f, g = self.predict(x)
         f_var, g_var = self.predict_variance(x)
 
@@ -138,12 +138,13 @@ if __name__ == '__main__':
             DeltaHVMetric(problem.pareto_front(ref_dirs)),
             IGDMetric(problem.pareto_front(ref_dirs)),
             MaxConstraintViolationMetric(),
+            InfillMetric(),
 
             # Metrics for detecting convergence
             ExpMovingAverageFilter(ConsolidationRatioMetric(), n=5),
             ExpMovingAverageFilter(MutualDominationRateMetric(), n=5),
         ]
-        plot_names = [['delta_hv'], None, None, ['cr'], ['mdr']]
+        plot_names = [['delta_hv'], None, None, ['min_range', 'g_min_range'], ['cr'], ['mdr']]
 
         # # Plot infill selection
         # res_infill: SurrogateBasedInfill = Experimenter(problem, algorithms[1][0], n_eval_max=algorithms[1][2])\

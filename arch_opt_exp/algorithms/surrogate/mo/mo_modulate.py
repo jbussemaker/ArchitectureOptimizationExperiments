@@ -55,7 +55,7 @@ class ModulatedMOInfill(SurrogateInfill):
     def get_n_infill_constraints(self) -> int:
         return self.underlying.get_n_infill_constraints()
 
-    def evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    def _evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         f_underlying, g = self.underlying.evaluate(x)
         f_predicted, _ = self.predict(x)
 

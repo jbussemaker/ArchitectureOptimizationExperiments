@@ -205,12 +205,13 @@ if __name__ == '__main__':
             # Metrics for evaluating the algorithm performance
             DeltaHVMetric(pf),
             IGDMetric(pf),
+            InfillMetric(),
 
             # Metrics for detecting convergence
             ExpMovingAverageFilter(ConsolidationRatioMetric(), n=5),
             ExpMovingAverageFilter(MutualDominationRateMetric(), n=5),
         ]
-        plot_names = [['delta_hv'], None, ['cr'], ['mdr']]
+        plot_names = [['delta_hv'], None, ['min_range'], ['cr'], ['mdr']]
 
         # # Plot infill selection
         # algo_eval = algorithms[3]
