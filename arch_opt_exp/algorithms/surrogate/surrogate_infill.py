@@ -155,9 +155,13 @@ class SurrogateModelFactory:
 
         default_opts = {key: data['default'] for key, data in surrogate_model.options._declared_entries.items()}
         kwargs = {key: copy.deepcopy(value) for key, value in surrogate_model.options._dict.items()
-                  if value != default_opts[key]}
+                  if repr(value) != repr(default_opts[key])}
 
         return cls(klass, **kwargs)
+
+    @classmethod
+    def copy_surrogate_model(cls, surrogate_model: SurrogateModel) -> SurrogateModel:
+        return cls.from_surrogate_model(surrogate_model).get()
 
 
 class SurrogateBasedInfill(ModelBasedInfillCriterion):

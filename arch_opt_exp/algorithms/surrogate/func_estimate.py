@@ -106,11 +106,12 @@ if __name__ == '__main__':
             termination=100, verbose=True,
         )
 
+        validate_loo_cv = False
         n_eval, n_eval_sbo, n_repeat = 10000, 500, 8
         algorithms = [
             (RandomSearchAlgorithm(pop_size=100), 'Random search', n_eval),
             (NSGA2(pop_size=100), 'NSGA2', n_eval),
-            (sbo.algorithm(infill_size=50, init_size=100), sbo.name, n_eval_sbo),
+            (sbo.algorithm(infill_size=10, init_size=40), sbo.name, n_eval_sbo),
             (sbo_cp.algorithm(infill_size=50, init_size=100), sbo_cp.name, n_eval_sbo),
         ]
 
@@ -127,6 +128,11 @@ if __name__ == '__main__':
             ExpMovingAverageFilter(MutualDominationRateMetric(), n=5),
         ]
         plot_names = [['delta_hv'], None, ['min_range'], ['cr'], ['mdr']]
+
+        if validate_loo_cv:
+            from arch_opt_exp.algorithms.surrogate.validation import SurrogateQualityMetric
+            metrics += [SurrogateQualityMetric(include_loo_cv=True, n_loo_cv=10)]
+            plot_names += [['loo_cv']]
 
         # # Plot infill selection
         # algo_eval = algorithms[2]
