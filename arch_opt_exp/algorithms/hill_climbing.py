@@ -76,7 +76,9 @@ class HillClimbingAlgorithm(Algorithm):
             self.pop[i] = self._local_search(self.pop[i])
 
     def _local_search(self, individual: Individual) -> Individual:
-        for i in range(self.problem.n_var):
+        i_dv = np.random.choice(list(range(self.problem.n_var)), (self.problem.n_var,), replace=False)
+        # i_dv = range(self.problem.n_var)
+        for i in i_dv:
             # Check if we passed the number of max evaluations
             if self.n_max_eval is not None and self.evaluator.n_eval >= self.n_max_eval:
                 return individual
@@ -128,16 +130,19 @@ class SimulatedAnnealingAlgorithm(HillClimbingAlgorithm):
     local optimum and therefore could increase the chance of finding a global optimum. The chance of accepting a worse
     solution is gradually lowered during the optimization run, simulating the material annealing process.
 
+    Either a linear or geometric reduction in temperature can be used.
+
     Implementation and more information:
     Amine, K., "Multiobjective Simulated Annealing: Principles and Algorithm Variants", 2019, 10.1155/2019/8134674
     """
 
-    def __init__(self, t0=1., beta=.1, t_min=0., **kwargs):
+    def __init__(self, t0=1., beta=.1, t_min=0., geometric=True, **kwargs):
         super(SimulatedAnnealingAlgorithm, self).__init__(**kwargs)
 
         self.t = self.t0 = t0
         self.beta = beta
         self.t_min = t_min
+        self.geometric = geometric
 
         self.t_hist = []
         self.ideal_point = None
@@ -156,8 +161,10 @@ class SimulatedAnnealingAlgorithm(HillClimbingAlgorithm):
         self._update_temperature()
 
     def _update_temperature(self):
-        """Linear cooling scheme"""
-        self.t = max(self.t_min, self.t-self.beta)
+        if self.geometric:  # Geometric cooling scheme
+            self.t = max(self.t_min, self.t*(1.-self.beta))
+        else:  # Linear cooling scheme
+            self.t = max(self.t_min, self.t-self.beta)
 
     def _accept_mod_individual(self, individual: Individual, mod_individual: Individual, dom_relation: int) -> bool:
         # Just accept if modified individual dominates
@@ -179,7 +186,7 @@ class SimulatedAnnealingAlgorithm(HillClimbingAlgorithm):
         delta_e = euclidean_distance(np.array([f0]), np.array([f1]), norm=norm)[0]
 
         # Accept probability is based on distance and temperature
-        p_accept = np.exp(-delta_e/self.t)
+        p_accept = min(1., np.exp(-delta_e/self.t))
         return p_accept
 
 
@@ -199,7 +206,7 @@ if __name__ == '__main__':
             RandomSearchAlgorithm(pop_size=100),
             NSGA2(pop_size=100),
             HillClimbingAlgorithm(pop_size=100),
-            SimulatedAnnealingAlgorithm(pop_size=100, beta=.01, t_min=.1),
+            SimulatedAnnealingAlgorithm(pop_size=100, t0=1., beta=.2, t_min=.01),
         ]
         n_eval, n_repeat = 10000, 8
 
