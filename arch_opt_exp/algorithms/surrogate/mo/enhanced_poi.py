@@ -57,7 +57,7 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
     def get_n_infill_objectives(self) -> int:
         return 1
 
-    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+    def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
         return self.get_epoi_f(f_predict, f_var_predict, self.f_pareto_sorted, self.i_pts_list)
 
     @classmethod
@@ -200,7 +200,7 @@ class EuclideanEIInfill(EnhancedPOIInfill):
     Parr, J.M., "Improvement Criteria for Constraint Handling and Multiobjective Optimization", 2013
     """
 
-    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+    def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
         return self.get_eei_f(f_predict, f_var_predict, self.f_pareto, self.f_pareto_sorted, self.i_pts_list)
 
     @classmethod
@@ -279,7 +279,7 @@ class MinimumPOIInfill(EuclideanEIInfill):
 
         self.euclidean = euclidean
 
-    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+    def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
         return self.get_mpoi_f(f_predict, f_var_predict, self.f_pareto, self.euclidean)
 
     @classmethod

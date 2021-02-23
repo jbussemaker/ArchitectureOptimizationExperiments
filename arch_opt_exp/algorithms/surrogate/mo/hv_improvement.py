@@ -59,7 +59,7 @@ class ExpectedHypervolumeImprovementInfill(ProbabilityOfFeasibilityInfill):
     def get_n_infill_objectives(self) -> int:
         return 1
 
-    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+    def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
         f_predict_norm, f_predict_var_norm = self._normalize_f_var(
             f_var_predict, f_var_predict, self.nadir_point, self.ideal_point)
 

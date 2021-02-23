@@ -17,10 +17,11 @@ Contact: jasper.bussemaker@dlr.de
 
 import numpy as np
 from scipy.stats import norm
+from pymoo.util.normalization import normalize
 from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
 
-__all__ = ['ProbabilityOfImprovementInfill', 'LowerConfidenceBoundInfill', 'EstimateVarianceInfill',
-           'ExpectedImprovementInfill']
+__all__ = ['ProbabilityOfImprovementInfill', 'ExpectedImprovementInfill', 'LowerConfidenceBoundInfill',
+           'EstimateVarianceInfill']
 
 
 class ProbabilityOfImprovementInfill(ProbabilityOfFeasibilityInfill):
@@ -36,8 +37,8 @@ class ProbabilityOfImprovementInfill(ProbabilityOfFeasibilityInfill):
     - s(x) the surrogate model variance estimate
 
     PoI was developed for single-objective optimization, and because of the use of the minimum current objective value,
-    it tends towards suggesting improvement points only at the edges of the Pareto front, which is not suited for
-    multi-objective optimization.
+    it tends towards suggesting improvement points only at the edges of the Pareto front. It has been modified to
+    evaluate the PoI with respect to the closest Pareto front point instead.
 
     Implementation based on:
     Hawe, G.I., "An Enhanced Probability of Improvement Utility Function for Locating Pareto Optimal Solutions", 2007
@@ -51,18 +52,94 @@ class ProbabilityOfImprovementInfill(ProbabilityOfFeasibilityInfill):
     def get_n_infill_objectives(self) -> int:
         return self.problem.n_obj
 
-    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
-        f_min = np.min(self.y_train[:, :f_predict.shape[1]], axis=0)
-        f_targets = f_min-self.f_min_offset
+    def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+        return self._evaluate_f_poi(f_predict, f_var_predict, self.y_train[:, :f_predict.shape[1]], self.f_min_offset)
 
-        poi = self._poi(f_targets, f_predict, f_var_predict)
-        f_poi = 1.-poi
+    @classmethod
+    def _evaluate_f_static(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, **kwargs) -> np.ndarray:
+        return cls._evaluate_f_poi(f, f_var, f_pareto, **kwargs)
+
+    @classmethod
+    def _evaluate_f_poi(cls, f: np.ndarray, f_var: np.ndarray, f_current: np.ndarray, f_min_offset=0.) -> np.ndarray:
+        # Normalize current and predicted objectives
+        f_pareto = cls.get_pareto_front(f_current)
+        nadir_point, ideal_point = np.max(f_pareto, axis=0), np.min(f_pareto, axis=0)
+        f_pareto_norm = normalize(f_pareto, x_max=nadir_point, x_min=ideal_point)
+        f_norm, f_var_norm = cls._normalize_f_var(f, f_var, nadir_point, ideal_point)
+
+        # Get PoI for each point using closest point in the Pareto front
+        f_poi = np.empty(f.shape)
+        for i in range(f.shape[0]):
+            i_par_closest = np.argmin(np.sum((f_pareto_norm-f_norm[i, :])**2, axis=1))
+            f_par_targets = f_pareto_norm[i_par_closest, :]-f_min_offset
+            poi = cls._poi(f_par_targets, f_norm[i, :], f_var_norm[i, :])
+            f_poi[i, :] = 1.-poi
 
         return f_poi
 
     @staticmethod
+    def _normalize_f_var(f: np.ndarray, f_var: np.ndarray, nadir_point, ideal_point):
+        f_norm = normalize(f, x_max=nadir_point, x_min=ideal_point)
+        f_var_norm = f_var/((nadir_point-ideal_point)**2)
+        return f_norm, f_var_norm
+
+    @staticmethod
     def _poi(f_targets: np.ndarray, f: np.ndarray, f_var: np.ndarray) -> np.ndarray:
         return norm.cdf((f_targets-f) / np.sqrt(f_var))
+
+
+class ExpectedImprovementInfill(ProbabilityOfImprovementInfill):
+    """
+    The Expected Improvement (EI) naturally balances exploitation and exploration by representing the expected amount
+    of improvement at some point taking into accounts its probability of improvement.
+
+    EI(x) = (f_min-y(x)) * Phi((f_min - y(x))/s(x)) + s(x) * phi((f_min - y(x)) / s(x))
+    where
+    - f_min is the current best point (real)
+    - y(x) the surrogate model estimate
+    - s(x) the surrogate model variance estimate
+    - Phi is the cumulative distribution function of the normal distribution
+    - phi is the probability density function of the normal distribution
+
+    EI was developed for single-objective optimization, and because of the use of the minimum current objective value,
+    it tends towards suggesting improvement points only at the edges of the Pareto front. It has been modified to
+    evaluate the EI with respect to the closest Pareto front point instead.
+
+    Implementation based on:
+    Jones, D.R., "Efficient Global Optimization of Expensive Black-Box Functions", 1998, 10.1023/A:1008306431147
+    """
+
+    def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+        return self._evaluate_f_ei(f_predict, f_var_predict, self.y_train[:, :f_predict.shape[1]])
+
+    @classmethod
+    def _evaluate_f_static(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, **kwargs) -> np.ndarray:
+        return cls._evaluate_f_ei(f, f_var, f_pareto)
+
+    @classmethod
+    def _evaluate_f_ei(cls, f: np.ndarray, f_var: np.ndarray, f_current: np.ndarray) -> np.ndarray:
+        # Normalize current and predicted objectives
+        f_pareto = cls.get_pareto_front(f_current)
+        nadir_point, ideal_point = np.max(f_pareto, axis=0), np.min(f_pareto, axis=0)
+        f_pareto_norm = normalize(f_pareto, x_max=nadir_point, x_min=ideal_point)
+        f_norm, f_var_norm = cls._normalize_f_var(f, f_var, nadir_point, ideal_point)
+
+        # Get PoI for each point using closest point in the Pareto front
+        f_ei = np.empty(f.shape)
+        for i in range(f.shape[0]):
+            i_par_closest = np.argmin(np.sum((f_pareto_norm-f_norm[i, :])**2, axis=1))
+            f_par_min = f_pareto_norm[i_par_closest, :]
+            ei = cls._ei(f_par_min, f_norm[i, :], f_var_norm[i, :])
+            ei[ei < 0.] = 0.
+            f_ei[i, :] = 1.-ei
+
+        return f_ei
+
+    @staticmethod
+    def _ei(f_min: np.ndarray, f: np.ndarray, f_var: np.ndarray) -> np.ndarray:
+        dy = f_min-f
+        ei = dy*norm.cdf(dy/np.sqrt(f_var)) + f_var*norm.pdf(dy/np.sqrt(f_var))
+        return ei
 
 
 class LowerConfidenceBoundInfill(ProbabilityOfFeasibilityInfill):
@@ -88,9 +165,13 @@ class LowerConfidenceBoundInfill(ProbabilityOfFeasibilityInfill):
     def get_n_infill_objectives(self) -> int:
         return self.problem.n_obj
 
-    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+    def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
         lcb = f_predict-self.alpha*np.sqrt(f_var_predict)
         return lcb
+
+    @classmethod
+    def _evaluate_f_static(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, alpha=2.) -> np.ndarray:
+        return f-alpha*np.sqrt(f_var)
 
 
 class EstimateVarianceInfill(ProbabilityOfFeasibilityInfill):
@@ -106,66 +187,40 @@ class EstimateVarianceInfill(ProbabilityOfFeasibilityInfill):
     def __init__(self, **kwargs):
         super(EstimateVarianceInfill, self).__init__(**kwargs)
 
-        self.var_max = None
+        self.std_max = None
 
     def get_n_infill_objectives(self) -> int:
         return self.problem.n_obj*2
 
-    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
-        n_f = f_predict.shape[1]
-        f = np.empty((f_predict.shape[0], n_f*2))
+    def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+        f_std_predict = np.sqrt(f_var_predict)
+        if self.std_max is None:
+            self.std_max = np.max(f_std_predict, axis=0)
+            self.std_max[self.std_max == 0] = 1.
+
+        return self._evaluate_f_var_infill(f_predict, f_var_predict, std_max=self.std_max)
+
+    @classmethod
+    def _evaluate_f_static(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, **kwargs) -> np.ndarray:
+        return cls._evaluate_f_var_infill(f, f_var)
+
+    @classmethod
+    def _evaluate_f_var_infill(cls, f: np.ndarray, f_var: np.ndarray, std_max=None) -> np.ndarray:
+        n_f = f.shape[1]
+        f_out = np.empty((f.shape[0], n_f*2))
 
         # Function estimates as first set of objectives
-        f[:, :n_f] = f_predict[:, :]
+        f_out[:, :n_f] = f[:, :]
 
         # Variances as second set of objectives
-        f_std_predict = np.sqrt(f_var_predict)
-        if self.var_max is None:
-            self.var_max = np.max(f_std_predict, axis=0)
-            self.var_max[self.var_max == 0] = 1.
+        f_std_predict = np.sqrt(f_var)
+        if std_max is None:
+            std_max = np.max(f_std_predict, axis=0)
+            std_max[std_max == 0] = 1.
 
-        f[:, n_f:] = 1.-f_std_predict/self.var_max
+        f_out[:, n_f:] = 1.-f_std_predict/std_max
 
-        return f
-
-
-class ExpectedImprovementInfill(ProbabilityOfFeasibilityInfill):
-    """
-    The Expected Improvement (EI) naturally balances exploitation and exploration by representing the expected amount
-    of improvement at some point taking into accounts its probability of improvement.
-
-    EI(x) = (f_min-y(x)) * Phi((f_min - y(x))/s(x)) + s(x) * phi((f_min - y(x)) / s(x))
-    where
-    - f_min is the current best point (real)
-    - y(x) the surrogate model estimate
-    - s(x) the surrogate model variance estimate
-    - Phi is the cumulative distribution function of the normal distribution
-    - phi is the probability density function of the normal distribution
-
-    EI was developed for single-objective optimization, and because of the use of the minimum current objective value,
-    it tends towards suggesting improvement points only at the edges of the Pareto front, which is not suited for
-    multi-objective optimization.
-
-    Implementation based on:
-    Jones, D.R., "Efficient Global Optimization of Expensive Black-Box Functions", 1998, 10.1023/A:1008306431147
-    """
-
-    def get_n_infill_objectives(self) -> int:
-        return self.problem.n_obj
-
-    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
-        f_min = np.min(self.y_train[:, :f_predict.shape[1]], axis=0)
-
-        ei = self._ei(f_min, f_predict, f_var_predict)
-
-        f_ei = 1.-ei
-        return f_ei
-
-    @staticmethod
-    def _ei(f_min: np.ndarray, f: np.ndarray, f_var: np.ndarray) -> np.ndarray:
-        dy = f_min-f
-        ei = dy*norm.cdf(dy/np.sqrt(f_var)) + f_var*norm.pdf(dy/np.sqrt(f_var))
-        return ei
+        return f_out
 
 
 if __name__ == '__main__':
@@ -180,12 +235,26 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
 
+    # ProbabilityOfImprovementInfill.plot(var=.05**2, n_pareto=5, show=False)
+    # ProbabilityOfImprovementInfill.plot(var=.05**2, n_pareto=5, concave=True, show=False)
+    # ExpectedImprovementInfill.plot(var=.05**2, n_pareto=5, show=False)
+    # ExpectedImprovementInfill.plot(var=.05**2, n_pareto=5, concave=True, show=False)
+    # LowerConfidenceBoundInfill.plot(var=.05**2, n_pareto=5, alpha=2., show=False)
+    # EstimateVarianceInfill.plot(var=.05**2, n_pareto=5, show=False)
+    # plt.show()
+    # exit()
+
     with Experimenter.temp_results():
         # Define algorithms to run
         surrogate_model = KPLS(n_comp=5, theta0=[1e-2]*5)
         sbo_poi = SurrogateBasedInfill(
             surrogate_model=surrogate_model,
             infill=ProbabilityOfImprovementInfill(f_min_offset=0.),
+            termination=100, verbose=True,
+        )
+        sbo_ei = SurrogateBasedInfill(
+            surrogate_model=surrogate_model,
+            infill=ExpectedImprovementInfill(),
             termination=100, verbose=True,
         )
         sbo_lcb = SurrogateBasedInfill(
@@ -196,11 +265,6 @@ if __name__ == '__main__':
         sbo_est_var = SurrogateBasedInfill(
             surrogate_model=surrogate_model,
             infill=EstimateVarianceInfill(),
-            termination=100, verbose=True,
-        )
-        sbo_ei = SurrogateBasedInfill(
-            surrogate_model=surrogate_model,
-            infill=ExpectedImprovementInfill(),
             termination=100, verbose=True,
         )
         sbo_y = SurrogateBasedInfill(
@@ -215,8 +279,8 @@ if __name__ == '__main__':
             (sbo_y.algorithm(infill_size=50, init_size=100), sbo_y.name, n_eval_sbo),
             (sbo_lcb.algorithm(infill_size=50, init_size=100), sbo_lcb.name, n_eval_sbo),
             (sbo_est_var.algorithm(infill_size=50, init_size=100), sbo_est_var.name, n_eval_sbo),
-            # (sbo_poi.algorithm(infill_size=50, init_size=100), sbo_poi.name, n_eval_sbo),
-            # (sbo_ei.algorithm(infill_size=50, init_size=100), sbo_ei.name, n_eval_sbo),
+            (sbo_poi.algorithm(infill_size=50, init_size=100), sbo_poi.name, n_eval_sbo),
+            (sbo_ei.algorithm(infill_size=50, init_size=100), sbo_ei.name, n_eval_sbo),
         ]
 
         # Define problem and metrics

@@ -48,7 +48,7 @@ class ExpectedMaximinFitnessInfill(ProbabilityOfFeasibilityInfill):
     def get_n_infill_objectives(self) -> int:
         return 1
 
-    def _evaluate_f(self, x: np.ndarray, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
+    def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
         emf = np.empty((f_predict.shape[0], 1))
         for i in range(emf.shape[0]):
             emf[i, 0] = self._emf_monte_carlo(f_predict[i, :], f_var_predict[i, :], self.f_pareto, n=self.n_mc)
