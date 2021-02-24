@@ -75,13 +75,13 @@ def test_mixed_int_problem_masked(problem):
     })
 
     crossover = MixedVariableCrossover(mixed_int_problem.mask, {
-        'real': get_crossover('real_sbx', prob=1., eta=3.),
-        'int': get_crossover('int_sbx', prob=1., eta=3.),
+        'real': get_crossover('real_sbx', prob=.9, eta=3.),
+        'int': get_crossover('int_ux', prob=.9),
     })
 
     mutation = MixedVariableMutation(mixed_int_problem.mask, {
         'real': get_mutation('real_pm', eta=3.),
-        'int': get_mutation('int_pm', eta=3.),
+        'int': get_mutation('bin_bitflip'),
     })
 
     algorithm = NSGA2(
