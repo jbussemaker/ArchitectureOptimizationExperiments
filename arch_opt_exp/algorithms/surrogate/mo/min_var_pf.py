@@ -75,6 +75,11 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
 
+    MinVariancePFInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
+    MinVariancePFInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
+    MinVariancePFInfill.benchmark_evaluation_time(n_pareto=20, n_f=1000)
+    exit()
+
     with Experimenter.temp_results():
         # Define algorithms to run
         surrogate_model = KPLS(n_comp=5, theta0=[1e-2] * 5)

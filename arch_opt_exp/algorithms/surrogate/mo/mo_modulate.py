@@ -92,12 +92,13 @@ class ModulatedMOInfill(SurrogateInfill):
 
         for i_f in range(f_underlying.shape[1]):
             plt.figure()
-            c = plt.contourf(x, y, f_underlying[:, i_f].reshape(x.shape), 50, cmap='viridis')
+            c = plt.contourf(x, y, f_underlying[:, i_f].reshape(x.shape), 50, cmap='Blues_r')
             for edge in c.collections:  # https://github.com/matplotlib/matplotlib/issues/4419#issuecomment-101253070
                 edge.set_edgecolor('face')
+            plt.contour(x, y, f_underlying[:, i_f].reshape(x.shape), 5, colors='k', alpha=.5)
 
             plt.colorbar(c).set_label('Criterion $f$')
-            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=5, c='k')
+            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=20, c='w', edgecolors='k')
             plt.ylim([0, 1]), plt.xlim([0, 1])
             plt.xlabel('$f_0$'), plt.ylabel('$f_1$')
 
@@ -108,12 +109,13 @@ class ModulatedMOInfill(SurrogateInfill):
             i_f_orig = int(np.floor(i_f_mod/n_f))
 
             plt.figure()
-            c = plt.contourf(x, y, f_modulated[:, i_f_mod].reshape(x.shape), 50, cmap='viridis')
+            c = plt.contourf(x, y, f_modulated[:, i_f_mod].reshape(x.shape), 50, cmap='Blues_r')
             for edge in c.collections:  # https://github.com/matplotlib/matplotlib/issues/4419#issuecomment-101253070
                 edge.set_edgecolor('face')
+            plt.contour(x, y, f_modulated[:, i_f_mod].reshape(x.shape), 5, colors='k', alpha=.5)
 
             plt.colorbar(c).set_label('Criterion $f$ modulated over $f_{%d}$' % (i_f_orig,))
-            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=5, c='k')
+            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=20, c='w', edgecolors='k')
             plt.ylim([0, 1]), plt.xlim([0, 1])
             plt.xlabel('$f_0$'), plt.ylabel('$f_1$')
 

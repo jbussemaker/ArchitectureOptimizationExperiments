@@ -61,6 +61,20 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
         return self.get_epoi_f(f_predict, f_var_predict, self.f_pareto_sorted, self.i_pts_list)
 
     @classmethod
+    def _evaluate_f_kwargs(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, n_dominate=1) -> dict:
+        f_pareto_sorted = cls._get_f_sorted(f_pareto)
+        i_pts_list = cls._get_i_pts_list(f_pareto, n_dominate)
+        return {
+            'f_pareto_sorted': f_pareto_sorted,
+            'i_pts_list': i_pts_list,
+        }
+
+    @classmethod
+    def _evaluate_f_static(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, f_pareto_sorted=None,
+                           i_pts_list=None, **kwargs) -> np.ndarray:
+        return cls.get_epoi_f(f, f_var, f_pareto_sorted, i_pts_list)
+
+    @classmethod
     def get_epoi_f(cls, f_predict: np.ndarray, f_var_predict: np.ndarray, f_pareto_sorted: np.ndarray, i_pts_list) \
             -> np.ndarray:
 
@@ -76,7 +90,7 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
             -> float:
         """
         Calculate the probability that a point with predicted multi-dimensional objective values f_predict and variance
-        var_predict will dominate at least n_dominate current Pareto points. The equation from the paper is adapter for
+        var_predict will dominate at least n_dominate current Pareto points. The equation from the paper is adapted for
         more than 2 dimensions by looping through the different points based on sorted objective values per objective,
         instead of assuming a sorting order a-priori.
 
@@ -204,6 +218,11 @@ class EuclideanEIInfill(EnhancedPOIInfill):
         return self.get_eei_f(f_predict, f_var_predict, self.f_pareto, self.f_pareto_sorted, self.i_pts_list)
 
     @classmethod
+    def _evaluate_f_static(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, f_pareto_sorted=None,
+                           i_pts_list=None, **kwargs) -> np.ndarray:
+        return cls.get_eei_f(f, f_var, f_pareto, f_pareto_sorted, i_pts_list)
+
+    @classmethod
     def get_eei_f(cls, f_predict: np.ndarray, f_var_predict: np.ndarray, f_pareto: np.ndarray,
                   f_pareto_sorted: np.ndarray, i_pts_list) -> np.ndarray:
 
@@ -226,7 +245,7 @@ class EuclideanEIInfill(EnhancedPOIInfill):
     @classmethod
     def _get_euclidean_moment(cls, p_dominate: float, f_pareto: np.ndarray, f_predict: np.ndarray) -> float:
 
-        # If the probability of domination if less than 50%, it means we are on the wrong side of the Pareto front
+        # If the probability of domination is less than 50%, it means we are on the wrong side of the Pareto front
         if p_dominate < .5:
             return 0.
 
@@ -281,6 +300,15 @@ class MinimumPOIInfill(EuclideanEIInfill):
 
     def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
         return self.get_mpoi_f(f_predict, f_var_predict, self.f_pareto, self.euclidean)
+
+    @classmethod
+    def _evaluate_f_kwargs(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, euclidean=False) -> dict:
+        return {'euclidean': euclidean}
+
+    @classmethod
+    def _evaluate_f_static(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, euclidean=False, **kwargs) \
+            -> np.ndarray:
+        return cls.get_mpoi_f(f, f_var, f_pareto, euclidean)
 
     @classmethod
     def get_mpoi_f(cls, f_predict: np.ndarray, f_var_predict: np.ndarray, f_pareto: np.ndarray, euclidean: bool) \
@@ -366,6 +394,26 @@ if __name__ == '__main__':
     # MinimumPOIInfill.plot_mpoi(var=.0025, n_pareto=5, euclidean=True, show=False)
     # # ModMinimumPOIInfill.plot(var=.0025, n_pareto=5, show=False)
     # ModMinimumPOIInfill.plot(var=.0025, n_pareto=5, euclidean=True, show=True), exit()
+
+    # EnhancedPOIInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
+    # EnhancedPOIInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
+    # EnhancedPOIInfill.benchmark_evaluation_time(n_pareto=20, n_f=1000)
+    # EuclideanEIInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
+    # EuclideanEIInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
+    # EuclideanEIInfill.benchmark_evaluation_time(n_pareto=20, n_f=1000)
+    # MinimumPOIInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
+    # MinimumPOIInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
+    # MinimumPOIInfill.benchmark_evaluation_time(n_pareto=20, n_f=1000)
+    # MinimumPOIInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000, euclidean=True)
+    # MinimumPOIInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000, euclidean=True)
+    # MinimumPOIInfill.benchmark_evaluation_time(n_pareto=20, n_f=1000, euclidean=True)
+    # exit()
+
+    # EnhancedPOIInfill.plot(var=.0025, n_pareto=5, show=False)
+    # EuclideanEIInfill.plot(var=.0025, n_pareto=5, show=False)
+    # MinimumPOIInfill.plot(var=.0025, n_pareto=5, show=False)
+    # MinimumPOIInfill.plot(var=.0025, n_pareto=5, euclidean=True)
+    # exit()
 
     with Experimenter.temp_results():
         # Define algorithms to run

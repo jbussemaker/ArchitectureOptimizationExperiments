@@ -237,11 +237,21 @@ if __name__ == '__main__':
 
     # ProbabilityOfImprovementInfill.plot(var=.05**2, n_pareto=5, show=False)
     # ProbabilityOfImprovementInfill.plot(var=.05**2, n_pareto=5, concave=True, show=False)
-    # ExpectedImprovementInfill.plot(var=.05**2, n_pareto=5, show=False)
-    # ExpectedImprovementInfill.plot(var=.05**2, n_pareto=5, concave=True, show=False)
-    # LowerConfidenceBoundInfill.plot(var=.05**2, n_pareto=5, alpha=2., show=False)
-    # EstimateVarianceInfill.plot(var=.05**2, n_pareto=5, show=False)
+    # # ExpectedImprovementInfill.plot(var=.05**2, n_pareto=5, show=False)
+    # # ExpectedImprovementInfill.plot(var=.05**2, n_pareto=5, concave=True, show=False)
+    # # LowerConfidenceBoundInfill.plot(var=.05**2, n_pareto=5, alpha=2., show=False)
+    # # EstimateVarianceInfill.plot(var=.05**2, n_pareto=5, show=False)
     # plt.show()
+    # exit()
+
+    # ProbabilityOfImprovementInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
+    # ProbabilityOfImprovementInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
+    # ExpectedImprovementInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
+    # ExpectedImprovementInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
+    # # LowerConfidenceBoundInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000, alpha=2.)
+    # # LowerConfidenceBoundInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000, alpha=2.)
+    # # EstimateVarianceInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
+    # # EstimateVarianceInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
     # exit()
 
     with Experimenter.temp_results():

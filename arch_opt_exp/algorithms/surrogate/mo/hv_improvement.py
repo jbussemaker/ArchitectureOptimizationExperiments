@@ -60,13 +60,32 @@ class ExpectedHypervolumeImprovementInfill(ProbabilityOfFeasibilityInfill):
         return 1
 
     def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
-        f_predict_norm, f_predict_var_norm = self._normalize_f_var(
-            f_var_predict, f_var_predict, self.nadir_point, self.ideal_point)
+        return self._evaluate_f_static(f_predict, f_var_predict, self.f_pareto, self.nadir_point, self.ideal_point,
+                                       self.hv, self.f_pareto_norm, self.n_mc)
 
-        ehvi = np.empty((f_predict.shape[0], 1))
+    @classmethod
+    def _evaluate_f_kwargs(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, n_mc=1000) -> dict:
+        nadir_point, ideal_point = np.max(f_pareto, axis=0), np.min(f_pareto, axis=0)
+        f_pareto_norm = normalize(f_pareto, x_max=nadir_point, x_min=ideal_point)
+        hv = cls._hv(f_pareto_norm)
+
+        return {
+            'nadir_point': nadir_point,
+            'ideal_point': ideal_point,
+            'hv': hv,
+            'f_pareto_norm': f_pareto_norm,
+            'n_mc': n_mc,
+        }
+
+    @classmethod
+    def _evaluate_f_static(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, nadir_point=None,
+                           ideal_point=None, hv=None, f_pareto_norm=None, n_mc=1000) -> np.ndarray:
+        f_predict_norm, f_predict_var_norm = cls._normalize_f_var(
+            f, f_var, nadir_point, ideal_point)
+
+        ehvi = np.empty((f.shape[0], 1))
         for i in range(f_predict_norm.shape[0]):
-            ehvi[i, 0] = self._ehvi(self.f_pareto_norm, f_predict_norm[i, :], f_predict_var_norm[i, :], self.hv,
-                                    n=self.n_mc)
+            ehvi[i, 0] = cls._ehvi(f_pareto_norm, f_predict_norm[i, :], f_predict_var_norm[i, :], hv, n=n_mc)
         return 1.-ehvi
 
     @classmethod
@@ -97,43 +116,6 @@ class ExpectedHypervolumeImprovementInfill(ProbabilityOfFeasibilityInfill):
 
         return f_norm, f_var_norm
 
-    @classmethod
-    def plot_ehvi(cls, var=None, n_pareto=5, n_mc=1000, n_grid=25, show=True):
-        # Construct example Pareto front
-        f_pareto = np.zeros((n_pareto, 2))
-        f_pareto[:, 0] = (1.-np.cos(.5*np.pi*np.linspace(0, 1, n_pareto+2)[1:-1]))**.8
-        f_pareto[:, 1] = (1.-np.cos(.5*np.pi*(1-np.linspace(0, 1, n_pareto+2)[1:-1])))**.8
-
-        nadir_point, ideal_point = np.max(f_pareto, axis=0), np.min(f_pareto, axis=0)
-        f_pareto_norm = normalize(f_pareto, x_max=nadir_point, x_min=ideal_point)
-        hv = cls._hv(f_pareto_norm)
-
-        if np.isscalar(var):
-            var = [var, var]
-        if var is None:
-            var = [.1, .1]
-
-        x, y = np.meshgrid(np.linspace(0, 1, n_grid), np.linspace(0, 1, n_grid))
-
-        f_norm, f_var_norm = cls._normalize_f_var(
-            np.column_stack([x.ravel(), y.ravel()]), np.tile([var], reps=(x.size, 1)), nadir_point, ideal_point)
-
-        z = np.empty((x.size, 1))
-        for i in range(f_norm.shape[0]):
-            z[i] = cls._ehvi(f_pareto_norm, f_norm[i, :], f_var_norm[i, :], hv, n=n_mc)
-
-        z = z.reshape(x.shape)
-
-        plt.figure()
-        plt.title('Probability of domination (var = %r)' % var)
-        c = plt.contourf(x, y, z, 50, cmap='viridis')
-        plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=5, c='k')
-        plt.ylim(0, 1)
-        plt.xlim(0, 1)
-        plt.colorbar(c)
-        if show:
-            plt.show()
-
 
 class ModExpectedHypervolumeImprovementInfill(ModulatedMOInfill):
     """
@@ -159,7 +141,11 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
 
-    # ExpectedHypervolumeImprovementInfill.plot_ehvi(var=.05**2, n_pareto=5, n_mc=1000, n_grid=10), exit()
+    # ExpectedHypervolumeImprovementInfill.plot(var=.05**2, n_pareto=5, n=20, n_mc=200), exit()
+
+    # ExpectedHypervolumeImprovementInfill.benchmark_evaluation_time(n_pareto=5, n_f=100, n_mc=100)
+    # ExpectedHypervolumeImprovementInfill.benchmark_evaluation_time(n_pareto=10, n_f=100, n_mc=100)
+    # exit()
 
     with Experimenter.temp_results():
         # Define algorithms to run

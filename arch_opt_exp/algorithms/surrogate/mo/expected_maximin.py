@@ -25,7 +25,7 @@ __all__ = ['ExpectedMaximinFitnessInfill', 'ModExpectedMaximinFitnessInfill']
 
 class ExpectedMaximinFitnessInfill(ProbabilityOfFeasibilityInfill):
     """
-    The Expected Maximin Fitness Infill (EMFI) criterion. The EMF function quantities the improvement over an existing
+    The Expected Maximin Fitness Infill (EMFI) criterion. The EMF function quantifies the improvement over an existing
     Pareto front for a given predicted mean and variance. The maximin function represents the maximum over all Pareto
     points of the minimum of the distances to each objective.
 
@@ -49,9 +49,13 @@ class ExpectedMaximinFitnessInfill(ProbabilityOfFeasibilityInfill):
         return 1
 
     def _evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
-        emf = np.empty((f_predict.shape[0], 1))
+        return self._evaluate_f_static(f_predict, f_var_predict, self.f_pareto, n_mc=self.n_mc)
+
+    @classmethod
+    def _evaluate_f_static(cls, f: np.ndarray, f_var: np.ndarray, f_pareto: np.ndarray, n_mc=1000) -> np.ndarray:
+        emf = np.empty((f.shape[0], 1))
         for i in range(emf.shape[0]):
-            emf[i, 0] = self._emf_monte_carlo(f_predict[i, :], f_var_predict[i, :], self.f_pareto, n=self.n_mc)
+            emf[i, 0] = cls._emf_monte_carlo(f[i, :], f_var[i, :], f_pareto, n=n_mc)
         return 1.-emf
 
     @classmethod
@@ -168,8 +172,17 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
 
+    # ExpectedMaximinFitnessInfill.plot(var=.1**2, n_pareto=5, n_mc=1000, show=False)
+    # ExpectedMaximinFitnessInfill.plot(var=.1**2, n_pareto=5, n_mc=10000, show=True), exit()
+
+    # ExpectedMaximinFitnessInfill.plot(var=.1**2, n_pareto=5, concave=True, show=False)
     # ExpectedMaximinFitnessInfill.plot_emfi(n_pareto=5, n=1000, var=.1**2, n_rand=1000, contour=True, show=False)
     # ExpectedMaximinFitnessInfill.plot_emfi(n_pareto=5, n=10000, var=None, show=True), exit()
+
+    # ExpectedMaximinFitnessInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
+    # ExpectedMaximinFitnessInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
+    # ExpectedMaximinFitnessInfill.benchmark_evaluation_time(n_pareto=20, n_f=1000)
+    # exit()
 
     with Experimenter.temp_results():
         # Define algorithms to run
@@ -193,9 +206,9 @@ if __name__ == '__main__':
         validate_loo_cv = True
         n_eval, n_eval_sbo, n_repeat = 10000, 250, 4
         algorithms = [
-            # (NSGA2(pop_size=100), 'NSGA2', n_eval),
+            (NSGA2(pop_size=100), 'NSGA2', n_eval),
             (sbo_y.algorithm(infill_size=25, init_size=50), sbo_y.name, n_eval_sbo),
-            # (sbo_emfi.algorithm(infill_size=10, init_size=50), sbo_emfi.name, 100),
+            (sbo_emfi.algorithm(infill_size=10, init_size=50), sbo_emfi.name, 100),
             (sbo_mo_emfi.algorithm(infill_size=25, init_size=50), sbo_mo_emfi.name, n_eval_sbo),
         ]
 
