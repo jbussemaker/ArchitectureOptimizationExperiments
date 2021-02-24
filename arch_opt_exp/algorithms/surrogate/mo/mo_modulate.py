@@ -91,21 +91,31 @@ class ModulatedMOInfill(SurrogateInfill):
         f_underlying = cls._get_plot_f_underlying(f_eval, f_var, f_pareto, **kwargs)
 
         for i_f in range(f_underlying.shape[1]):
-            plt.figure(), plt.title('Underlying $f_{%d}$' % i_f)
-            plt.colorbar(plt.contourf(x, y, f_underlying[:, i_f].reshape(x.shape), 50, cmap='viridis'))
+            plt.figure()
+            c = plt.contourf(x, y, f_underlying[:, i_f].reshape(x.shape), 50, cmap='viridis')
+            for edge in c.collections:  # https://github.com/matplotlib/matplotlib/issues/4419#issuecomment-101253070
+                edge.set_edgecolor('face')
+
+            plt.colorbar(c).set_label('Criterion $f$')
             plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=5, c='k')
             plt.ylim([0, 1]), plt.xlim([0, 1])
+            plt.xlabel('$f_0$'), plt.ylabel('$f_1$')
 
         f_modulated = cls._get_f_modulated(f_eval, f_underlying)
         n_f = f_underlying.shape[1]
         for i_f_mod in range(f_modulated.shape[1]):
-            i_f_underlying = i_f_mod % n_f
+            # i_f_underlying = i_f_mod % n_f
             i_f_orig = int(np.floor(i_f_mod/n_f))
 
-            plt.figure(), plt.title('Underlying $f_{%d}$ modulated over $f_{%d}$' % (i_f_underlying, i_f_orig))
-            plt.colorbar(plt.contourf(x, y, f_modulated[:, i_f_mod].reshape(x.shape), 50, cmap='viridis'))
+            plt.figure()
+            c = plt.contourf(x, y, f_modulated[:, i_f_mod].reshape(x.shape), 50, cmap='viridis')
+            for edge in c.collections:  # https://github.com/matplotlib/matplotlib/issues/4419#issuecomment-101253070
+                edge.set_edgecolor('face')
+
+            plt.colorbar(c).set_label('Criterion $f$ modulated over $f_{%d}$' % (i_f_orig,))
             plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=5, c='k')
             plt.ylim([0, 1]), plt.xlim([0, 1])
+            plt.xlabel('$f_0$'), plt.ylabel('$f_1$')
 
         if show:
             plt.show()
