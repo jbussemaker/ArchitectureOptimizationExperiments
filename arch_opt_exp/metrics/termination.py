@@ -34,21 +34,21 @@ class SpreadTermination(MetricDiffTermination):
 class HVTermination(MetricDiffTermination):
 
     def __init__(self, limit=1e-4, smooth_n=2):
-        metric = MovingAverageFilter(HVMetric(), n=smooth_n)
+        metric = ExpMovingAverageFilter(HVMetric(), n=smooth_n)
         super(HVTermination, self).__init__(metric, limit=limit)
 
 
 class GDTermination(MetricDiffTermination):
 
     def __init__(self, limit=1e-4, smooth_n=2):
-        metric = MovingAverageFilter(GDConvergenceMetric(), n=smooth_n)
+        metric = ExpMovingAverageFilter(GDConvergenceMetric(), n=smooth_n)
         super(GDTermination, self).__init__(metric, limit=limit)
 
 
 class IGDTermination(MetricDiffTermination):
 
     def __init__(self, limit=1e-4, smooth_n=2):
-        metric = MovingAverageFilter(IGDConvergenceMetric(), n=smooth_n)
+        metric = ExpMovingAverageFilter(IGDConvergenceMetric(), n=smooth_n)
         super(IGDTermination, self).__init__(metric, limit=limit)
 
 
@@ -62,7 +62,7 @@ class MCDTermination(MetricDiffTermination):
 class SPITermination(MetricTermination):
 
     def __init__(self, n=40, limit=.02, smooth_n=2):
-        metric = MovingAverageFilter(SteadyPerformanceIndicator(n_last_steps=n), n=smooth_n)
+        metric = ExpMovingAverageFilter(SteadyPerformanceIndicator(n_last_steps=n), n=smooth_n)
         super(SPITermination, self).__init__(metric, lower_limit=limit)
 
 
