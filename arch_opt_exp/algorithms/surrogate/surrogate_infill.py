@@ -37,7 +37,7 @@ from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 from pymoo.util.termination.max_gen import MaximumGenerationTermination
 
 __all__ = ['SurrogateInfill', 'SurrogateModelFactory', 'SurrogateBasedInfill', 'SurrogateInfillOptimizationProblem',
-           'InfillMetric']
+           'InfillMetric', 'NrTrainMetric']
 
 log = logging.getLogger('arch_opt_exp.sur')
 
@@ -184,6 +184,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self.y_train_min = None
         self.y_train_max = None
         self.y_train_centered = None
+        self.n_train = 0
 
         self.pop_size = pop_size or 100
         self.termination = termination
@@ -245,9 +246,10 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
     def _train_model(self):
         self.surrogate_model.set_training_values(self.x_train, self.y_train)
-        self.surrogate_model.train()
-
         self.infill.set_training_values(self.x_train, self.y_train)
+
+        self.surrogate_model.train()
+        self.n_train += 1
 
     def _normalize(self, x: np.ndarray) -> np.ndarray:
         xl, xu = self.problem.xl, self.problem.xu
@@ -529,6 +531,30 @@ class InfillMetric(Metric):
     def _get_surrogate_infill(algorithm: Algorithm) -> Optional[SurrogateInfill]:
         if isinstance(algorithm, InfillBasedAlgorithm) and isinstance(algorithm.infill, SurrogateBasedInfill):
             return algorithm.infill.infill
+
+
+class NrTrainMetric(Metric):
+    """Metric that tracks the number of times the used surrogate model was trained."""
+
+    @property
+    def name(self) -> str:
+        return 'n_train'
+
+    @property
+    def value_names(self) -> List[str]:
+        return ['n_train']
+
+    def _calculate_values(self, algorithm: Algorithm) -> List[float]:
+        surrogate_infill = self._get_surrogate_infill(algorithm)
+        if surrogate_infill is None:
+            return [np.nan]
+
+        return [surrogate_infill.n_train]
+
+    @staticmethod
+    def _get_surrogate_infill(algorithm: Algorithm) -> Optional[SurrogateBasedInfill]:
+        if isinstance(algorithm, InfillBasedAlgorithm) and isinstance(algorithm.infill, SurrogateBasedInfill):
+            return algorithm.infill
 
 
 if __name__ == '__main__':

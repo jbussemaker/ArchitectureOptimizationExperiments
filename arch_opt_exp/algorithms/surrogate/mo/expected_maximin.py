@@ -220,12 +220,13 @@ if __name__ == '__main__':
             DeltaHVMetric(pf),
             IGDMetric(pf),
             InfillMetric(),
+            NrTrainMetric(),
 
             # Metrics for detecting convergence
             ExpMovingAverageFilter(ConsolidationRatioMetric(), n=5),
             ExpMovingAverageFilter(MutualDominationRateMetric(), n=5),
         ]
-        plot_names = [['delta_hv'], None, ['min_range'], ['cr'], ['mdr']]
+        plot_names = [['delta_hv'], None, ['min_range'], None, ['cr'], ['mdr']]
 
         if validate_loo_cv:
             from arch_opt_exp.algorithms.surrogate.validation import SurrogateQualityMetric
