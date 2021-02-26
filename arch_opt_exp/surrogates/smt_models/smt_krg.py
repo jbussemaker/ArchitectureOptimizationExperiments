@@ -18,7 +18,7 @@ Contact: jasper.bussemaker@dlr.de
 import numpy as np
 from smt.surrogate_models.krg import KRG
 from smt.surrogate_models.kpls import KPLS
-from arch_opt_exp.surrogates.smt.smt_surrogate_model import SMTSurrogateModel
+from arch_opt_exp.surrogates.smt_models.smt_surrogate_model import SMTSurrogateModel
 
 __all__ = ['SMTKrigingSurrogateModel', 'SMTKPLSSurrogateModel']
 

@@ -21,10 +21,23 @@ from pymoo.model.repair import Repair
 from pymoo.model.population import Population
 from pymoo.model.problem import MetaProblem, Problem
 
-__all__ = ['MixedIntProblem', 'MixedIntRepair']
+__all__ = ['MixedIntBaseProblem', 'MixedIntProblem', 'MixedIntRepair']
 
 
-class MixedIntProblem(MetaProblem):
+class MixedIntBaseProblem(Problem):
+    is_int_mask: np.ndarray
+
+    def get_repair(self) -> Repair:
+        return MixedIntRepair(self.is_int_mask)
+
+    def correct_x(self, x: np.ndarray) -> np.ndarray:
+        return MixedIntRepair.correct_x(self.is_int_mask, x)
+
+    def _evaluate(self, x, out, *args, **kwargs):
+        raise NotImplementedError
+
+
+class MixedIntProblem(MetaProblem, MixedIntBaseProblem):
     """Creates a mixed-integer problem from an existing problem, by mapping the first n (if not given: all) variables to
     integers, with a given number of choices."""
     problem: Problem
@@ -51,9 +64,6 @@ class MixedIntProblem(MetaProblem):
         n_vars_real = self.problem.n_var-self.n_vars_mixed_int
         self.mask = ['int' for _ in range(self.n_vars_mixed_int)]+['real' for _ in range(n_vars_real)]
         self.is_int_mask = [self.mask[i] == 'int' for i in range(len(self.mask))]
-
-    def get_repair(self) -> Repair:
-        return MixedIntRepair(self.is_int_mask)
 
     def _evaluate(self, x, out, *args, **kwargs):
         x_underlying = self._map_x(self._correct_x(x))
@@ -89,10 +99,15 @@ class MixedIntRepair(Repair):
         is_array = not isinstance(pop, Population)
         x = pop if is_array else pop.get("X")
 
-        is_int_mask = self.is_int_mask
-        x[:, is_int_mask] = np.round(x[:, is_int_mask].astype(np.float64)).astype(np.int)
+        x = self.correct_x(self.is_int_mask, x)
 
         if is_array:
             return x
         pop.set("X", x)
         return pop
+
+    @staticmethod
+    def correct_x(is_int_mask, x: np.ndarray) -> np.ndarray:
+        x = np.copy(x)
+        x[:, is_int_mask] = np.round(x[:, is_int_mask].astype(np.float64)).astype(np.int)
+        return x

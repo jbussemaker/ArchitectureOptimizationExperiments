@@ -540,7 +540,7 @@ if __name__ == '__main__':
 
     # from arch_opt_exp.surrogates.smt.smt_krg import SMTKrigingSurrogateModel
     # sm = SMTKrigingSurrogateModel()
-    from arch_opt_exp.surrogates.sklearn.gp import SKLearnGPSurrogateModel
+    from arch_opt_exp.surrogates.sklearn_models.gp import SKLearnGPSurrogateModel
     sm = SKLearnGPSurrogateModel()
 
     sur_infill = FunctionEstimateInfill()

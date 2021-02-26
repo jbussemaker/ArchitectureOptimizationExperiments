@@ -18,13 +18,13 @@ Contact: jasper.bussemaker@dlr.de
 import numpy as np
 from typing import *
 from arch_opt_exp.metrics_base import Metric
+from arch_opt_exp.surrogates.validation import *
 from arch_opt_exp.algorithms.infill_based import *
-from arch_opt_exp.surrogates import SurrogateModel
 from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
 
 from pymoo.model.algorithm import Algorithm
 
-__all__ = ['SurrogateQualityMetric', 'LOOCrossValidation']
+__all__ = ['SurrogateQualityMetric']
 
 
 class SurrogateQualityMetric(Metric):
@@ -97,76 +97,3 @@ class SurrogateQualityMetric(Metric):
     def _get_surrogate_infill(algorithm: Algorithm) -> Optional[SurrogateInfill]:
         if isinstance(algorithm, InfillBasedAlgorithm) and isinstance(algorithm.infill, SurrogateBasedInfill):
             return algorithm.infill.infill
-
-
-class LOOCrossValidation:
-    """Leave-one-out cross validation of a surrogate model: trains a surrogate model k-times with each time one random
-    sample left out, and then computing the root mean square error (RMSE) of each of the training round errors."""
-
-    @classmethod
-    def cross_validate(cls, surrogate_model: SurrogateModel, xt: np.ndarray, yt: np.ndarray, n_train: int = None) \
-            -> np.ndarray:
-        if n_train is None:
-            n_train = xt.shape[0]
-        if n_train > xt.shape[0]:
-            n_train = xt.shape[0]
-
-        i_leave_out = np.random.choice(xt.shape[0], n_train, replace=False)
-        errors = np.empty((n_train, yt.shape[1]))
-        for i, i_lo in enumerate(i_leave_out):
-            errors[i, :] = cls._get_error(surrogate_model, xt, yt, i_lo)
-
-        rmse = np.sqrt(np.mean(errors**2, axis=0))
-        return rmse
-
-    @classmethod
-    def _get_error(cls, surrogate_model: SurrogateModel, xt: np.ndarray, yt: np.ndarray, i_leave_out) -> np.ndarray:
-        x_lo = xt[i_leave_out, :]
-        y_lo = yt[i_leave_out, :]
-        xt = np.delete(xt, i_leave_out, axis=0)
-        yt = np.delete(yt, i_leave_out, axis=0)
-
-        surrogate_model_copy = cls._copy_surrogate_model(surrogate_model)
-        surrogate_model_copy.set_samples(xt, yt)
-        surrogate_model_copy.train()
-
-        y_lo_predict = surrogate_model_copy.predict(np.atleast_2d(x_lo))
-        return y_lo_predict-y_lo
-
-    @classmethod
-    def _copy_surrogate_model(cls, surrogate_model: SurrogateModel) -> SurrogateModel:
-        return surrogate_model.copy()
-
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    from smt.sampling_methods.lhs import LHS
-    from pymoo.problems.single.himmelblau import Himmelblau
-    from arch_opt_exp.surrogates.smt.smt_krg import SMTKrigingSurrogateModel
-
-    sm = SMTKrigingSurrogateModel(theta0=1e-1)
-    prob = Himmelblau()
-    n_loo_cv_pts = 10
-    n_pts_test = [10, 15, 20, 50, 75, 100]
-    n_loo_cv_repeat = 5
-
-    lhs = LHS(xlimits=np.array([[0, 1]]*2))
-    scores = []
-    scores_std = []
-    for n_pts in n_pts_test:
-        xt_test = lhs(n_pts)
-        yt_test = prob.evaluate(xt_test)
-
-        run_scores = [LOOCrossValidation.cross_validate(sm, xt_test, yt_test, n_train=n_loo_cv_pts)
-                      for _ in range(n_loo_cv_repeat)]
-        scores.append(np.mean(run_scores))
-        scores_std.append(np.std(run_scores))
-
-    scores, scores_std = np.array(scores), np.array(scores_std)
-
-    plt.figure(), plt.title('LOO-CV')
-    plt.semilogy(n_pts_test, scores, '-xk', linewidth=1)
-    plt.plot(n_pts_test, scores+scores_std, '--k', linewidth=1)
-    plt.plot(n_pts_test, scores-scores_std, '--k', linewidth=1)
-    plt.xlabel('Number of training points'), plt.ylabel('LOO-CV score')
-    plt.show()

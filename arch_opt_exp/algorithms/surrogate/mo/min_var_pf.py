@@ -70,11 +70,11 @@ if __name__ == '__main__':
     from arch_opt_exp.metrics.filters import *
     from arch_opt_exp.metrics.convergence import *
     from arch_opt_exp.metrics.performance import *
-    from arch_opt_exp.surrogates.smt.smt_krg import *
+    from arch_opt_exp.surrogates.smt_models.smt_krg import *
     from arch_opt_exp.algorithms.surrogate.func_estimate import *
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
-    from arch_opt_exp.surrogates.sklearn.gp import SKLearnGPSurrogateModel
+    from arch_opt_exp.surrogates.sklearn_models.gp import SKLearnGPSurrogateModel
 
     # MinVariancePFInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
     # MinVariancePFInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)

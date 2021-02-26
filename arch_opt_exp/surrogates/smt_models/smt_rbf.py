@@ -16,7 +16,7 @@ Contact: jasper.bussemaker@dlr.de
 """
 
 from smt.surrogate_models.rbf import RBF
-from arch_opt_exp.surrogates.smt.smt_surrogate_model import SMTSurrogateModel
+from arch_opt_exp.surrogates.smt_models.smt_surrogate_model import SMTSurrogateModel
 
 __all__ = ['SMTRBFSurrogateModel']
 

@@ -178,7 +178,7 @@ if __name__ == '__main__':
     from arch_opt_exp.metrics.performance import *
     from arch_opt_exp.algorithms.surrogate.func_estimate import *
     from pymoo.factory import get_problem, get_reference_directions
-    from arch_opt_exp.surrogates.smt.smt_krg import SMTKPLSSurrogateModel
+    from arch_opt_exp.surrogates.smt_models.smt_krg import SMTKPLSSurrogateModel
 
     # FunctionEstimatePoFInfill.plot(var=.05**2, n_pareto=5, show=False)
     # FunctionVariancePoFInfill.plot(var=.05**2, n_pareto=5, show=True), exit()

@@ -170,7 +170,7 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.func_estimate import *
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
-    from arch_opt_exp.surrogates.smt.smt_krg import SMTKPLSSurrogateModel
+    from arch_opt_exp.surrogates.smt_models.smt_krg import SMTKPLSSurrogateModel
 
     # ExpectedMaximinFitnessInfill.plot(var=.1**2, n_pareto=5, n_mc=1000, show=False)
     # ExpectedMaximinFitnessInfill.plot(var=.1**2, n_pareto=5, n_mc=10000, show=True), exit()

@@ -1,3 +1,4 @@
+numba
 pymoo==0.4.2.1
 pytest
 werkzeug==1.0.1

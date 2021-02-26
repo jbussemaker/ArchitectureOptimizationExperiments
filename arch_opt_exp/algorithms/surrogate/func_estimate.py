@@ -91,7 +91,7 @@ if __name__ == '__main__':
     from arch_opt_exp.metrics.convergence import *
     from arch_opt_exp.metrics.performance import *
     from arch_opt_exp.algorithms.random_search import *
-    from arch_opt_exp.surrogates.smt.smt_rbf import SMTRBFSurrogateModel
+    from arch_opt_exp.surrogates.smt_models.smt_rbf import SMTRBFSurrogateModel
 
     with Experimenter.temp_results():
         # Define algorithms to run
