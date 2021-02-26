@@ -47,8 +47,8 @@ class ExpectedHypervolumeImprovementInfill(ProbabilityOfFeasibilityInfill):
         self.f_pareto_norm = None
         self.hv = None
 
-    def set_training_values(self, x_train: np.ndarray, y_train: np.ndarray):
-        super(ExpectedHypervolumeImprovementInfill, self).set_training_values(x_train, y_train)
+    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
+        super(ExpectedHypervolumeImprovementInfill, self).set_samples(x_train, y_train)
 
         self.f_pareto = f_pareto = self.get_pareto_front(y_train[:, :self.problem.n_obj])
 
@@ -133,13 +133,13 @@ class ModExpectedHypervolumeImprovementInfill(ModulatedMOInfill):
 if __name__ == '__main__':
     from arch_opt_exp.experimenter import *
     from pymoo.algorithms.nsga2 import NSGA2
-    from smt.surrogate_models.kpls import KPLS
     from arch_opt_exp.metrics.filters import *
     from arch_opt_exp.metrics.convergence import *
     from arch_opt_exp.metrics.performance import *
     from arch_opt_exp.algorithms.surrogate.func_estimate import *
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
+    from arch_opt_exp.surrogates.smt.smt_krg import SMTKPLSSurrogateModel
 
     # ExpectedHypervolumeImprovementInfill.plot(var=.05**2, n_pareto=5, n=20, n_mc=200), exit()
 
@@ -149,7 +149,7 @@ if __name__ == '__main__':
 
     with Experimenter.temp_results():
         # Define algorithms to run
-        surrogate_model = KPLS(n_comp=5, theta0=[1e-2] * 5)
+        surrogate_model = SMTKPLSSurrogateModel(n_comp=5, theta0=1e-2)
         sbo_ehvi = SurrogateBasedInfill(
             surrogate_model=surrogate_model,
             infill=ExpectedHypervolumeImprovementInfill(n_monte_carlo=200),

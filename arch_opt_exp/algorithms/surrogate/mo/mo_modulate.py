@@ -45,9 +45,9 @@ class ModulatedMOInfill(SurrogateInfill):
         super(ModulatedMOInfill, self).initialize(*args, **kwargs)
         self.underlying.initialize(*args, **kwargs)
 
-    def set_training_values(self, x_train: np.ndarray, y_train: np.ndarray):
-        super(ModulatedMOInfill, self).set_training_values(x_train, y_train)
-        self.underlying.set_training_values(x_train, y_train)
+    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
+        super(ModulatedMOInfill, self).set_samples(x_train, y_train)
+        self.underlying.set_samples(x_train, y_train)
 
     def get_n_infill_objectives(self) -> int:
         return self.underlying.get_n_infill_objectives()*self.problem.n_obj

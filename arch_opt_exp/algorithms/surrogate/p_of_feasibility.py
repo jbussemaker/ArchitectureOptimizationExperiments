@@ -173,19 +173,19 @@ class FunctionVariancePoFInfill(ProbabilityOfFeasibilityInfill):
 if __name__ == '__main__':
     from arch_opt_exp.experimenter import *
     from pymoo.algorithms.nsga2 import NSGA2
-    from smt.surrogate_models.kpls import KPLS
-    from arch_opt_exp.metrics.filters import *
     from arch_opt_exp.metrics.convergence import *
+    from arch_opt_exp.metrics.filters import *
     from arch_opt_exp.metrics.performance import *
     from arch_opt_exp.algorithms.surrogate.func_estimate import *
     from pymoo.factory import get_problem, get_reference_directions
+    from arch_opt_exp.surrogates.smt.smt_krg import SMTKPLSSurrogateModel
 
     # FunctionEstimatePoFInfill.plot(var=.05**2, n_pareto=5, show=False)
     # FunctionVariancePoFInfill.plot(var=.05**2, n_pareto=5, show=True), exit()
 
     with Experimenter.temp_results():
         # Define algorithms to run
-        surrogate_model = KPLS(n_comp=5, theta0=[1e-2]*5)
+        surrogate_model = SMTKPLSSurrogateModel(n_comp=5, theta0=1e-2)
         sbo_66 = SurrogateBasedInfill(
             surrogate_model=surrogate_model,
             infill=FunctionEstimatePoFInfill(min_pof=.66),

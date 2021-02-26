@@ -15,15 +15,14 @@ Copyright: (c) 2021, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 
-import copy
 import logging
 import numpy as np
 from typing import *
 import matplotlib.pyplot as plt
 from matplotlib.colors import SymLogNorm
+from arch_opt_exp.surrogates.model import *
 from arch_opt_exp.metrics_base import Metric
 from arch_opt_exp.algorithms.infill_based import *
-from smt.surrogate_models.surrogate_model import SurrogateModel
 
 from pymoo.optimize import minimize
 from pymoo.model.result import Result
@@ -36,8 +35,8 @@ from pymoo.algorithms.nsga2 import NSGA2, RankAndCrowdingSurvival
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 from pymoo.util.termination.max_gen import MaximumGenerationTermination
 
-__all__ = ['SurrogateInfill', 'SurrogateModelFactory', 'SurrogateBasedInfill', 'SurrogateInfillOptimizationProblem',
-           'InfillMetric', 'NrTrainMetric']
+__all__ = ['SurrogateInfill', 'SurrogateBasedInfill', 'SurrogateInfillOptimizationProblem', 'InfillMetric',
+           'NrTrainMetric']
 
 log = logging.getLogger('arch_opt_exp.sur')
 
@@ -69,16 +68,16 @@ class SurrogateInfill:
     def needs_variance(self):
         return False
 
-    def set_training_values(self, x_train: np.ndarray, y_train: np.ndarray):
+    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
         self.x_train = x_train
         self.y_train = y_train
 
     def predict(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        y = self.surrogate_model.predict_values(x)
+        y = self.surrogate_model.predict(x)
         return self._split_f_g(y)
 
     def predict_variance(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        y_var = self.surrogate_model.predict_variances(x)
+        y_var = self.surrogate_model.predict_variance(x)
         return self._split_f_g(y_var)
 
     def _split_f_g(self, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -140,30 +139,6 @@ class SurrogateInfill:
         raise NotImplementedError
 
 
-class SurrogateModelFactory:
-
-    def __init__(self, klass: Type[SurrogateModel], **kwargs):
-        self.klass = klass
-        self.kwargs = kwargs
-
-    def get(self) -> SurrogateModel:
-        return self.klass(**self.kwargs)
-
-    @classmethod
-    def from_surrogate_model(cls, surrogate_model: SurrogateModel):
-        klass = surrogate_model.__class__
-
-        default_opts = {key: data['default'] for key, data in surrogate_model.options._declared_entries.items()}
-        kwargs = {key: copy.deepcopy(value) for key, value in surrogate_model.options._dict.items()
-                  if repr(value) != repr(default_opts[key])}
-
-        return cls(klass, **kwargs)
-
-    @classmethod
-    def copy_surrogate_model(cls, surrogate_model: SurrogateModel) -> SurrogateModel:
-        return cls.from_surrogate_model(surrogate_model).get()
-
-
 class SurrogateBasedInfill(ModelBasedInfillCriterion):
     """Infill criterion that searches a surrogate model to generate new infill points."""
 
@@ -174,7 +149,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         super(SurrogateBasedInfill, self).__init__(**kwargs)
 
         if isinstance(surrogate_model, SurrogateModel):
-            surrogate_model = SurrogateModelFactory.from_surrogate_model(surrogate_model)
+            surrogate_model = SurrogateModelFactory(surrogate_model)
         self.surrogate_model_factory = surrogate_model
         self._surrogate_model = None
         self.infill = infill
@@ -203,10 +178,9 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         return '%s / %s' % (self.surrogate_model.__class__.__name__, self.infill.__class__.__name__)
 
     @property
-    def surrogate_model(self):
+    def surrogate_model(self) -> SurrogateModel:
         if self._surrogate_model is None:
             self._surrogate_model = self.surrogate_model_factory.get()
-            self._surrogate_model.options['print_global'] = False
 
             if self.infill.needs_variance and not self.supports_variances:
                 raise ValueError(
@@ -217,7 +191,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
     @property
     def supports_variances(self):
-        return self.surrogate_model.supports['variances']
+        return self.surrogate_model.supports_variance()
 
     def _initialize(self):
         self.infill.initialize(self.problem, self.surrogate_model)
@@ -245,8 +219,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self._train_model()
 
     def _train_model(self):
-        self.surrogate_model.set_training_values(self.x_train, self.y_train)
-        self.infill.set_training_values(self.x_train, self.y_train)
+        self.surrogate_model.set_samples(self.x_train, self.y_train)
+        self.infill.set_samples(self.x_train, self.y_train)
 
         self.surrogate_model.train()
         self.n_train += 1
@@ -357,14 +331,14 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         if is_one_dim:
             xx = np.ones((len(x), self.problem.n_var))*.5
             xx[:, i_x[0]] = x
-            y = self.surrogate_model.predict_values(xx)[:, i_y]
+            y = self.surrogate_model.predict(xx)[:, i_y]
 
             plt.figure()
             if plot_problem:
                 plt.plot(x, _problem_eval_norm(xx), 'b', linewidth=1., label='Problem')
             plt.plot(x, y, 'k', linewidth=1., label='Predicted')
             if has_var:
-                y_std = np.sqrt(self.surrogate_model.predict_variances(xx)[:, i_y])
+                y_std = np.sqrt(self.surrogate_model.predict_variance(xx)[:, i_y])
                 plt.plot(x, y+y_std, '--k', linewidth=1.)
                 plt.plot(x, y-y_std, '--k', linewidth=1.)
             plt.scatter(x_train[:, i_x[0]], y_train[:, i_y], c='k', marker='x', label='Samples')
@@ -378,7 +352,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
             xx = np.ones((xx1.size, self.problem.n_var))*.5
             xx[:, i_x[0]] = xx1.ravel()
             xx[:, i_x[1]] = xx2.ravel()
-            y = self.surrogate_model.predict_values(xx)[:, i_y]
+            y = self.surrogate_model.predict(xx)[:, i_y]
             yy = y.reshape(xx1.shape)
 
             # Contour
@@ -395,7 +369,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
             # Contour (variance)
             if has_var:
-                yy_std = np.sqrt(self.surrogate_model.predict_variances(xx)[:, i_y].reshape(xx1.shape))
+                yy_std = np.sqrt(self.surrogate_model.predict_variance(xx)[:, i_y].reshape(xx1.shape))
 
                 plt.figure()
                 c = plt.contourf(xx1, xx2, yy_std, 50)
@@ -404,7 +378,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
             # Prediction error
             plt.figure()
-            y_err = y_train[:, i_y]-self.surrogate_model.predict_values(x_train)[:, i_y]
+            y_err = y_train[:, i_y]-self.surrogate_model.predict(x_train)[:, i_y]
             c = plt.scatter(x_train[:, i_x[0]], x_train[:, i_x[1]], s=1, c=y_err, cmap='RdYlBu',
                             norm=SymLogNorm(linthresh=1e-3, base=10.))
 
@@ -564,8 +538,10 @@ if __name__ == '__main__':
     prob = Himmelblau()
     n_pts = 10
 
-    from smt.surrogate_models.krg import KRG
-    sm = KRG()
+    # from arch_opt_exp.surrogates.smt.smt_krg import SMTKrigingSurrogateModel
+    # sm = SMTKrigingSurrogateModel()
+    from arch_opt_exp.surrogates.sklearn.gp import SKLearnGPSurrogateModel
+    sm = SKLearnGPSurrogateModel()
 
     sur_infill = FunctionEstimateInfill()
     sbo_infill = SurrogateBasedInfill(surrogate_model=sm, infill=sur_infill)

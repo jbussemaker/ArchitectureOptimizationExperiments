@@ -19,7 +19,7 @@ import numpy as np
 from typing import *
 from arch_opt_exp.metrics_base import Metric
 from arch_opt_exp.algorithms.infill_based import *
-from smt.surrogate_models.surrogate_model import SurrogateModel
+from arch_opt_exp.surrogates import SurrogateModel
 from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
 
 from pymoo.model.algorithm import Algorithm
@@ -64,7 +64,7 @@ class SurrogateQualityMetric(Metric):
 
         xt, yt = surrogate_infill.x_train, surrogate_infill.y_train
 
-        y_err = yt-surrogate_model.predict_values(xt)
+        y_err = yt-surrogate_model.predict(xt)
 
         values = [
             np.max(self._get_rmse(y_err)),
@@ -127,25 +127,24 @@ class LOOCrossValidation:
         yt = np.delete(yt, i_leave_out, axis=0)
 
         surrogate_model_copy = cls._copy_surrogate_model(surrogate_model)
-        surrogate_model_copy.options['print_global'] = False
-        surrogate_model_copy.set_training_values(xt, yt)
+        surrogate_model_copy.set_samples(xt, yt)
         surrogate_model_copy.train()
 
-        y_lo_predict = surrogate_model_copy.predict_values(np.atleast_2d(x_lo))
+        y_lo_predict = surrogate_model_copy.predict(np.atleast_2d(x_lo))
         return y_lo_predict-y_lo
 
     @classmethod
     def _copy_surrogate_model(cls, surrogate_model: SurrogateModel) -> SurrogateModel:
-        return SurrogateModelFactory.copy_surrogate_model(surrogate_model)
+        return surrogate_model.copy()
 
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from smt.surrogate_models.krg import KRG
     from smt.sampling_methods.lhs import LHS
     from pymoo.problems.single.himmelblau import Himmelblau
+    from arch_opt_exp.surrogates.smt.smt_krg import SMTKrigingSurrogateModel
 
-    sm = KRG(theta0=[1e-1]*2)
+    sm = SMTKrigingSurrogateModel(theta0=1e-1)
     prob = Himmelblau()
     n_loo_cv_pts = 10
     n_pts_test = [10, 15, 20, 50, 75, 100]

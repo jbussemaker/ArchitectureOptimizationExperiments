@@ -67,30 +67,40 @@ class MinVariancePFInfill(FunctionEstimatePoFInfill):
 if __name__ == '__main__':
     from arch_opt_exp.experimenter import *
     from pymoo.algorithms.nsga2 import NSGA2
-    from smt.surrogate_models.kpls import KPLS
     from arch_opt_exp.metrics.filters import *
     from arch_opt_exp.metrics.convergence import *
     from arch_opt_exp.metrics.performance import *
+    from arch_opt_exp.surrogates.smt.smt_krg import *
     from arch_opt_exp.algorithms.surrogate.func_estimate import *
     from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
     from pymoo.factory import get_problem, get_reference_directions
+    from arch_opt_exp.surrogates.sklearn.gp import SKLearnGPSurrogateModel
 
-    MinVariancePFInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
-    MinVariancePFInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
-    MinVariancePFInfill.benchmark_evaluation_time(n_pareto=20, n_f=1000)
-    exit()
+    # MinVariancePFInfill.benchmark_evaluation_time(n_pareto=5, n_f=1000)
+    # MinVariancePFInfill.benchmark_evaluation_time(n_pareto=10, n_f=1000)
+    # MinVariancePFInfill.benchmark_evaluation_time(n_pareto=20, n_f=1000)
+    # exit()
 
     with Experimenter.temp_results():
         # Define algorithms to run
-        surrogate_model = KPLS(n_comp=5, theta0=[1e-2] * 5)
-        sbo_mvpf = SurrogateBasedInfill(
-            surrogate_model=surrogate_model,
-            infill=MinVariancePFInfill(),
+        sbo_y = SurrogateBasedInfill(
+            surrogate_model=SMTKPLSSurrogateModel(n_comp=5, theta0=1e-2),
+            infill=FunctionEstimateInfill(),
             termination=100, verbose=True,
         )
-        sbo_y = SurrogateBasedInfill(
-            surrogate_model=surrogate_model,
+        sbo_y_krg = SurrogateBasedInfill(
+            surrogate_model=SMTKrigingSurrogateModel(theta0=1e-2),
             infill=FunctionEstimateInfill(),
+            termination=100, verbose=True,
+        )
+        sbo_y_skl = SurrogateBasedInfill(
+            surrogate_model=SKLearnGPSurrogateModel(alpha=1e-10),
+            infill=FunctionEstimateInfill(),
+            termination=100, verbose=True,
+        )
+        sbo_mvpf = SurrogateBasedInfill(
+            surrogate_model=SKLearnGPSurrogateModel(alpha=1e-10),
+            infill=MinVariancePFInfill(),
             termination=100, verbose=True,
         )
 
@@ -98,6 +108,8 @@ if __name__ == '__main__':
         algorithms = [
             (NSGA2(pop_size=100), 'NSGA2', n_eval),
             (sbo_y.algorithm(infill_size=25, init_size=50), sbo_y.name, n_eval_sbo),
+            (sbo_y_krg.algorithm(infill_size=25, init_size=50), sbo_y_krg.name, n_eval_sbo),
+            (sbo_y_skl.algorithm(infill_size=25, init_size=50), sbo_y_skl.name, n_eval_sbo),
             (sbo_mvpf.algorithm(infill_size=25, init_size=50), sbo_mvpf.name, n_eval_sbo),
         ]
 
@@ -129,8 +141,8 @@ if __name__ == '__main__':
 
         # Run algorithms
         results = [ExperimenterResult.aggregate_results(
-            Experimenter(problem, algorithm, n_eval_max=n_eval_algo, metrics=metrics)
-                .run_effectiveness_parallel(n_repeat=n_repeat)) for algorithm, _, n_eval_algo in algorithms]
+            Experimenter(problem, algorithm, n_eval_max=n_eval_algo, metrics=metrics, algorithm_name=name)
+                .run_effectiveness_parallel(n_repeat=n_repeat)) for algorithm, name, n_eval_algo in algorithms]
 
         # Plot metrics
         for ii, metric in enumerate(metrics):

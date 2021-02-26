@@ -2,3 +2,4 @@ pymoo==0.4.2.1
 pytest
 werkzeug==1.0.1
 smt==0.7.1
+scikit-learn==0.24.0

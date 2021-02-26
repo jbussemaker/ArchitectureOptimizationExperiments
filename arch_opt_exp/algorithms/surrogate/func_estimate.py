@@ -85,23 +85,23 @@ class FunctionEstimateDistanceInfill(SurrogateInfill):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     from arch_opt_exp.experimenter import *
-    from smt.surrogate_models.rbf import RBF
     from pymoo.algorithms.nsga2 import NSGA2
     from pymoo.problems.multi.zdt import ZDT1
     from arch_opt_exp.metrics.filters import *
     from arch_opt_exp.metrics.convergence import *
     from arch_opt_exp.metrics.performance import *
     from arch_opt_exp.algorithms.random_search import *
+    from arch_opt_exp.surrogates.smt.smt_rbf import SMTRBFSurrogateModel
 
     with Experimenter.temp_results():
         # Define algorithms to run
         sbo = SurrogateBasedInfill(
-            surrogate_model=RBF(d0=1., poly_degree=-1, reg=1e-10),
+            surrogate_model=SMTRBFSurrogateModel(d0=1., deg=-1, reg=1e-10),
             infill=FunctionEstimateInfill(),
             termination=100, verbose=True,
         )
         sbo_cp = SurrogateBasedInfill(
-            surrogate_model=RBF(d0=1., poly_degree=-1, reg=1e-10),
+            surrogate_model=SMTRBFSurrogateModel(d0=1., deg=-1, reg=1e-10),
             infill=FunctionEstimateDistanceInfill(),
             termination=100, verbose=True,
         )
