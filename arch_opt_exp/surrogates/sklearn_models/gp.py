@@ -19,10 +19,12 @@ import pickle
 import logging
 import warnings
 import numpy as np
+from typing import *
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.gaussian_process.kernels import Kernel
 from arch_opt_exp.surrogates.model import SurrogateModel
 from sklearn.gaussian_process import GaussianProcessRegressor
+from arch_opt_exp.surrogates.sklearn_models.distance_base import *
 from sklearn.gaussian_process.kernels import ConstantKernel, Matern
 
 __all__ = ['SKLearnGPSurrogateModel']
@@ -68,6 +70,20 @@ class SKLearnGPSurrogateModel(SurrogateModel):
     def set_samples(self, x: np.ndarray, y: np.ndarray):
         self._samples = (x, y)
         self._ny = y.shape[1]
+
+        for dist in self._get_distance_metrics():
+            dist.set_samples(x, y)
+
+    def _get_distance_metrics(self) -> List[Distance]:
+        int_kernel = self.kernel
+        if isinstance(int_kernel, MixedIntKernel):
+            int_kernel = int_kernel.k2
+
+        if isinstance(int_kernel, CustomDistanceKernel):
+            if isinstance(int_kernel.metric, Distance):
+                return [int_kernel.metric]
+
+        return []
 
     def train(self):
         if self._samples is None:

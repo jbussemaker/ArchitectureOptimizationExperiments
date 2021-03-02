@@ -31,6 +31,19 @@ IsIntMask = Union[np.ndarray, List[bool]]
 class Distance:
     """Base class for implementing some component-wise distance calculation: d(x, x')"""
 
+    def __init__(self):
+        self.xt = None
+        self.yt = None
+
+    def set_samples(self, x, y):
+        """Set before training the GP model."""
+        self.xt = x
+        self.yt = y
+        self._process_samples(x, y)
+
+    def _process_samples(self, x: np.ndarray, y: np.ndarray):
+        pass
+
     def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray], **kwargs) -> float:
         uv = np.array([u, v]).T
         return float(self._call(uv))
