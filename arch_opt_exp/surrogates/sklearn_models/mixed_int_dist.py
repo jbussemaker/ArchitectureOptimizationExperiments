@@ -17,9 +17,11 @@ Contact: jasper.bussemaker@dlr.de
 
 import numba
 import numpy as np
+from typing import *
+from scipy.spatial.distance import hamming
 from arch_opt_exp.surrogates.sklearn_models.distance_base import *
 
-__all__ = ['GowerDistance', 'SymbolicCovarianceDistance']
+__all__ = ['GowerDistance', 'SymbolicCovarianceDistance', 'HammingDistance']
 
 
 class GowerDistance(Distance):
@@ -152,6 +154,25 @@ def _sc_dist(inv_cov_matrix: np.ndarray, uv: np.ndarray, is_int_mask: np.ndarray
     return np.dot(delta_uv, np.dot(inv_cov_matrix, delta_uv))
 
 
+class HammingDistance(Distance):
+    """
+    Hamming distance for the discrete terms. Based on the principle by Roustant et al. that the kernel value is the
+    Hadamard product of the continuous kernel and the discrete kernel. See for example Eq. 8 in:
+    Pelamatti 2019: "Surrogate Model Based Optimization of Constrained Mixed Variable Problems"
+    """
+
+    def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray], **kwargs) -> float:
+        return hamming(u, v)
+
+    def _call(self, uv: np.ndarray) -> float:
+        raise NotImplementedError
+
+    def kernel(self, is_int_mask: IsIntMask, **kwargs):
+        cont_kernel = MixedIntKernel.get_cont_kernel()
+        int_kernel = CustomDistanceKernel(self)
+        return MixedIntKernel(cont_kernel, int_kernel, is_int_mask)
+
+
 if __name__ == '__main__':
     from arch_opt_exp.surrogates.validation import *
     from arch_opt_exp.problems.discrete_branin import *
@@ -161,7 +182,8 @@ if __name__ == '__main__':
 
     # kernel = None
     # kernel = GowerDistance(problem.is_int_mask).kernel()
-    kernel = SymbolicCovarianceDistance(problem.is_int_mask).kernel()
+    # kernel = SymbolicCovarianceDistance(problem.is_int_mask).kernel()
+    kernel = HammingDistance().kernel(problem.is_int_mask)
 
     sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6)
     LOOCrossValidation.check_sample_sizes(sm, problem, repair=problem.get_repair(), show=True)

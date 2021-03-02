@@ -60,7 +60,7 @@ class Distance:
 
 class MixedIntKernel(KernelOperator):
     """
-    A mixed integer kernel that is based n the principle by Roustant et al. that the kernel value is the Hadamard
+    A mixed integer kernel that is based on the principle by Roustant et al. that the kernel value is the Hadamard
     product of the continuous kernel and the discrete kernel.
 
     See for example Eq. 8 in:
@@ -73,6 +73,20 @@ class MixedIntKernel(KernelOperator):
         self.is_int_mask = self.get_int_mask(is_int_mask)
         self.is_cont_mask = ~self.is_int_mask
         super(MixedIntKernel, self).__init__(cont_kernel, int_kernel)
+
+    def get_params(self, deep=True):
+        params = {
+            'cont_kernel': self.k1,
+            'int_kernel': self.k2,
+            'is_int_mask': self.is_int_mask,
+        }
+        if deep:
+            deep_items = self.k1.get_params().items()
+            params.update(('cont_kernel__' + k, val) for k, val in deep_items)
+            deep_items = self.k2.get_params().items()
+            params.update(('int_kernel__' + k, val) for k, val in deep_items)
+
+        return params
 
     def __call__(self, X, Y=None, eval_gradient=False):
         x_cont, x_int = self._split(X)
@@ -99,6 +113,8 @@ class MixedIntKernel(KernelOperator):
 
     @staticmethod
     def get_int_mask(is_int_mask: IsIntMask) -> np.ndarray:
+        if isinstance(is_int_mask, np.ndarray):
+            return is_int_mask
         return np.array(is_int_mask, dtype=bool)
 
     @staticmethod
