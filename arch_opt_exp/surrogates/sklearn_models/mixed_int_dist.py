@@ -79,13 +79,18 @@ class SymbolicCovarianceDistance(Distance):
         self._inv_cov_matrix = None
 
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
+        """Recalculate the covariance matrix when setting new samples for training."""
+
         x_cont = x[:, self.is_cont_mask]
         x_int = x[:, self.is_int_mask].astype(np.int)
 
         # Determine X - X_bar for all samples
         x_means = np.empty(x.shape)
+
+        # The continuous case
         x_means[:, self.is_cont_mask] = x_cont-np.mean(x_cont, axis=0)
 
+        # For discrete variables use the symbolic covariance
         x_means_int = np.empty(x_int.shape)
         for i in range(x_int.shape[1]):
             n_x_levels_i = np.max(x_int[:, i])+1
