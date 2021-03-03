@@ -47,8 +47,8 @@ class EnhancedPOIInfill(ProbabilityOfFeasibilityInfill):
         self.f_pareto_sorted = None
         self.i_pts_list = None
 
-    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
-        super(EnhancedPOIInfill, self).set_samples(x_train, y_train)
+    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray, **kwargs):
+        super(EnhancedPOIInfill, self).set_samples(x_train, y_train, **kwargs)
 
         self.f_pareto = self.get_pareto_front(y_train[:, :self.problem.n_obj])
         self.f_pareto_sorted = self._get_f_sorted(self.f_pareto)

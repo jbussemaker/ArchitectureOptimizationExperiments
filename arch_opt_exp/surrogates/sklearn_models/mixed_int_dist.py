@@ -35,30 +35,25 @@ class GowerDistance(Distance):
     Halstrup 2016, "Black-box Optimization of Mixed Discrete-Continuous Optimization Problems", section 6.6
     """
 
-    def __init__(self, is_int_mask: IsIntMask):
-        self.is_int_mask = MixedIntKernel.get_int_mask(is_int_mask)
-        self.is_cont_mask = ~self.is_int_mask
-        super(GowerDistance, self).__init__()
-
     def _call(self, uv: np.ndarray) -> float:
         uv_cont = uv[self.is_cont_mask, :]
-        uv_int = uv[self.is_int_mask, :].astype(np.int)
-        return _gower(uv_cont, uv_int, self.is_cont_mask, self.is_int_mask)
+        uv_dis = uv[self.is_discrete_mask, :].astype(np.int)
+        return _gower(uv_cont, uv_dis, self.is_cont_mask, self.is_discrete_mask)
 
     def kernel(self, **kwargs):
         return CustomDistanceKernel(metric=self, **kwargs)
 
 
-@numba.jit(nopython=True, cache=True)
-def _gower(uv_cont: np.ndarray, uv_int: np.ndarray, is_cont_mask: np.ndarray, is_int_mask: np.ndarray) -> float:
+@numba.jit(nopython=True)
+def _gower(uv_cont: np.ndarray, uv_dis: np.ndarray, is_cont_mask: np.ndarray, is_discrete_mask: np.ndarray) -> float:
 
     s = np.empty((len(is_cont_mask),))
     s[is_cont_mask] = np.abs(uv_cont[:, 0]-uv_cont[:, 1])
 
-    int_is_same = uv_int[:, 0] == uv_int[:, 1]
-    s_int = np.ones((uv_int.shape[0],))
-    s_int[int_is_same] = 0
-    s[is_int_mask] = s_int
+    dis_is_same = uv_dis[:, 0] == uv_dis[:, 1]
+    s_dis = np.ones((uv_dis.shape[0],))
+    s_dis[dis_is_same] = 0
+    s[is_discrete_mask] = s_dis
 
     return np.mean(s)  # Eq. 6.36
 
@@ -73,31 +68,38 @@ class SymbolicCovarianceDistance(Distance):
     - https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Two-pass
     """
 
-    def __init__(self, is_int_mask: IsIntMask):
+    def __init__(self, int_as_discrete=True):
         super(SymbolicCovarianceDistance, self).__init__()
-        self.is_int_mask = MixedIntKernel.get_int_mask(is_int_mask)
-        self.is_cont_mask = ~self.is_int_mask
 
+        self.int_as_discrete = int_as_discrete
         self._inv_cov_matrix = None
+
+    @property
+    def use_sc_mask(self):
+        return self.is_discrete_mask if self.int_as_discrete else self.is_cat_mask
+
+    @property
+    def use_cont_mask(self):
+        return self.is_cont_mask if self.int_as_discrete else np.bitwise_or(self.is_cont_mask, self.is_int_mask)
 
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
         """Recalculate the covariance matrix when setting new samples for training."""
 
-        x_cont = x[:, self.is_cont_mask]
-        x_int = x[:, self.is_int_mask].astype(np.int)
+        x_cont = x[:, self.use_cont_mask]
+        x_dis = x[:, self.use_sc_mask].astype(np.int)
 
         # Determine X - X_bar for all samples
         x_means = np.empty(x.shape)
 
         # The continuous case
-        x_means[:, self.is_cont_mask] = x_cont-np.mean(x_cont, axis=0)
+        x_means[:, self.use_cont_mask] = x_cont-np.mean(x_cont, axis=0)
 
         # For discrete variables use the symbolic covariance
-        x_means_int = np.empty(x_int.shape)
-        for i in range(x_int.shape[1]):
-            n_x_levels_i = np.max(x_int[:, i])+1
-            x_means_int[:, i] = self._symbolic_covariance_x_means(x_int[:, i], n_x_levels_i)
-        x_means[:, self.is_int_mask] = x_means_int
+        x_means_dis = np.empty(x_dis.shape)
+        for i in range(x_dis.shape[1]):
+            n_x_levels_i = np.max(x_dis[:, i])+1
+            x_means_dis[:, i] = self._symbolic_covariance_x_means(x_dis[:, i], n_x_levels_i)
+        x_means[:, self.use_sc_mask] = x_means_dis
 
         # Calculate covariance matrix
         # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Two-pass
@@ -136,19 +138,19 @@ class SymbolicCovarianceDistance(Distance):
 
     def _call(self, uv: np.ndarray) -> float:
         """Calculate the distance function using the inverse of the symbolic covariance matrix."""
-        return _sc_dist(self._inv_cov_matrix, uv, self.is_int_mask)
+        return _sc_dist(self._inv_cov_matrix, uv, self.use_sc_mask)
 
     def kernel(self, **kwargs):
         return CustomDistanceKernel(metric=self, **kwargs)
 
 
 @numba.jit(nopython=True, cache=True)
-def _sc_dist(inv_cov_matrix: np.ndarray, uv: np.ndarray, is_int_mask: np.ndarray):
+def _sc_dist(inv_cov_matrix: np.ndarray, uv: np.ndarray, is_discrete_mask: np.ndarray):
     delta_uv = uv[:, 0]-uv[:, 1]
 
     # The delta between symbolic variables is 1 if i < j, -1 if i > j (compare with d_mat)
-    delta_uv[np.bitwise_and(is_int_mask, uv[:, 0] < uv[:, 1])] = 1.
-    delta_uv[np.bitwise_and(is_int_mask, uv[:, 0] > uv[:, 1])] = -1.
+    delta_uv[np.bitwise_and(is_discrete_mask, uv[:, 0] < uv[:, 1])] = 1.
+    delta_uv[np.bitwise_and(is_discrete_mask, uv[:, 0] > uv[:, 1])] = -1.
 
     # Calculate Mahalanobis-like distance (Eq. 13)
     return np.dot(delta_uv, np.dot(inv_cov_matrix, delta_uv))
@@ -167,23 +169,25 @@ class HammingDistance(Distance):
     def _call(self, uv: np.ndarray) -> float:
         raise NotImplementedError
 
-    def kernel(self, is_int_mask: IsIntMask, **kwargs):
+    def kernel(self, **kwargs):
         cont_kernel = MixedIntKernel.get_cont_kernel()
-        int_kernel = CustomDistanceKernel(self)
-        return MixedIntKernel(cont_kernel, int_kernel, is_int_mask)
+        discrete_kernel = CustomDistanceKernel(self)
+        return MixedIntKernel(cont_kernel, discrete_kernel)
 
 
 if __name__ == '__main__':
     from arch_opt_exp.surrogates.validation import *
-    from arch_opt_exp.problems.discrete_branin import *
     from arch_opt_exp.surrogates.sklearn_models.gp import *
 
-    problem = MixedIntBraninProblem()
+    # from arch_opt_exp.problems.discrete_branin import MixedIntBraninProblem
+    # problem = MixedIntBraninProblem()
+    from arch_opt_exp.problems.discrete_goldstein import MixedIntGoldsteinProblem
+    problem = MixedIntGoldsteinProblem()
 
     # kernel = None
-    # kernel = GowerDistance(problem.is_int_mask).kernel()
-    # kernel = SymbolicCovarianceDistance(problem.is_int_mask).kernel()
-    kernel = HammingDistance().kernel(problem.is_int_mask)
+    # kernel = GowerDistance().kernel()
+    kernel = SymbolicCovarianceDistance(int_as_discrete=True).kernel()
+    # kernel = HammingDistance().kernel()
 
-    sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6)
-    LOOCrossValidation.check_sample_sizes(sm, problem, repair=problem.get_repair(), show=True)
+    sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6, int_as_discrete=False)
+    LOOCrossValidation.check_sample_sizes(sm, problem, repair=problem.get_repair(), show=True, print_progress=True)

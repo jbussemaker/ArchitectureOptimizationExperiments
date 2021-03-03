@@ -30,7 +30,11 @@ class SurrogateModel:
         """Return an uninitialized copy of the surrogate model."""
         return copy.deepcopy(self)
 
-    def set_samples(self, x: np.ndarray, y: np.ndarray):
+    @staticmethod
+    def _get_mask(x: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
+        return np.zeros((x.shape[1],), dtype=bool) if mask is None else mask
+
+    def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None):
         raise NotImplementedError
 
     def train(self):

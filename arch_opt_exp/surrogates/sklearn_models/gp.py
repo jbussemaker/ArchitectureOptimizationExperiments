@@ -37,22 +37,29 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 
 class SKLearnGPSurrogateModel(SurrogateModel):
-    """Adapter for scikit-learn Gaussian process surrogate models."""
+    """
+    Adapter for scikit-learn Gaussian process surrogate models. Support for mixed-integer variables.
+
+    Either treats integer variables as discrete variables or not (continuous relaxation).
+    """
 
     _exclude = ['__models', '_samples', '_ny']
 
-    def __init__(self, kernel: Kernel = None, alpha: float = None):
+    def __init__(self, kernel: Kernel = None, alpha: float = None, int_as_discrete=False):
         if kernel is None:
             kernel = ConstantKernel(1.)*Matern(1., nu=1.5)
         self.kernel = kernel
 
         self.alpha = alpha or 1e-10
+        self.int_as_discrete = int_as_discrete
 
         self.alpha_multiply = np.sqrt(10.)
         self.alpha_multiply_try = 20
 
         self.__models = None
         self._samples = None
+        self._is_int_mask = None
+        self._is_cat_mask = None
         self._ny = None
 
     def __getstate__(self):
@@ -67,12 +74,19 @@ class SKLearnGPSurrogateModel(SurrogateModel):
             self.__models = [GaussianProcessRegressor(kernel=self.kernel, alpha=self.alpha) for _ in range(self._ny)]
         return self.__models
 
-    def set_samples(self, x: np.ndarray, y: np.ndarray):
+    def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None):
         self._samples = (x, y)
+        self._is_int_mask = self._get_mask(x, is_int_mask)
+        self._is_cat_mask = self._get_mask(x, is_cat_mask)
         self._ny = y.shape[1]
 
+        if isinstance(self.kernel, MixedIntKernel):
+            is_discrete_mask = np.bitwise_or(self._is_int_mask, self._is_cat_mask) \
+                if self.int_as_discrete else self._is_cat_mask
+            self.kernel.set_discrete_mask(is_discrete_mask)
+
         for dist in self._get_distance_metrics():
-            dist.set_samples(x, y)
+            dist.set_samples(x, y, self._is_int_mask, self._is_cat_mask)
 
     def _get_distance_metrics(self) -> List[Distance]:
         int_kernel = self.kernel

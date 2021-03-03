@@ -23,6 +23,7 @@ from matplotlib.colors import SymLogNorm
 from arch_opt_exp.surrogates.model import *
 from arch_opt_exp.metrics_base import Metric
 from arch_opt_exp.algorithms.infill_based import *
+from arch_opt_exp.problems.discretization import MixedIntBaseProblem
 
 from pymoo.optimize import minimize
 from pymoo.model.result import Result
@@ -54,6 +55,8 @@ class SurrogateInfill:
 
         self.x_train = None
         self.y_train = None
+        self.is_int_mask = None
+        self.is_cat_mask = None
 
         self.f_infill_log = []
         self.g_infill_log = []
@@ -68,9 +71,13 @@ class SurrogateInfill:
     def needs_variance(self):
         return False
 
-    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
+    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray, is_int_mask: np.ndarray = None,
+                    is_cat_mask: np.ndarray = None):
         self.x_train = x_train
         self.y_train = y_train
+
+        self.is_int_mask = is_int_mask
+        self.is_cat_mask = is_cat_mask
 
     def predict(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         y = self.surrogate_model.predict(x)
@@ -193,6 +200,16 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
     def supports_variances(self):
         return self.surrogate_model.supports_variance()
 
+    @property
+    def is_int_mask(self) -> Optional[np.ndarray]:
+        if isinstance(self.problem, MixedIntBaseProblem):
+            return self.problem.is_int_mask
+
+    @property
+    def is_cat_mask(self) -> Optional[np.ndarray]:
+        if isinstance(self.problem, MixedIntBaseProblem):
+            return self.problem.is_cat_mask
+
     def _initialize(self):
         self.infill.initialize(self.problem, self.surrogate_model)
 
@@ -219,17 +236,24 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self._train_model()
 
     def _train_model(self):
-        self.surrogate_model.set_samples(self.x_train, self.y_train)
-        self.infill.set_samples(self.x_train, self.y_train)
+        is_int_mask, is_cat_mask = self.is_int_mask, self.is_cat_mask
+        self.surrogate_model.set_samples(self.x_train, self.y_train, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask)
+        self.infill.set_samples(self.x_train, self.y_train, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask)
 
         self.surrogate_model.train()
         self.n_train += 1
 
     def _normalize(self, x: np.ndarray) -> np.ndarray:
+        if isinstance(self.problem, MixedIntBaseProblem):
+            return self.problem.normalize(x)
+
         xl, xu = self.problem.xl, self.problem.xu
         return (x-xl)/(xu-xl)
 
     def _denormalize(self, x_norm: np.ndarray) -> np.ndarray:
+        if isinstance(self.problem, MixedIntBaseProblem):
+            return self.problem.denormalize(x_norm)
+
         xl, xu = self.problem.xl, self.problem.xu
         return x_norm*(xu-xl)+xl
 
@@ -275,7 +299,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         return Population.new(X=x)
 
     def _get_infill_problem(self):
-        return SurrogateInfillOptimizationProblem(self.infill, self.problem.n_var)
+        return SurrogateInfillOptimizationProblem(self.infill, self.problem)
 
     def _get_termination(self):
         termination = self.termination
@@ -415,11 +439,22 @@ class SurrogateInfillCallback(Callback):
                      (algorithm.n_gen, algorithm.evaluator.n_eval, self.n_points_outer, self.n_eval_outer))
 
 
-class SurrogateInfillOptimizationProblem(Problem):
+class SurrogateInfillOptimizationProblem(MixedIntBaseProblem):
     """Problem class representing a surrogate infill problem given a SurrogateInfill instance."""
 
-    def __init__(self, infill: SurrogateInfill, n_var):
+    def __init__(self, infill: SurrogateInfill, problem: Problem):
+        n_var = problem.n_var
         xl, xu = np.zeros(n_var), np.ones(n_var)
+
+        if isinstance(problem, MixedIntBaseProblem):
+            is_discrete_mask = problem.is_discrete_mask
+            xu[is_discrete_mask] = problem.xu[is_discrete_mask]
+
+            self.is_int_mask = problem.is_int_mask
+            self.is_cat_mask = problem.is_cat_mask
+        else:
+            self.is_int_mask = np.zeros((n_var,), dtype=bool)
+            self.is_cat_mask = np.zeros((n_var,), dtype=bool)
 
         n_obj = infill.get_n_infill_objectives()
         n_constr = infill.get_n_infill_constraints()

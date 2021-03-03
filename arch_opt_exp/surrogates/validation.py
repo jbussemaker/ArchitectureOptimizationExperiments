@@ -22,6 +22,7 @@ from pymoo.model.problem import Problem
 from pymoo.model.initialization import Initialization
 from arch_opt_exp.surrogates.model import SurrogateModel
 from pymoo.model.duplicate import DefaultDuplicateElimination
+from arch_opt_exp.problems.discretization import MixedIntBaseProblem
 from pymoo.operators.sampling.latin_hypercube_sampling import LatinHypercubeSampling
 
 __all__ = ['LOOCrossValidation']
@@ -33,20 +34,35 @@ class LOOCrossValidation:
 
     @classmethod
     def check_sample_sizes(cls, surrogate_model: SurrogateModel, problem: Problem, n_train=10, n_pts_test=None,
-                           n_repeat=5, repair: Repair = None, show=True):
+                           n_repeat=5, repair: Repair = None, print_progress=False, show=True):
         if n_pts_test is None:
             n_pts_test = [10, 15, 20, 50, 75, 100]
+
+        is_int_mask = is_cat_mask = None
+        if isinstance(problem, MixedIntBaseProblem):
+            is_int_mask = problem.is_int_mask
+            is_cat_mask = problem.is_cat_mask
 
         init_sampling = Initialization(LatinHypercubeSampling(), repair=repair,
                                        eliminate_duplicates=DefaultDuplicateElimination())
         scores = []
         scores_std = []
-        for n_pts in n_pts_test:
+        for i, n_pts in enumerate(n_pts_test):
+            if print_progress:
+                print('LOOCV set for %d pts (%d/%d)' % (n_pts, i+1, len(n_pts_test)))
+
             xt_test = init_sampling.do(problem, n_pts).get('X')
             yt_test = problem.evaluate(xt_test)
 
-            run_scores = [cls.cross_validate(surrogate_model, xt_test, yt_test, n_train=n_train)
-                          for _ in range(n_repeat)]
+            if isinstance(problem, MixedIntBaseProblem):
+                xt_test = problem.normalize(xt_test)
+
+            run_scores = []
+            for j in range(n_repeat):
+                if print_progress:
+                    print('LOOCV x %d (%d/%d)' % (n_train, j+1, n_repeat))
+                run_scores.append(cls.cross_validate(surrogate_model, xt_test, yt_test, n_train=n_train,
+                                                     is_int_mask=is_int_mask, is_cat_mask=is_cat_mask))
             scores.append(np.mean(run_scores))
             scores_std.append(np.std(run_scores))
 
@@ -62,8 +78,8 @@ class LOOCrossValidation:
             plt.show()
 
     @classmethod
-    def cross_validate(cls, surrogate_model: SurrogateModel, xt: np.ndarray, yt: np.ndarray, n_train: int = None) \
-            -> np.ndarray:
+    def cross_validate(cls, surrogate_model: SurrogateModel, xt: np.ndarray, yt: np.ndarray, n_train: int = None,
+                       is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None) -> np.ndarray:
         if n_train is None:
             n_train = xt.shape[0]
         if n_train > xt.shape[0]:
@@ -72,20 +88,22 @@ class LOOCrossValidation:
         i_leave_out = np.random.choice(xt.shape[0], n_train, replace=False)
         errors = np.empty((n_train, yt.shape[1]))
         for i, i_lo in enumerate(i_leave_out):
-            errors[i, :] = cls._get_error(surrogate_model, xt, yt, i_lo)
+            errors[i, :] = cls._get_error(
+                surrogate_model, xt, yt, i_lo, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask)
 
         rmse = np.sqrt(np.mean(errors**2, axis=0))
         return rmse
 
     @classmethod
-    def _get_error(cls, surrogate_model: SurrogateModel, xt: np.ndarray, yt: np.ndarray, i_leave_out) -> np.ndarray:
+    def _get_error(cls, surrogate_model: SurrogateModel, xt: np.ndarray, yt: np.ndarray, i_leave_out,
+                   is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None) -> np.ndarray:
         x_lo = xt[i_leave_out, :]
         y_lo = yt[i_leave_out, :]
         xt = np.delete(xt, i_leave_out, axis=0)
         yt = np.delete(yt, i_leave_out, axis=0)
 
         surrogate_model_copy = cls._copy_surrogate_model(surrogate_model)
-        surrogate_model_copy.set_samples(xt, yt)
+        surrogate_model_copy.set_samples(xt, yt, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask)
         surrogate_model_copy.train()
 
         y_lo_predict = surrogate_model_copy.predict(np.atleast_2d(x_lo))
@@ -99,4 +117,4 @@ class LOOCrossValidation:
 if __name__ == '__main__':
     from pymoo.problems.single.himmelblau import Himmelblau
     from arch_opt_exp.surrogates.smt_models.smt_krg import SMTKrigingSurrogateModel
-    LOOCrossValidation.check_sample_sizes(SMTKrigingSurrogateModel(theta0=1e-1), Himmelblau())
+    LOOCrossValidation.check_sample_sizes(SMTKrigingSurrogateModel(theta0=1e-1), Himmelblau(), print_progress=True)

@@ -35,7 +35,8 @@ class MixedIntBraninProblem(MixedIntBaseProblem):
 
     def __init__(self):
         xl, xu = np.zeros((4,)), np.ones((4,))
-        self.is_int_mask = np.array([False, False, True, True], dtype=bool)
+        self.is_int_mask = np.array([False]*4, dtype=bool)
+        self.is_cat_mask = np.array([False, False, True, True], dtype=bool)
         super(MixedIntBraninProblem, self).__init__(n_var=4, n_obj=1, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
@@ -87,7 +88,8 @@ class AugmentedMixedIntBraninProblem(MixedIntBraninProblem):
 
     def __init__(self):
         xl, xu = np.zeros((12,)), np.ones((12,))
-        self.is_int_mask = np.array([False]*10+[True, True], dtype=bool)
+        self.is_int_mask = np.array([False]*12, dtype=bool)
+        self.is_cat_mask = np.array([False]*10+[True, True], dtype=bool)
         super(MixedIntBraninProblem, self).__init__(n_var=12, n_obj=1, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):

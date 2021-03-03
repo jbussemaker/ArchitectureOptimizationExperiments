@@ -47,8 +47,8 @@ class ExpectedHypervolumeImprovementInfill(ProbabilityOfFeasibilityInfill):
         self.f_pareto_norm = None
         self.hv = None
 
-    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
-        super(ExpectedHypervolumeImprovementInfill, self).set_samples(x_train, y_train)
+    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray, **kwargs):
+        super(ExpectedHypervolumeImprovementInfill, self).set_samples(x_train, y_train, **kwargs)
 
         self.f_pareto = f_pareto = self.get_pareto_front(y_train[:, :self.problem.n_obj])
 

@@ -29,6 +29,8 @@ class SMTSurrogateModel(SurrogateModel):
     def __init__(self):
         self._smt_model: Optional[SMTSurrogateModelBase] = None
         self._xt_last = None
+        self._is_int_mask = None
+        self._is_cat_mask = None
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -42,8 +44,11 @@ class SMTSurrogateModel(SurrogateModel):
             self._smt_model = self._create_surrogate_model()
         return self._smt_model
 
-    def set_samples(self, x: np.ndarray, y: np.ndarray):
+    def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None):
         self._xt_last = x
+        self._is_int_mask = self._get_mask(x, is_int_mask)
+        self._is_cat_mask = self._get_mask(x, is_cat_mask)
+
         self._smt.set_training_values(x, y)
 
     def train(self):

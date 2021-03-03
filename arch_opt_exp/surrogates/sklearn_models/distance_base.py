@@ -22,10 +22,10 @@ from sklearn.gaussian_process.kernels import \
     Matern, _check_length_scale, pdist, squareform, cdist, gamma, kv, _approx_fprime, KernelOperator, Kernel,\
     ConstantKernel
 
-__all__ = ['CustomDistanceKernel', 'MixedIntKernel', 'Distance', 'IsIntMask']
+__all__ = ['CustomDistanceKernel', 'MixedIntKernel', 'Distance', 'IsDiscreteMask']
 
 
-IsIntMask = Union[np.ndarray, List[bool]]
+IsDiscreteMask = Union[np.ndarray, List[bool]]
 
 
 class Distance:
@@ -34,11 +34,21 @@ class Distance:
     def __init__(self):
         self.xt = None
         self.yt = None
+        self.is_int_mask = None
+        self.is_cat_mask = None
+        self.is_discrete_mask = None
+        self.is_cont_mask = None
 
-    def set_samples(self, x, y):
+    def set_samples(self, x, y, is_int_mask: IsDiscreteMask, is_cat_mask: IsDiscreteMask):
         """Set before training the GP model."""
         self.xt = x
         self.yt = y
+
+        self.is_int_mask = MixedIntKernel.get_discrete_mask(is_int_mask)
+        self.is_cat_mask = MixedIntKernel.get_discrete_mask(is_cat_mask)
+        self.is_discrete_mask = np.bitwise_or(self.is_int_mask, self.is_cat_mask)
+        self.is_cont_mask = ~self.is_discrete_mask
+
         self._process_samples(x, y)
 
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
@@ -69,53 +79,81 @@ class MixedIntKernel(KernelOperator):
     Implementation inspired by the Product KernelOperator.
     """
 
-    def __init__(self, cont_kernel: Kernel, int_kernel: Kernel, is_int_mask: IsIntMask):
-        self.is_int_mask = self.get_int_mask(is_int_mask)
-        self.is_cont_mask = ~self.is_int_mask
-        super(MixedIntKernel, self).__init__(cont_kernel, int_kernel)
+    def __init__(self, cont_kernel: Kernel, discrete_kernel: Kernel, is_discrete_mask=None):
+        super(MixedIntKernel, self).__init__(cont_kernel, discrete_kernel)
+
+        self._is_discrete_mask: Optional[IsDiscreteMask] = is_discrete_mask
+        self._is_cont_mask: Optional[IsDiscreteMask] = ~is_discrete_mask if is_discrete_mask is not None else None
+
+    def set_discrete_mask(self, is_discrete_mask: IsDiscreteMask):
+        self._is_discrete_mask = MixedIntKernel.get_discrete_mask(is_discrete_mask)
+        self._is_cont_mask = ~self._is_discrete_mask
 
     def get_params(self, deep=True):
         params = {
             'cont_kernel': self.k1,
-            'int_kernel': self.k2,
-            'is_int_mask': self.is_int_mask,
+            'discrete_kernel': self.k2,
+            'is_discrete_mask': self._is_discrete_mask,
         }
         if deep:
             deep_items = self.k1.get_params().items()
             params.update(('cont_kernel__' + k, val) for k, val in deep_items)
             deep_items = self.k2.get_params().items()
-            params.update(('int_kernel__' + k, val) for k, val in deep_items)
+            params.update(('discrete_kernel__' + k, val) for k, val in deep_items)
 
         return params
 
     def __call__(self, X, Y=None, eval_gradient=False):
-        x_cont, x_int = self._split(X)
-        y_cont = y_int = None
+        x_cont, x_dis = self._split(X)
+        y_cont = y_dis = None
         if Y is not None:
-            y_cont, y_int = self._split(Y)
+            y_cont, y_dis = self._split(Y)
+
+        if x_cont.shape[1] == 0:  # No continuous variables
+            if eval_gradient:
+                K2, K2_gradient = self.k2(x_dis, y_dis, eval_gradient=eval_gradient)
+                n_k1 = self.k1.bounds.shape[0]
+                return K2, np.dstack((np.zeros(K2_gradient.shape[:2]+(n_k1,)), K2_gradient))
+            return self.k2(x_dis, y_dis)
+
+        elif x_dis.shape[1] == 0:  # No discrete variables
+            if eval_gradient:
+                K1, K1_gradient = self.k1(x_cont, y_cont, eval_gradient=eval_gradient)
+                n_k2 = self.k2.bounds.shape[0]
+                return K1, np.dstack((K1_gradient, np.zeros(K1_gradient.shape[:2]+(n_k2,))))
+            return self.k1(x_cont, y_cont)
 
         if eval_gradient:
             K1, K1_gradient = self.k1(x_cont, y_cont, eval_gradient=True)
-            K2, K2_gradient = self.k2(x_int, y_int, eval_gradient=True)
+            K2, K2_gradient = self.k2(x_dis, y_dis, eval_gradient=True)
             return K1 * K2, np.dstack((K1_gradient * K2[:, :, np.newaxis],
                                        K2_gradient * K1[:, :, np.newaxis]))
         else:
-            return self.k1(x_int, y_int) * self.k2(x_int, y_int)
+            return self.k1(x_dis, y_dis) * self.k2(x_dis, y_dis)
 
     def diag(self, X):
-        x_cont, x_int = self._split(X)
-        return self.k1.diag(x_cont) * self.k2.diag(x_int)
+        x_cont, x_dis = self._split(X)
+
+        if x_cont.shape[1] == 0:
+            return self.k2.diag(x_dis)
+        elif x_dis.shape[1] == 0:
+            return self.k1.diag(x_cont)
+
+        return self.k1.diag(x_cont) * self.k2.diag(x_dis)
 
     def _split(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        x_cont = x[:, self.is_cont_mask].astype(np.float)
-        x_int = x[:, self.is_int_mask].astype(np.int)
-        return x_cont, x_int
+        if self._is_cont_mask is None or self._is_discrete_mask is None:
+            raise ValueError('Discrete/continuous masks not set!')
+
+        x_cont = x[:, self._is_cont_mask].astype(np.float)
+        x_dis = x[:, self._is_discrete_mask].astype(np.int)
+        return x_cont, x_dis
 
     @staticmethod
-    def get_int_mask(is_int_mask: IsIntMask) -> np.ndarray:
-        if isinstance(is_int_mask, np.ndarray):
-            return is_int_mask
-        return np.array(is_int_mask, dtype=bool)
+    def get_discrete_mask(is_discrete_mask: IsDiscreteMask) -> np.ndarray:
+        if isinstance(is_discrete_mask, np.ndarray):
+            return is_discrete_mask
+        return np.array(is_discrete_mask, dtype=bool)
 
     @staticmethod
     def get_cont_kernel() -> Kernel:
