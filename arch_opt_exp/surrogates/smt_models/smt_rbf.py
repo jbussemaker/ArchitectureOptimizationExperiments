@@ -24,13 +24,13 @@ __all__ = ['SMTRBFSurrogateModel']
 class SMTRBFSurrogateModel(SMTSurrogateModel):
     """Radial Basis Function wrapper (SMT package)"""
 
-    def __init__(self, d0=1., deg=-1, reg=1e-10):
+    def __init__(self, d0=1., deg=-1, reg=1e-10, auto_wrap_mixed_int=False):
         """
         :param d0: Basis function scaling parameter
         :param deg: Global polynomial: -1 no polynomial, 0 constant, 1 linear trend
         :param reg: Regularization coefficient
         """
-        super(SMTRBFSurrogateModel, self).__init__()
+        super(SMTRBFSurrogateModel, self).__init__(auto_wrap_mixed_int=auto_wrap_mixed_int)
         self.d0 = d0
         self.deg = deg
         self.reg = reg
@@ -42,3 +42,12 @@ class SMTRBFSurrogateModel(SMTSurrogateModel):
             poly_degree=self.deg,
             reg=self.reg,
         )
+
+
+if __name__ == '__main__':
+    from arch_opt_exp.surrogates.validation import LOOCrossValidation
+    from arch_opt_exp.problems.discrete_branin import MixedIntBraninProblem
+
+    # sm = SMTRBFSurrogateModel(auto_wrap_mixed_int=False)
+    sm = SMTRBFSurrogateModel(auto_wrap_mixed_int=True)
+    LOOCrossValidation.check_sample_sizes(sm, MixedIntBraninProblem(), print_progress=True, n_repeat=20)

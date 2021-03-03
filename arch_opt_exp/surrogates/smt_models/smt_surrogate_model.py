@@ -18,16 +18,26 @@ Contact: jasper.bussemaker@dlr.de
 import numpy as np
 from typing import *
 from arch_opt_exp.surrogates import SurrogateModel
+from smt.applications.mixed_integer import MixedIntegerSurrogateModel, FLOAT, INT, ENUM
 from smt.surrogate_models.surrogate_model import SurrogateModel as SMTSurrogateModelBase
 
 
 class SMTSurrogateModel(SurrogateModel):
-    """Adapter for SMT surrogate models."""
+    """
+    Adapter for SMT surrogate models.
 
-    _exclude = ['_smt_model', '_xt_last']
+    If the surrogate model is to be automatically wrapped in the mixed-integer application, it is assumed that the
+    input variables are normalized according to the logic of MixedIntBaseProblem: continuous between 0 and 1, discrete
+    between 0 and n-1. The mixed-integer approach combines continuous relaxation for integer variables and dummy
+    coding for categorical variables.
+    """
 
-    def __init__(self):
-        self._smt_model: Optional[SMTSurrogateModelBase] = None
+    _exclude = ['_smt', '_xt_last', '_is_int_mask', '_is_cat_mask']
+
+    def __init__(self, auto_wrap_mixed_int=False):
+        self.auto_wrap_mi = auto_wrap_mixed_int
+
+        self._smt: Optional[SMTSurrogateModelBase] = None
         self._xt_last = None
         self._is_int_mask = None
         self._is_cat_mask = None
@@ -38,16 +48,31 @@ class SMTSurrogateModel(SurrogateModel):
             state[key] = None
         return state
 
-    @property
-    def _smt(self) -> SMTSurrogateModelBase:
-        if self._smt_model is None:
-            self._smt_model = self._create_surrogate_model()
-        return self._smt_model
-
     def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None):
         self._xt_last = x
-        self._is_int_mask = self._get_mask(x, is_int_mask)
-        self._is_cat_mask = self._get_mask(x, is_cat_mask)
+        self._is_int_mask = is_int_mask = self._get_mask(x, is_int_mask)
+        self._is_cat_mask = is_cat_mask = self._get_mask(x, is_cat_mask)
+
+        self._smt = surrogate_model = self._create_surrogate_model()
+
+        # Automatically wrap the surrogate model in the MixedIntegerSurrogateModel if there are discrete variables
+        if self.auto_wrap_mi and np.any(np.bitwise_or(is_int_mask, is_cat_mask)):
+            x_types, x_limits = [], []
+            for i_x in range(x.shape[1]):
+                if is_int_mask[i_x]:
+                    x_types += [INT]
+                    x_limits += [[0, int(np.max(x[:, i_x]))]]
+
+                elif is_cat_mask[i_x]:
+                    n = int(np.max(x[:, i_x])+1)
+                    x_types += [(ENUM, n)]
+                    x_limits += [[0, n-1]]
+
+                else:
+                    x_types += [FLOAT]
+                    x_limits += [[0., 1.]]
+
+            self._smt = MixedIntegerSurrogateModel(x_types, x_limits, surrogate_model, input_in_folded_space=True)
 
         self._smt.set_training_values(x, y)
 

@@ -190,4 +190,4 @@ if __name__ == '__main__':
     # kernel = HammingDistance().kernel()
 
     sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6, int_as_discrete=False)
-    LOOCrossValidation.check_sample_sizes(sm, problem, repair=problem.get_repair(), show=True, print_progress=True)
+    LOOCrossValidation.check_sample_sizes(sm, problem, show=True, print_progress=True)

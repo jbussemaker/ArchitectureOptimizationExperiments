@@ -26,8 +26,8 @@ __all__ = ['SMTKrigingSurrogateModel', 'SMTKPLSSurrogateModel']
 class SMTKrigingSurrogateModel(SMTSurrogateModel):
     """Normal Kriging (SMT package)"""
 
-    def __init__(self, theta0=None, **kwargs):
-        super(SMTKrigingSurrogateModel, self).__init__()
+    def __init__(self, theta0=None, auto_wrap_mixed_int=False, **kwargs):
+        super(SMTKrigingSurrogateModel, self).__init__(auto_wrap_mixed_int=auto_wrap_mixed_int)
         self._theta0 = theta0
         self._kw = kwargs
 

@@ -43,6 +43,9 @@ class LOOCrossValidation:
             is_int_mask = problem.is_int_mask
             is_cat_mask = problem.is_cat_mask
 
+            if repair is None:
+                repair = problem.get_repair()
+
         init_sampling = Initialization(LatinHypercubeSampling(), repair=repair,
                                        eliminate_duplicates=DefaultDuplicateElimination())
         scores = []
