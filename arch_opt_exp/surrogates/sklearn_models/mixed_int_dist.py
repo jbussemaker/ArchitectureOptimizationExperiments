@@ -179,9 +179,8 @@ if __name__ == '__main__':
     from arch_opt_exp.surrogates.validation import *
     from arch_opt_exp.surrogates.sklearn_models.gp import *
 
-    # from arch_opt_exp.problems.discrete_branin import MixedIntBraninProblem
+    from arch_opt_exp.problems.discrete import *
     # problem = MixedIntBraninProblem()
-    from arch_opt_exp.problems.discrete_goldstein import MixedIntGoldsteinProblem
     problem = MixedIntGoldsteinProblem()
 
     # kernel = None
