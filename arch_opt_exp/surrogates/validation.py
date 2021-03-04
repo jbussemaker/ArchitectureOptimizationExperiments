@@ -22,7 +22,7 @@ from pymoo.model.problem import Problem
 from pymoo.model.initialization import Initialization
 from arch_opt_exp.surrogates.model import SurrogateModel
 from pymoo.model.duplicate import DefaultDuplicateElimination
-from arch_opt_exp.problems.discretization import MixedIntBaseProblem
+from arch_opt_exp.problems.discretization import MixedIntProblemHelper
 from pymoo.operators.sampling.latin_hypercube_sampling import LatinHypercubeSampling
 
 __all__ = ['LOOCrossValidation']
@@ -38,13 +38,11 @@ class LOOCrossValidation:
         if n_pts_test is None:
             n_pts_test = [10, 15, 20, 50, 75, 100]
 
-        is_int_mask = is_cat_mask = None
-        if isinstance(problem, MixedIntBaseProblem):
-            is_int_mask = problem.is_int_mask
-            is_cat_mask = problem.is_cat_mask
+        is_int_mask = MixedIntProblemHelper.get_is_int_mask(problem)
+        is_cat_mask = MixedIntProblemHelper.get_is_cat_mask(problem)
 
-            if repair is None:
-                repair = problem.get_repair()
+        if repair is None:
+            repair = MixedIntProblemHelper.get_repair(problem)
 
         init_sampling = Initialization(LatinHypercubeSampling(), repair=repair,
                                        eliminate_duplicates=DefaultDuplicateElimination())
@@ -57,8 +55,7 @@ class LOOCrossValidation:
             xt_test = init_sampling.do(problem, n_pts).get('X')
             yt_test = problem.evaluate(xt_test)
 
-            if isinstance(problem, MixedIntBaseProblem):
-                xt_test = problem.normalize(xt_test)
+            xt_test = MixedIntProblemHelper.normalize(problem, xt_test)
 
             run_scores = []
             for j in range(n_repeat):

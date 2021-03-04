@@ -21,7 +21,7 @@ from pymoo.model.repair import Repair
 from pymoo.model.population import Population
 from pymoo.model.problem import MetaProblem, Problem
 
-__all__ = ['MixedIntBaseProblem', 'MixedIntProblem', 'MixedIntRepair']
+__all__ = ['MixedIntBaseProblem', 'MixedIntProblemHelper', 'MixedIntProblem', 'MixedIntRepair']
 
 
 class MixedIntBaseProblem(Problem):
@@ -64,25 +64,83 @@ class MixedIntBaseProblem(Problem):
         return MixedIntRepair.correct_x(self.is_discrete_mask, x)
 
     def normalize(self, x: np.ndarray) -> np.ndarray:
-        xl, xu = self.xl, self.xu
-        is_cont_mask, is_dis_mask = self.is_cont_mask, self.is_discrete_mask
+        return self.normalize_mi(x, self.xl, self.xu, self.is_cont_mask, self.is_discrete_mask)
 
+    @staticmethod
+    def normalize_mi(x: np.ndarray, xl, xu, is_cont_mask, is_discrete_mask) -> np.ndarray:
         x_norm = x.copy()
         x_norm[:, is_cont_mask] = (x[:, is_cont_mask]-xl[is_cont_mask])/(xu[is_cont_mask]-xl[is_cont_mask])
-        x_norm[:, is_dis_mask] = x[:, is_dis_mask]-xl[is_dis_mask]
+        x_norm[:, is_discrete_mask] = x[:, is_discrete_mask]-xl[is_discrete_mask]
         return x_norm
 
     def denormalize(self, x_norm: np.ndarray) -> np.ndarray:
-        xl, xu = self.xl, self.xu
-        is_cont_mask, is_dis_mask = self.is_cont_mask, self.is_discrete_mask
+        return self.denormalize_mi(x_norm, self.xl, self.xu, self.is_cont_mask, self.is_discrete_mask)
 
+    @staticmethod
+    def denormalize_mi(x_norm: np.ndarray, xl, xu, is_cont_mask, is_discrete_mask) -> np.ndarray:
         x = x_norm.copy()
         x[:, is_cont_mask] = x[:, is_cont_mask]*(xu[is_cont_mask]-xl[is_cont_mask])+xl[is_cont_mask]
-        x[:, is_dis_mask] = x[:, is_dis_mask]+xl[is_dis_mask]
+        x[:, is_discrete_mask] = x[:, is_discrete_mask]+xl[is_discrete_mask]
         return x
 
     def _evaluate(self, x, out, *args, **kwargs):
         raise NotImplementedError
+
+
+class MixedIntProblemHelper:
+
+    @staticmethod
+    def get_is_int_mask(problem: Problem) -> np.ndarray:
+        if isinstance(problem, MixedIntBaseProblem) or hasattr(problem, 'is_int_mask'):
+            return problem.is_int_mask
+
+        return np.zeros((problem.n_var,), dtype=bool)
+
+    @staticmethod
+    def get_is_cat_mask(problem: Problem) -> np.ndarray:
+        if isinstance(problem, MixedIntBaseProblem) or hasattr(problem, 'is_cat_mask'):
+            return problem.is_cat_mask
+
+        return np.zeros((problem.n_var,), dtype=bool)
+
+    @classmethod
+    def get_is_discrete_mask(cls, problem: Problem) -> np.ndarray:
+        return np.bitwise_or(cls.get_is_int_mask(problem), cls.get_is_cat_mask(problem))
+
+    @classmethod
+    def get_is_cont_mask(cls, problem: Problem) -> np.ndarray:
+        return ~cls.get_is_discrete_mask(problem)
+
+    @classmethod
+    def normalize(cls, problem: Problem, x: np.ndarray) -> np.ndarray:
+        if isinstance(problem, MixedIntBaseProblem) or hasattr(problem, 'normalize'):
+            return problem.normalize(x)
+
+        is_cont_mask = cls.get_is_cont_mask(problem)
+        if np.all(is_cont_mask):
+            xl, xu = problem.xl, problem.xu
+            return (x-xl)/(xu-xl)
+
+        return MixedIntBaseProblem.normalize_mi(
+            x, problem.xl, problem.xu, is_cont_mask, cls.get_is_discrete_mask(problem))
+
+    @classmethod
+    def denormalize(cls, problem: Problem, x_norm: np.ndarray) -> np.ndarray:
+        if isinstance(problem, MixedIntBaseProblem) or hasattr(problem, 'denormalize'):
+            return problem.denormalize(x_norm)
+
+        is_cont_mask = cls.get_is_cont_mask(problem)
+        if np.all(is_cont_mask):
+            xl, xu = problem.xl, problem.xu
+            return x_norm*(xu-xl)+xl
+
+        return MixedIntBaseProblem.denormalize_mi(
+            x_norm, problem.xl, problem.xu, is_cont_mask, cls.get_is_discrete_mask(problem))
+
+    @staticmethod
+    def get_repair(problem: Problem) -> Optional[Repair]:
+        if isinstance(problem, MixedIntBaseProblem) or hasattr(problem, 'get_repair'):
+            return problem.get_repair()
 
 
 class MixedIntProblem(MetaProblem, MixedIntBaseProblem):

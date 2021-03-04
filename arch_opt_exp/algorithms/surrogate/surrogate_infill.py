@@ -23,7 +23,7 @@ from matplotlib.colors import SymLogNorm
 from arch_opt_exp.surrogates.model import *
 from arch_opt_exp.metrics_base import Metric
 from arch_opt_exp.algorithms.infill_based import *
-from arch_opt_exp.problems.discretization import MixedIntBaseProblem
+from arch_opt_exp.problems.discretization import *
 
 from pymoo.optimize import minimize
 from pymoo.model.result import Result
@@ -202,13 +202,11 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
     @property
     def is_int_mask(self) -> Optional[np.ndarray]:
-        if isinstance(self.problem, MixedIntBaseProblem):
-            return self.problem.is_int_mask
+        return MixedIntProblemHelper.get_is_int_mask(self.problem)
 
     @property
     def is_cat_mask(self) -> Optional[np.ndarray]:
-        if isinstance(self.problem, MixedIntBaseProblem):
-            return self.problem.is_cat_mask
+        return MixedIntProblemHelper.get_is_cat_mask(self.problem)
 
     def _initialize(self):
         self.infill.initialize(self.problem, self.surrogate_model)
@@ -244,18 +242,10 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self.n_train += 1
 
     def _normalize(self, x: np.ndarray) -> np.ndarray:
-        if isinstance(self.problem, MixedIntBaseProblem):
-            return self.problem.normalize(x)
-
-        xl, xu = self.problem.xl, self.problem.xu
-        return (x-xl)/(xu-xl)
+        return MixedIntProblemHelper.normalize(self.problem, x)
 
     def _denormalize(self, x_norm: np.ndarray) -> np.ndarray:
-        if isinstance(self.problem, MixedIntBaseProblem):
-            return self.problem.denormalize(x_norm)
-
-        xl, xu = self.problem.xl, self.problem.xu
-        return x_norm*(xu-xl)+xl
+        return MixedIntProblemHelper.denormalize(self.problem, x_norm)
 
     @staticmethod
     def _normalize_y(y: np.ndarray, keep_centered=False, y_min=None, y_max=None):
@@ -446,15 +436,12 @@ class SurrogateInfillOptimizationProblem(MixedIntBaseProblem):
         n_var = problem.n_var
         xl, xu = np.zeros(n_var), np.ones(n_var)
 
-        if isinstance(problem, MixedIntBaseProblem):
-            is_discrete_mask = problem.is_discrete_mask
-            xu[is_discrete_mask] = problem.xu[is_discrete_mask]
+        self.is_int_mask = MixedIntProblemHelper.get_is_int_mask(problem)
+        self.is_cat_mask = MixedIntProblemHelper.get_is_cat_mask(problem)
 
-            self.is_int_mask = problem.is_int_mask
-            self.is_cat_mask = problem.is_cat_mask
-        else:
-            self.is_int_mask = np.zeros((n_var,), dtype=bool)
-            self.is_cat_mask = np.zeros((n_var,), dtype=bool)
+        is_discrete_mask = MixedIntProblemHelper.get_is_discrete_mask(problem)
+        if np.any(is_discrete_mask):
+            xu[is_discrete_mask] = problem.xu[is_discrete_mask]
 
         n_obj = infill.get_n_infill_objectives()
         n_constr = infill.get_n_infill_constraints()
