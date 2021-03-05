@@ -55,14 +55,16 @@ class LOOCrossValidation:
             xt_test = init_sampling.do(problem, n_pts).get('X')
             yt_test = problem.evaluate(xt_test)
 
+            is_active, xt_test = MixedIntProblemHelper.is_active(problem, xt_test)
             xt_test = MixedIntProblemHelper.normalize(problem, xt_test)
 
             run_scores = []
             for j in range(n_repeat):
                 if print_progress:
                     print('LOOCV x %d (%d/%d)' % (n_train, j+1, n_repeat))
-                run_scores.append(cls.cross_validate(surrogate_model, xt_test, yt_test, n_train=n_train,
-                                                     is_int_mask=is_int_mask, is_cat_mask=is_cat_mask))
+                run_scores.append(cls.cross_validate(
+                    surrogate_model, xt_test, yt_test, n_train=n_train, is_int_mask=is_int_mask,
+                    is_cat_mask=is_cat_mask, is_active=is_active))
             scores.append(np.mean(run_scores))
             scores_std.append(np.std(run_scores))
 
@@ -79,7 +81,8 @@ class LOOCrossValidation:
 
     @classmethod
     def cross_validate(cls, surrogate_model: SurrogateModel, xt: np.ndarray, yt: np.ndarray, n_train: int = None,
-                       is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None) -> np.ndarray:
+                       is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None, is_active: np.ndarray = None) \
+            -> np.ndarray:
         if n_train is None:
             n_train = xt.shape[0]
         if n_train > xt.shape[0]:
@@ -89,24 +92,26 @@ class LOOCrossValidation:
         errors = np.empty((n_train, yt.shape[1]))
         for i, i_lo in enumerate(i_leave_out):
             errors[i, :] = cls._get_error(
-                surrogate_model, xt, yt, i_lo, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask)
+                surrogate_model, xt, yt, i_lo, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, is_active=is_active)
 
         rmse = np.sqrt(np.mean(errors**2, axis=0))
         return rmse
 
     @classmethod
     def _get_error(cls, surrogate_model: SurrogateModel, xt: np.ndarray, yt: np.ndarray, i_leave_out,
-                   is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None) -> np.ndarray:
+                   is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None, is_active: np.ndarray = None) \
+            -> np.ndarray:
         x_lo = xt[i_leave_out, :]
         y_lo = yt[i_leave_out, :]
+        is_active_lo = is_active[i_leave_out, :] if is_active is not None else None
         xt = np.delete(xt, i_leave_out, axis=0)
         yt = np.delete(yt, i_leave_out, axis=0)
 
         surrogate_model_copy = cls._copy_surrogate_model(surrogate_model)
-        surrogate_model_copy.set_samples(xt, yt, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask)
+        surrogate_model_copy.set_samples(xt, yt, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, is_active=is_active)
         surrogate_model_copy.train()
 
-        y_lo_predict = surrogate_model_copy.predict(np.atleast_2d(x_lo))
+        y_lo_predict = surrogate_model_copy.predict(np.atleast_2d(x_lo), is_active=is_active_lo)
         return y_lo_predict-y_lo
 
     @classmethod

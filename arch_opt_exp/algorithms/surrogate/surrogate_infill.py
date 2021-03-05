@@ -55,6 +55,7 @@ class SurrogateInfill:
 
         self.x_train = None
         self.y_train = None
+        self.is_active = None
         self.is_int_mask = None
         self.is_cat_mask = None
 
@@ -72,19 +73,20 @@ class SurrogateInfill:
         return False
 
     def set_samples(self, x_train: np.ndarray, y_train: np.ndarray, is_int_mask: np.ndarray = None,
-                    is_cat_mask: np.ndarray = None):
+                    is_cat_mask: np.ndarray = None, is_active: np.ndarray = None):
         self.x_train = x_train
         self.y_train = y_train
+        self.is_active = is_active
 
         self.is_int_mask = is_int_mask
         self.is_cat_mask = is_cat_mask
 
     def predict(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        y = self.surrogate_model.predict(x)
+        y = self.surrogate_model.predict(x, is_active=self.is_active)
         return self._split_f_g(y)
 
     def predict_variance(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        y_var = self.surrogate_model.predict_variance(x)
+        y_var = self.surrogate_model.predict_variance(x, is_active=self.is_active)
         return self._split_f_g(y_var)
 
     def _split_f_g(self, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -167,6 +169,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self.y_train_max = None
         self.y_train_centered = None
         self.n_train = 0
+        self.is_active = None
 
         self.pop_size = pop_size or 100
         self.termination = termination
@@ -215,6 +218,12 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         """Update the underlying model. New population is given, total population is available from self.total_pop"""
 
         x = self.total_pop.get('X')
+
+        if self.total_pop.has('is_active'):
+            is_active = self.total_pop.get('is_active')
+        else:
+            is_active, x = MixedIntProblemHelper.is_active(self.problem, x)
+
         x_norm = self._normalize(x)
 
         f, self.y_train_min, self.y_train_max = self._normalize_y(self.total_pop.get('F'))
@@ -230,13 +239,16 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
         self.x_train = x_norm
         self.y_train = y
+        self.is_active = is_active
 
         self._train_model()
 
     def _train_model(self):
         is_int_mask, is_cat_mask = self.is_int_mask, self.is_cat_mask
-        self.surrogate_model.set_samples(self.x_train, self.y_train, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask)
-        self.infill.set_samples(self.x_train, self.y_train, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask)
+        self.surrogate_model.set_samples(self.x_train, self.y_train, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask,
+                                         is_active=self.is_active)
+        self.infill.set_samples(self.x_train, self.y_train, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask,
+                                is_active=self.is_active)
 
         self.surrogate_model.train()
         self.n_train += 1
@@ -349,7 +361,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         if i_y is None:
             i_y = 0
 
-        x_train, y_train = self.x_train, self.y_train
+        x_train, y_train, is_active = self.x_train, self.y_train, self.is_active
         self._train_model()
 
         def _problem_eval_norm(xx_eval):
@@ -362,14 +374,16 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         if is_one_dim:
             xx = np.ones((len(x), self.problem.n_var))*.5
             xx[:, i_x[0]] = x
-            y = self.surrogate_model.predict(xx)[:, i_y]
+            xx_is_active, xx_imp = MixedIntProblemHelper.is_active(self.problem, self._denormalize(xx))
+            xx_imp = self._normalize(xx_imp)
+            y = self.surrogate_model.predict(xx_imp, is_active=xx_is_active)[:, i_y]
 
             plt.figure()
             if plot_problem:
                 plt.plot(x, _problem_eval_norm(xx), 'b', linewidth=1., label='Problem')
             plt.plot(x, y, 'k', linewidth=1., label='Predicted')
             if has_var:
-                y_std = np.sqrt(self.surrogate_model.predict_variance(xx)[:, i_y])
+                y_std = np.sqrt(self.surrogate_model.predict_variance(xx_imp, is_active=xx_is_active)[:, i_y])
                 plt.plot(x, y+y_std, '--k', linewidth=1.)
                 plt.plot(x, y-y_std, '--k', linewidth=1.)
             plt.scatter(x_train[:, i_x[0]], y_train[:, i_y], c='k', marker='x', label='Samples')
@@ -383,7 +397,9 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
             xx = np.ones((xx1.size, self.problem.n_var))*.5
             xx[:, i_x[0]] = xx1.ravel()
             xx[:, i_x[1]] = xx2.ravel()
-            y = self.surrogate_model.predict(xx)[:, i_y]
+            xx_is_active, xx_imp = MixedIntProblemHelper.is_active(self.problem, self._denormalize(xx))
+            xx_imp = self._normalize(xx_imp)
+            y = self.surrogate_model.predict(xx_imp, is_active=xx_is_active)[:, i_y]
             yy = y.reshape(xx1.shape)
 
             # Contour
@@ -400,7 +416,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
             # Contour (variance)
             if has_var:
-                yy_std = np.sqrt(self.surrogate_model.predict_variance(xx)[:, i_y].reshape(xx1.shape))
+                yy_std = np.sqrt(
+                    self.surrogate_model.predict_variance(xx_imp, is_active=xx_is_active)[:, i_y].reshape(xx1.shape))
 
                 plt.figure()
                 c = plt.contourf(xx1, xx2, yy_std, 50)
@@ -409,7 +426,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
             # Prediction error
             plt.figure()
-            y_err = y_train[:, i_y]-self.surrogate_model.predict(x_train)[:, i_y]
+            y_err = y_train[:, i_y]-self.surrogate_model.predict(x_train, is_active=is_active)[:, i_y]
             c = plt.scatter(x_train[:, i_x[0]], x_train[:, i_x[1]], s=1, c=y_err, cmap='RdYlBu',
                             norm=SymLogNorm(linthresh=1e-3, base=10.))
 
@@ -449,12 +466,12 @@ class SurrogateInfillCallback(Callback):
 class SurrogateInfillOptimizationProblem(MixedIntBaseProblem):
     """Problem class representing a surrogate infill problem given a SurrogateInfill instance."""
 
-    def __init__(self, infill: SurrogateInfill, problem: Problem):
+    def __init__(self, infill: SurrogateInfill, problem: Problem, impute=True):
         n_var = problem.n_var
         xl, xu = np.zeros(n_var), np.ones(n_var)
 
-        self.is_int_mask = MixedIntProblemHelper.get_is_int_mask(problem)
-        self.is_cat_mask = MixedIntProblemHelper.get_is_cat_mask(problem)
+        is_int_mask = MixedIntProblemHelper.get_is_int_mask(problem)
+        is_cat_mask = MixedIntProblemHelper.get_is_cat_mask(problem)
 
         is_discrete_mask = MixedIntProblemHelper.get_is_discrete_mask(problem)
         if np.any(is_discrete_mask):
@@ -463,7 +480,9 @@ class SurrogateInfillOptimizationProblem(MixedIntBaseProblem):
         n_obj = infill.get_n_infill_objectives()
         n_constr = infill.get_n_infill_constraints()
 
-        super(SurrogateInfillOptimizationProblem, self).__init__(n_var, n_obj, n_constr, xl=xl, xu=xu)
+        super(SurrogateInfillOptimizationProblem, self).__init__(
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, impute=impute, n_var=n_var, n_obj=n_obj,
+            n_constr=n_constr, xl=xl, xu=xu)
 
         self.infill = infill
 

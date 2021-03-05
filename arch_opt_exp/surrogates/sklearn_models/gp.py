@@ -58,6 +58,7 @@ class SKLearnGPSurrogateModel(SurrogateModel):
 
         self.__models = None
         self._samples = None
+        self._is_active = None
         self._is_int_mask = None
         self._is_cat_mask = None
         self._ny = None
@@ -74,30 +75,19 @@ class SKLearnGPSurrogateModel(SurrogateModel):
             self.__models = [GaussianProcessRegressor(kernel=self.kernel, alpha=self.alpha) for _ in range(self._ny)]
         return self.__models
 
-    def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None):
+    def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None,
+                    is_active: np.ndarray = None):
         self._samples = (x, y)
+        self._is_active = is_active
         self._is_int_mask = self._get_mask(x, is_int_mask)
         self._is_cat_mask = self._get_mask(x, is_cat_mask)
         self._ny = y.shape[1]
 
-        if isinstance(self.kernel, MixedIntKernel):
+        if isinstance(self.kernel, (MixedIntKernel, CustomDistanceKernel)):
             is_discrete_mask = np.bitwise_or(self._is_int_mask, self._is_cat_mask) \
                 if self.int_as_discrete else self._is_cat_mask
             self.kernel.set_discrete_mask(is_discrete_mask)
-
-        for dist in self._get_distance_metrics():
-            dist.set_samples(x, y, self._is_int_mask, self._is_cat_mask)
-
-    def _get_distance_metrics(self) -> List[Distance]:
-        int_kernel = self.kernel
-        if isinstance(int_kernel, MixedIntKernel):
-            int_kernel = int_kernel.k2
-
-        if isinstance(int_kernel, CustomDistanceKernel):
-            if isinstance(int_kernel.metric, Distance):
-                return [int_kernel.metric]
-
-        return []
+            self.kernel.set_samples(x, y, self._is_int_mask, self._is_cat_mask, is_active=is_active)
 
     def train(self):
         if self._samples is None:
@@ -130,7 +120,9 @@ class SKLearnGPSurrogateModel(SurrogateModel):
 
                         raise
 
-    def predict(self, x: np.ndarray) -> np.ndarray:
+    def predict(self, x: np.ndarray, is_active: np.ndarray = None) -> np.ndarray:
+        self._predict_set_is_active(x, is_active=is_active)
+
         y = np.empty((x.shape[0], self._ny))
         for i in range(self._ny):
             y[:, i] = self._models[i].predict(x)
@@ -139,7 +131,9 @@ class SKLearnGPSurrogateModel(SurrogateModel):
     def supports_variance(self) -> bool:
         return True
 
-    def predict_variance(self, x: np.ndarray) -> np.ndarray:
+    def predict_variance(self, x: np.ndarray, is_active: np.ndarray = None) -> np.ndarray:
+        self._predict_set_is_active(x, is_active=is_active)
+
         y_std = np.empty((x.shape[0], self._ny))
         for i in range(self._ny):
             _, y_std_i = self._models[i].predict(x, return_std=True)
@@ -148,3 +142,9 @@ class SKLearnGPSurrogateModel(SurrogateModel):
         # Standard deviation is square root of variance, however it seems that y_std already represents the variance
         y_std[y_std < 0.] = 0.
         return y_std
+
+    def _predict_set_is_active(self, x: np.ndarray, is_active: np.ndarray = None):
+        if is_active is None:
+            is_active = np.ones(x.shape, dtype=bool)
+        if isinstance(self.kernel, (MixedIntKernel, CustomDistanceKernel)):
+            self.kernel.predict_set_is_active(is_active)

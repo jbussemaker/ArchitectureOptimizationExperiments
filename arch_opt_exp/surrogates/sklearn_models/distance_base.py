@@ -34,15 +34,19 @@ class Distance:
     def __init__(self):
         self.xt = None
         self.yt = None
+        self.is_active = None
         self.is_int_mask = None
         self.is_cat_mask = None
         self.is_discrete_mask = None
         self.is_cont_mask = None
 
-    def set_samples(self, x, y, is_int_mask: IsDiscreteMask, is_cat_mask: IsDiscreteMask):
+        self.predict_is_active = None
+
+    def set_samples(self, x, y, is_int_mask: IsDiscreteMask, is_cat_mask: IsDiscreteMask, is_active: np.ndarray = None):
         """Set before training the GP model."""
         self.xt = x
         self.yt = y
+        self.is_active = is_active if is_active is not None else np.ones(x.shape, dtype=bool)
 
         self.is_int_mask = MixedIntKernel.get_discrete_mask(is_int_mask)
         self.is_cat_mask = MixedIntKernel.get_discrete_mask(is_cat_mask)
@@ -54,11 +58,17 @@ class Distance:
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
         pass
 
-    def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray], **kwargs) -> float:
-        uv = np.array([u, v]).T
-        return float(self._call(uv))
+    def predict_set_is_active(self, is_active: np.ndarray):
+        self.predict_is_active = is_active
 
-    def _call(self, uv: np.ndarray) -> float:
+    def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray], uv_is_active: np.ndarray = None,
+                 **kwargs) -> float:
+        uv = np.column_stack([u, v])
+        if uv_is_active is None:
+            uv_is_active = np.ones(uv.shape, dtype=bool)
+        return float(self._call(uv, uv_is_active))
+
+    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
         raise NotImplementedError
 
     def kernel(self, **kwargs):
@@ -88,6 +98,20 @@ class MixedIntKernel(KernelOperator):
     def set_discrete_mask(self, is_discrete_mask: IsDiscreteMask):
         self._is_discrete_mask = MixedIntKernel.get_discrete_mask(is_discrete_mask)
         self._is_cont_mask = ~self._is_discrete_mask
+
+        if isinstance(self.k2, CustomDistanceKernel):
+            self.k2.set_discrete_mask(is_discrete_mask[is_discrete_mask])
+
+    def set_samples(self, x, y, is_int_mask: IsDiscreteMask, is_cat_mask: IsDiscreteMask, is_active: np.ndarray = None):
+        if isinstance(self.k2, CustomDistanceKernel):
+            m = self._is_discrete_mask
+            if is_active is not None:
+                is_active = is_active[:, m]
+            self.k2.set_samples(x[:, m], y, is_int_mask[m], is_cat_mask[m], is_active=is_active)
+
+    def predict_set_is_active(self, is_active: np.ndarray):
+        if isinstance(self.k2, CustomDistanceKernel):
+            self.k2.predict_set_is_active(is_active[:, self._is_discrete_mask])
 
     def get_params(self, deep=True):
         params = {
@@ -162,17 +186,43 @@ class MixedIntKernel(KernelOperator):
 
 class CustomDistanceKernel(Matern):
     """
-    Same as the Matern kernel, but with a custom distance metric:
+    Same as the Matern kernel, but with a custom (discrete) distance metric:
     k(x, x') = exp(-theta*d(x, x'))
 
     The distance metric can be an instance of Distance, or some distance name as available in the scipy.spatial.distance
     package (see https://docs.scipy.org/doc/scipy/reference/spatial.distance.html).
     """
 
-    def __init__(self, metric: Union[str, Distance] = None, length_scale=1.0, length_scale_bounds=(1e-5, 1e5), nu=1.5):
+    def __init__(self, metric: Union[str, Distance] = None, length_scale=1.0, length_scale_bounds=(1e-5, 1e5), nu=1.5,
+                 _is_discrete_mask=None):
         super(CustomDistanceKernel, self).__init__(
             length_scale=length_scale, length_scale_bounds=length_scale_bounds, nu=nu)
         self.metric = metric if metric is not None else 'sqeuclidean'
+
+        self._is_discrete_mask: Optional[IsDiscreteMask] = _is_discrete_mask
+        self._is_cont_mask: Optional[IsDiscreteMask] = ~_is_discrete_mask if _is_discrete_mask is not None else None
+
+        self._train_is_active = None
+        self._predict_is_active = None
+
+    def set_discrete_mask(self, is_discrete_mask: IsDiscreteMask):
+        self._is_discrete_mask = MixedIntKernel.get_discrete_mask(is_discrete_mask)
+        self._is_cont_mask = ~self._is_discrete_mask
+
+    def set_samples(self, x, y, is_int_mask: IsDiscreteMask, is_cat_mask: IsDiscreteMask, is_active: np.ndarray = None):
+        self._train_is_active = is_active
+        if isinstance(self.metric, Distance):
+            self.metric.set_samples(x, y, is_int_mask, is_cat_mask, is_active=is_active)
+
+    def predict_set_is_active(self, is_active: np.ndarray):
+        self._predict_is_active = is_active
+        if isinstance(self.metric, Distance):
+            self.metric.predict_set_is_active(is_active)
+
+    def get_params(self, deep=True):
+        params = super(CustomDistanceKernel, self).get_params(deep=deep)
+        params['_is_discrete_mask'] = self._is_discrete_mask
+        return params
 
     def __call__(self, x, y=None, eval_gradient=False):
         """Return the kernel k(X, Y) and optionally its gradient.
@@ -204,14 +254,17 @@ class CustomDistanceKernel(Matern):
         """
         x = np.atleast_2d(x)
         length_scale = _check_length_scale(x, self.length_scale)
+        x_norm = x.copy()
+        x_norm[:, self._is_cont_mask] = x_norm[:, self._is_cont_mask] / length_scale
         if y is None:
-            dists = pdist(x / length_scale, metric=self.metric)
+            dists = self._pdist(x_norm)
         else:
+            y_norm = y.copy()
+            y_norm[:, self._is_cont_mask] = y_norm[:, self._is_cont_mask] / length_scale
             if eval_gradient:
                 raise ValueError(
                     "Gradient can only be evaluated when Y is None.")
-            dists = cdist(x / length_scale, y / length_scale,
-                          metric=self.metric)
+            dists = self._cdist(x_norm, y_norm)
 
         if self.nu == 0.5:
             K = np.exp(-dists)
@@ -273,6 +326,48 @@ class CustomDistanceKernel(Matern):
                 return K, K_gradient
         else:
             return K
+
+    def _pdist(self, x: np.ndarray):  # Called during training
+        if not isinstance(self.metric, Distance):
+            return pdist(x, metric=self.metric)
+
+        x = np.asarray(x, order='c')
+        m, n = x.shape
+        dm = np.empty((m * (m - 1)) // 2, dtype=np.double)
+
+        is_active = self._train_is_active
+        if is_active is None:
+            is_active = np.ones(x.shape, dtype=bool)
+
+        k = 0
+        for i in range(0, m - 1):
+            for j in range(i + 1, m):
+                uv_is_active = is_active[[i, j], :].T
+                dm[k] = self.metric(x[i], x[j], uv_is_active=uv_is_active)
+                k = k + 1
+        return dm
+
+    def _cdist(self, x: np.ndarray, y: np.ndarray):  # Called during prediction
+        if not isinstance(self.metric, Distance):
+            return cdist(x, y, metric=self.metric)
+
+        x = np.asarray(x, order='c')  # Prediction points
+        y = np.asarray(y, order='c')  # Training points
+        dm = np.empty((x.shape[0], y.shape[0]), dtype=np.double)
+
+        train_is_active = self._train_is_active
+        if train_is_active is None:
+            train_is_active = np.ones(y.shape, dtype=bool)
+        predict_is_active = self._predict_is_active
+        if predict_is_active is None:
+            predict_is_active = np.ones(x.shape, dtype=bool)
+
+        for i in range(x.shape[0]):
+            for j in range(y.shape[0]):
+                uv_is_active = np.column_stack([predict_is_active[i, :], train_is_active[j, :]])
+                dm[i, j] = self.metric(x[i], y[j], uv_is_active=uv_is_active)
+        return dm
+
 
     def __repr__(self):
         return '%s(metric=%s, nu=%r)' % (self.__class__.__name__, self.metric, self.nu)

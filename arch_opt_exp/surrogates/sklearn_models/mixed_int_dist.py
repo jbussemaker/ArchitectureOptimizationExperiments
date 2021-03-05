@@ -35,7 +35,7 @@ class GowerDistance(Distance):
     Halstrup 2016, "Black-box Optimization of Mixed Discrete-Continuous Optimization Problems", section 6.6
     """
 
-    def _call(self, uv: np.ndarray) -> float:
+    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
         uv_cont = uv[self.is_cont_mask, :]
         uv_dis = uv[self.is_discrete_mask, :].astype(np.int)
         return _gower(uv_cont, uv_dis, self.is_cont_mask, self.is_discrete_mask)
@@ -136,7 +136,7 @@ class SymbolicCovarianceDistance(Distance):
 
         return x_means
 
-    def _call(self, uv: np.ndarray) -> float:
+    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
         """Calculate the distance function using the inverse of the symbolic covariance matrix."""
         return _sc_dist(self._inv_cov_matrix, uv, self.use_sc_mask)
 
@@ -166,7 +166,7 @@ class HammingDistance(Distance):
     def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray], **kwargs) -> float:
         return hamming(u, v)
 
-    def _call(self, uv: np.ndarray) -> float:
+    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
         raise NotImplementedError
 
     def kernel(self, **kwargs):

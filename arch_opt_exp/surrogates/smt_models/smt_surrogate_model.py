@@ -30,6 +30,8 @@ class SMTSurrogateModel(SurrogateModel):
     input variables are normalized according to the logic of MixedIntBaseProblem: continuous between 0 and 1, discrete
     between 0 and n-1. The mixed-integer approach combines continuous relaxation for integer variables and dummy
     coding for categorical variables.
+
+    SMT surrogate models do not take design variable hierarchy into account.
     """
 
     _exclude = ['_smt', '_xt_last', '_is_int_mask', '_is_cat_mask']
@@ -48,7 +50,8 @@ class SMTSurrogateModel(SurrogateModel):
             state[key] = None
         return state
 
-    def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None):
+    def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None,
+                    is_active: np.ndarray = None):
         self._xt_last = x
         self._is_int_mask = is_int_mask = self._get_mask(x, is_int_mask)
         self._is_cat_mask = is_cat_mask = self._get_mask(x, is_cat_mask)
@@ -79,13 +82,13 @@ class SMTSurrogateModel(SurrogateModel):
     def train(self):
         self._smt.train()
 
-    def predict(self, x: np.ndarray) -> np.ndarray:
+    def predict(self, x: np.ndarray, is_active: np.ndarray = None) -> np.ndarray:
         return self._smt.predict_values(x)
 
     def supports_variance(self) -> bool:
         return self._smt.supports['variances']
 
-    def predict_variance(self, x: np.ndarray) -> np.ndarray:
+    def predict_variance(self, x: np.ndarray, is_active: np.ndarray = None) -> np.ndarray:
         # There is a bug in SMT preventing a vectorized evaluation:
         # https://github.com/SMTorg/smt/issues/160
 

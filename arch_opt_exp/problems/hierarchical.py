@@ -46,10 +46,11 @@ class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
         xu[5:9] = 2
         xu[9] = 3
 
-        self.is_int_mask = np.array([0]*5+[1]*4+[0]*2, dtype=bool)
-        self.is_cat_mask = np.array([0]*5+[0]*4+[1]*2, dtype=bool)
+        is_int_mask = np.array([0]*5+[1]*4+[0]*2, dtype=bool)
+        is_cat_mask = np.array([0]*5+[0]*4+[1]*2, dtype=bool)
 
-        super(HierarchicalGoldsteinProblem, self).__init__(n_var=n_var, n_obj=1, n_constr=1, xl=xl, xu=xu)
+        super(HierarchicalGoldsteinProblem, self).__init__(
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=n_var, n_obj=1, n_constr=1, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
         x = self.correct_x(x)
@@ -70,8 +71,26 @@ class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
             g_idx = int(w_i[0])
             g[i, 0] = self.g(*g_map[g_idx](x_i, z_i))
 
+        out['is_active'], out['X'] = self.is_active(x)
         out['F'] = f
         out['G'] = g
+
+    def _is_active(self, x: np.ndarray) -> np.ndarray:
+        x = self.correct_x(x)
+        w1 = x[:, 9].astype(np.int)
+        w2 = x[:, 10].astype(np.int)
+
+        is_active = np.zeros(x.shape, dtype=bool)
+        is_active[:, [0, 1, 7, 8, 9, 10]] = True  # x1, x2, z3, z4, w1, w2
+
+        is_active[:, 2] = np.bitwise_or(w1 == 1, w1 == 3)  # x3
+        is_active[:, 3] = w1 >= 2  # x4
+        is_active[:, 4] = w2 == 1  # x5
+
+        is_active[:, 5] = np.bitwise_or(w1 == 0, w1 == 2) # z1
+        is_active[:, 6] = w1 <= 1 # z2
+
+        return is_active
 
     @staticmethod
     def h(x1, x2, x3, x4, x5, z3, z4, cos_term: bool) -> float:
@@ -191,10 +210,11 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
         xu[[1, 3, 5, 7]] = 1.5
         xu[10] = 2
 
-        self.is_int_mask = np.array([0]*8+[1]*3+[0]*2, dtype=bool)
-        self.is_cat_mask = np.array([0]*8+[0]*3+[1]*2, dtype=bool)
+        is_int_mask = np.array([0]*8+[1]*3+[0]*2, dtype=bool)
+        is_cat_mask = np.array([0]*8+[0]*3+[1]*2, dtype=bool)
 
-        super(HierarchicalRosenbrockProblem, self).__init__(n_var=n_var, n_obj=1, n_constr=2, xl=xl, xu=xu)
+        super(HierarchicalRosenbrockProblem, self).__init__(
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=n_var, n_obj=1, n_constr=2, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
         x = self.correct_x(x)
@@ -220,8 +240,30 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
             g[i, 0] = self.g1(x_fg)
             g[i, 1] = self.g2(x_i[x_idx_g2[idx]]) if idx < 2 else 0.
 
+        out['is_active'], out['X'] = self.is_active(x)
         out['F'] = f
         out['G'] = g
+
+    def _is_active(self, x: np.ndarray) -> np.ndarray:
+        x = self.correct_x(x)
+        w1 = x[:, 11].astype(np.int)
+        w2 = x[:, 12].astype(np.int)
+        idx = w1*2+w2
+
+        is_active = np.zeros(x.shape, dtype=bool)
+        is_active[:, [0, 1, 8, 9, 11, 12]] = True  # x1, x2, z1, z2, w1, w2
+
+        is_active[:, 2] = idx <= 2  # x3
+        is_active[:, 3] = idx <= 2  # x4
+        is_active[:, 4] = w2 == 1  # x5
+        is_active[:, 5] = w2 == 1  # x6
+        is_active[:, 6] = idx >= 1  # x7
+        is_active[:, 7] = idx >= 1  # x8
+
+        is_active[:, 10] = w2 == 1  # z3
+
+        return is_active
+
 
     @staticmethod
     def f(x: np.ndarray, z1, z2, z3, a1, a2, add_z3: bool):
@@ -287,18 +329,25 @@ class ZaeffererHierarchicalProblem(MixedIntBaseProblem):
         self.c = c
         self.d = d
 
-        self.is_int_mask = np.zeros((2,), dtype=bool)
-        self.is_cat_mask = np.zeros((2,), dtype=bool)
+        is_int_mask = np.zeros((2,), dtype=bool)
+        is_cat_mask = np.zeros((2,), dtype=bool)
 
         xl, xu = np.zeros((2,)), np.ones((2,))
-        super(ZaeffererHierarchicalProblem, self).__init__(n_var=2, n_obj=1, xl=xl, xu=xu)
+        super(ZaeffererHierarchicalProblem, self).__init__(
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=2, n_obj=1, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
         f1 = (x[:, 0] - self.d)**2
         f2 = (x[:, 1] - .5)**2 + self.b
         f2[x[:, 0] <= self.c] = 0.
 
+        out['is_active'], out['X'] = self.is_active(x)
         out['F'] = f1+f2
+
+    def _is_active(self, x: np.ndarray) -> np.ndarray:
+        is_active = np.ones(x.shape, dtype=bool)
+        is_active[:, 1] = x[:, 0] > self.c  # x2 is active if x1 > c
+        return is_active
 
     def plot(self, show=True):
         import matplotlib.pyplot as plt
@@ -316,8 +365,8 @@ class ZaeffererHierarchicalProblem(MixedIntBaseProblem):
 
 
 if __name__ == '__main__':
-    HierarchicalGoldsteinProblem.validate_ranges(show=False)
-    HierarchicalGoldsteinProblem().so_run()
+    # HierarchicalGoldsteinProblem.validate_ranges(show=False)
+    # HierarchicalGoldsteinProblem().so_run()
 
     # HierarchicalRosenbrockProblem.validate_ranges(show=False)
     # HierarchicalRosenbrockProblem().so_run(n_repeat=8, n_eval_max=2000, pop_size=30)
@@ -325,10 +374,11 @@ if __name__ == '__main__':
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
     # ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1).plot()  # Zaefferer 2018, Fig. 1
 
-    # from arch_opt_exp.surrogates.sklearn_models.gp import SKLearnGPSurrogateModel
-    # sm = SKLearnGPSurrogateModel()
-    # problem = ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7)
-    # # problem = ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1)
-    #
-    # from arch_opt_exp.algorithms.surrogate.surrogate_infill import SurrogateBasedInfill
-    # SurrogateBasedInfill.plot_model_problem(sm, problem, n_pts=150)
+    from arch_opt_exp.surrogates.sklearn_models.gp import SKLearnGPSurrogateModel
+    sm = SKLearnGPSurrogateModel()
+    problem = ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7)
+    # problem = ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1)
+    # problem.impute = False
+
+    from arch_opt_exp.algorithms.surrogate.surrogate_infill import SurrogateBasedInfill
+    SurrogateBasedInfill.plot_model_problem(sm, problem, n_pts=150)

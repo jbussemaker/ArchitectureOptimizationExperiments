@@ -35,9 +35,10 @@ class MixedIntBraninProblem(MixedIntBaseProblem):
 
     def __init__(self):
         xl, xu = np.zeros((4,)), np.ones((4,))
-        self.is_int_mask = np.array([False]*4, dtype=bool)
-        self.is_cat_mask = np.array([False, False, True, True], dtype=bool)
-        super(MixedIntBraninProblem, self).__init__(n_var=4, n_obj=1, xl=xl, xu=xu)
+        is_int_mask = np.array([False]*4, dtype=bool)
+        is_cat_mask = np.array([False, False, True, True], dtype=bool)
+        super(MixedIntBraninProblem, self).__init__(
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=4, n_obj=1, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
         x = self.correct_x(x)
@@ -88,9 +89,10 @@ class AugmentedMixedIntBraninProblem(MixedIntBraninProblem):
 
     def __init__(self):
         xl, xu = np.zeros((12,)), np.ones((12,))
-        self.is_int_mask = np.array([False]*12, dtype=bool)
-        self.is_cat_mask = np.array([False]*10+[True, True], dtype=bool)
-        super(MixedIntBraninProblem, self).__init__(n_var=12, n_obj=1, xl=xl, xu=xu)
+        is_int_mask = np.array([False]*12, dtype=bool)
+        is_cat_mask = np.array([False]*10+[True, True], dtype=bool)
+        super(MixedIntBraninProblem, self).__init__(
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=12, n_obj=1, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
         x = self.correct_x(x)
@@ -120,9 +122,10 @@ class MixedIntGoldsteinProblem(MixedIntBaseProblem):
 
     def __init__(self):
         xl, xu = np.zeros((4,)), np.array([100., 100., 2, 2])
-        self.is_int_mask = np.array([False, False, True, True], dtype=bool)
-        self.is_cat_mask = np.array([False]*4, dtype=bool)
-        super(MixedIntGoldsteinProblem, self).__init__(n_var=4, n_obj=1, xl=xl, xu=xu)
+        is_int_mask = np.array([False, False, True, True], dtype=bool)
+        is_cat_mask = np.array([False]*4, dtype=bool)
+        super(MixedIntGoldsteinProblem, self).__init__(
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=4, n_obj=1, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
         x = self.correct_x(x)

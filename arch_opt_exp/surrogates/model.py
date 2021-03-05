@@ -24,6 +24,13 @@ __all__ = ['SurrogateModel', 'SurrogateModelFactory']
 class SurrogateModel:
     """
     Base class for the surrogate model as used in this package. Should be pickleable.
+
+    Interface definitions:
+    - x: design vector of shape n_samples x n_x
+    - y: output vector of shape n_samples x n_y
+    - is_int_mask (optional): mask specifying which x is of type integer (size n_x)
+    - is_cat_mask (optional): mask specifying which x is of type categorical (size n_x)
+    - is_active (optional): mask specifying which x is active in a hierchical problem (shape n_samples x n_x)
     """
 
     def copy(self) -> 'SurrogateModel':
@@ -34,19 +41,20 @@ class SurrogateModel:
     def _get_mask(x: np.ndarray, mask: np.ndarray = None) -> np.ndarray:
         return np.zeros((x.shape[1],), dtype=bool) if mask is None else mask
 
-    def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None):
+    def set_samples(self, x: np.ndarray, y: np.ndarray, is_int_mask: np.ndarray = None, is_cat_mask: np.ndarray = None,
+                    is_active: np.ndarray = None):
         raise NotImplementedError
 
     def train(self):
         raise NotImplementedError
 
-    def predict(self, x: np.ndarray) -> np.ndarray:
+    def predict(self, x: np.ndarray, is_active: np.ndarray = None) -> np.ndarray:
         raise NotImplementedError
 
     def supports_variance(self) -> bool:
         raise NotImplementedError
 
-    def predict_variance(self, x: np.ndarray) -> np.ndarray:
+    def predict_variance(self, x: np.ndarray, is_active: np.ndarray = None) -> np.ndarray:
         raise NotImplementedError
 
 

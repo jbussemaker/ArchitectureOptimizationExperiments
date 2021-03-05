@@ -63,9 +63,10 @@ class SurrogateQualityMetric(Metric):
             return [np.nan]*len(self.value_names)
 
         xt, yt = surrogate_infill.x_train, surrogate_infill.y_train
+        is_active = surrogate_infill.is_active
         is_int_mask, is_cat_mask = surrogate_infill.is_int_mask, surrogate_infill.is_cat_mask
 
-        y_err = yt-surrogate_model.predict(xt)
+        y_err = yt-surrogate_model.predict(xt, is_active=is_active)
 
         values = [
             np.max(self._get_rmse(y_err)),
@@ -75,7 +76,8 @@ class SurrogateQualityMetric(Metric):
         ]
         if self.include_loo_cv:
             values += [np.max(LOOCrossValidation.cross_validate(
-                surrogate_model, xt, yt, n_train=self.n_loo_cv, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask))]
+                surrogate_model, xt, yt, n_train=self.n_loo_cv, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask,
+                is_active=is_active))]
 
         return values
 
