@@ -133,20 +133,20 @@ class MixedIntGoldsteinProblem(MixedIntBaseProblem):
         f = np.empty((x.shape[0], 1))
         for i in range(x.shape[0]):
             x3, x4 = _x3[int(x[i, 2])], _x4[int(x[i, 3])]
-            f[i, 0] = self._h(x[i, 0], x[i, 1], x3, x4)
+            f[i, 0] = self.h(x[i, 0], x[i, 1], x3, x4)
 
         out['F'] = f
 
     @staticmethod
-    def _h(x1, x2, x3, x4):
+    def h(x1, x2, x3, x4, z3=4, z4=3):
         return sum([
             53.3108,
             .184901 * x1,
             -5.02914 * x1**3 * 1e-6,
-            7.72522 * x1**4 * 1e-8,
+            7.72522 * x1**z3 * 1e-8,
             0.0870775 * x2,
             -0.106959 * x3,
-            7.98772 * x3**3 * 1e-6,
+            7.98772 * x3**z4 * 1e-6,
             0.00242482 * x4,
             1.32851 * x4**3 * 1e-6,
             -0.00146393 * x1 * x2,

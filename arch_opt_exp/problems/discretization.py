@@ -83,6 +83,43 @@ class MixedIntBaseProblem(Problem):
         x[:, is_discrete_mask] = x[:, is_discrete_mask]+xl[is_discrete_mask]
         return x
 
+    def so_run(self, n_repeat=8, pop_size=100, n_eval_max=5000, show=True):
+        from pymoo.algorithms.so_genetic_algorithm import GA
+        from pymoo.factory import get_sampling, get_crossover, get_mutation
+        from arch_opt_exp.experimenter import Experimenter, ExperimenterResult
+        from arch_opt_exp.metrics.performance import BestObjMetric, MaxConstraintViolationMetric
+        from pymoo.operators.mixed_variable_operator import MixedVariableSampling, MixedVariableMutation, \
+            MixedVariableCrossover
+
+        with Experimenter.temp_results():
+            algorithm = GA(
+                pop_size=pop_size,
+                sampling=MixedVariableSampling(self.is_discrete_mask, {
+                    False: get_sampling('real_random'),
+                    True: get_sampling('int_random'),
+                }),
+                crossover=MixedVariableCrossover(self.is_discrete_mask, {
+                    False: get_crossover('real_sbx', prob=.9, eta=3.),
+                    True: get_crossover('int_ux', prob=.9),
+                }),
+                mutation=MixedVariableMutation(self.is_discrete_mask, {
+                    False: get_mutation('real_pm', eta=3.),
+                    True: get_mutation('bin_bitflip'),
+                }),
+                repair=self.get_repair(),
+            )
+
+            metrics = [BestObjMetric(), MaxConstraintViolationMetric()]
+            exp = Experimenter(self, algorithm, n_eval_max=n_eval_max, metrics=metrics)
+            if n_repeat == 1:
+                results = exp.run_effectiveness()
+            else:
+                results = ExperimenterResult.aggregate_results(exp.run_effectiveness_parallel(n_repeat=n_repeat))
+
+            for i in range(len(metrics)):
+                ExperimenterResult.plot_compare_metrics([results], metrics[i].name, plot_evaluations=True,
+                                                        show=show and (i == len(metrics)-1))
+
     def _evaluate(self, x, out, *args, **kwargs):
         raise NotImplementedError
 

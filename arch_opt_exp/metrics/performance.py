@@ -25,7 +25,7 @@ from pymoo.performance_indicator.igd_plus import IGDPlus
 from pymoo.performance_indicator.distance_indicator import euclidean_distance
 
 __all__ = ['SpreadMetric', 'DeltaHVMetric', 'IGDMetric', 'IGDPlusMetric', 'MaxConstraintViolationMetric',
-           'NrEvaluationsMetric']
+           'NrEvaluationsMetric', 'BestObjMetric']
 
 
 class SpreadMetric(Metric):
@@ -151,3 +151,24 @@ class NrEvaluationsMetric(Metric):
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         return [algorithm.evaluator.n_eval]
+
+
+class BestObjMetric(Metric):
+    """Metric that tracks the current best (feasible) objective values."""
+
+    def __init__(self, i_f=0):
+        self.i_f = i_f
+        super(BestObjMetric, self).__init__()
+
+    @property
+    def name(self):
+        return 'f_best'
+
+    @property
+    def value_names(self) -> List[str]:
+        return ['f_best']
+
+    def _calculate_values(self, algorithm: Algorithm) -> List[float]:
+        if algorithm.opt is not None:
+            return [algorithm.opt.get('F')[self.i_f]]
+        return [np.nan]

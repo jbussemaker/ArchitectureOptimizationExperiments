@@ -322,6 +322,23 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         if show:
             plt.show()
 
+    @staticmethod
+    def plot_model_problem(surrogate_model: SurrogateModel, problem: Problem, n_pts=20):
+        from arch_opt_exp.algorithms.surrogate.func_estimate import FunctionEstimateInfill
+        surogate_infill = FunctionEstimateInfill()
+        sbo_infill = SurrogateBasedInfill(surrogate_model=surrogate_model, infill=surogate_infill)
+        sbo_infill._generate_infill_points = lambda *args, **kwargs: []
+
+        algorithm = sbo_infill.algorithm(init_size=n_pts)
+        algorithm.setup(problem, termination=MaximumGenerationTermination(n_max_gen=1))
+        pop = algorithm.initialization.do(algorithm.problem, n_pts, algorithm=algorithm)
+        pop = algorithm.evaluator.eval(algorithm.problem, pop, algorithm=algorithm)
+        sbo_infill.do(algorithm.problem, pop, 0, algorithm=algorithm)
+
+        sbo_infill.plot_model(i_x=[0], plot_problem=True, show=False)
+        sbo_infill.plot_model(i_x=[1], plot_problem=True, show=False)
+        sbo_infill.plot_model(plot_problem=True)
+
     def plot_model(self, i_x: List[int] = None, i_y: int = None, line_at_level: float = None, plot_problem=False,
                    show=True):
 
@@ -558,23 +575,11 @@ if __name__ == '__main__':
     from arch_opt_exp.algorithms.surrogate.func_estimate import FunctionEstimateInfill
 
     prob = Himmelblau()
-    n_pts = 10
+    n_pts_sample = 10
 
     # from arch_opt_exp.surrogates.smt.smt_krg import SMTKrigingSurrogateModel
     # sm = SMTKrigingSurrogateModel()
     from arch_opt_exp.surrogates.sklearn_models.gp import SKLearnGPSurrogateModel
     sm = SKLearnGPSurrogateModel()
 
-    sur_infill = FunctionEstimateInfill()
-    sbo_infill = SurrogateBasedInfill(surrogate_model=sm, infill=sur_infill)
-    sbo_infill._generate_infill_points = lambda *args, **kwargs: []
-
-    algo = sbo_infill.algorithm(init_size=n_pts)
-    algo.setup(prob, termination=MaximumGenerationTermination(n_max_gen=1))
-    pop = algo.initialization.do(algo.problem, n_pts, algorithm=algo)
-    pop = algo.evaluator.eval(algo.problem, pop, algorithm=algo)
-    sbo_infill.do(algo.problem, pop, 0, algorithm=algo)
-
-    sbo_infill.plot_model(i_x=[0], plot_problem=True, show=False)
-    sbo_infill.plot_model(i_x=[1], plot_problem=True, show=False)
-    sbo_infill.plot_model(plot_problem=True)
+    SurrogateBasedInfill.plot_model_problem(sm, prob, n_pts=n_pts_sample)
