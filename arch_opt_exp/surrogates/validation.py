@@ -103,7 +103,7 @@ class LOOCrossValidation:
             -> np.ndarray:
         x_lo = xt[i_leave_out, :]
         y_lo = yt[i_leave_out, :]
-        is_active_lo = is_active[i_leave_out, :] if is_active is not None else None
+        is_active_lo = is_active[[i_leave_out], :] if is_active is not None else None
         xt = np.delete(xt, i_leave_out, axis=0)
         yt = np.delete(yt, i_leave_out, axis=0)
 

@@ -20,9 +20,9 @@ import numpy as np
 from typing import *
 from sklearn.gaussian_process.kernels import \
     Matern, _check_length_scale, pdist, squareform, cdist, gamma, kv, _approx_fprime, KernelOperator, Kernel,\
-    ConstantKernel
+    ConstantKernel, Hyperparameter
 
-__all__ = ['CustomDistanceKernel', 'MixedIntKernel', 'Distance', 'IsDiscreteMask']
+__all__ = ['CustomDistanceKernel', 'MixedIntKernel', 'Distance', 'IsDiscreteMask', 'Hyperparameter']
 
 
 IsDiscreteMask = Union[np.ndarray, List[bool]]
@@ -56,6 +56,15 @@ class Distance:
         self._process_samples(x, y)
 
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
+        pass
+
+    def hyperparameters(self) -> Optional[List[Hyperparameter]]:
+        pass
+
+    def get_hyperparameter_values(self) -> List[float]:
+        return []
+
+    def set_hyperparameter_values(self, values: List[float]):
         pass
 
     def predict_set_is_active(self, is_active: np.ndarray):
@@ -194,7 +203,7 @@ class CustomDistanceKernel(Matern):
     """
 
     def __init__(self, metric: Union[str, Distance] = None, length_scale=1.0, length_scale_bounds=(1e-5, 1e5), nu=1.5,
-                 _is_discrete_mask=None):
+                 _is_discrete_mask=None, **metric_hp):
         super(CustomDistanceKernel, self).__init__(
             length_scale=length_scale, length_scale_bounds=length_scale_bounds, nu=nu)
         self.metric = metric if metric is not None else 'sqeuclidean'
@@ -204,6 +213,9 @@ class CustomDistanceKernel(Matern):
 
         self._train_is_active = None
         self._predict_is_active = None
+
+        for key, value in metric_hp.items():
+            setattr(self, key, value)
 
     def set_discrete_mask(self, is_discrete_mask: IsDiscreteMask):
         self._is_discrete_mask = MixedIntKernel.get_discrete_mask(is_discrete_mask)
@@ -219,10 +231,36 @@ class CustomDistanceKernel(Matern):
         if isinstance(self.metric, Distance):
             self.metric.predict_set_is_active(is_active)
 
+    @property
+    def hyperparameters(self):
+        hyperparameters = super(CustomDistanceKernel, self).hyperparameters
+        hyperparameters += self._get_metric_hyperparameters()
+        return hyperparameters
+
+    def _get_metric_hyperparameters(self) -> List[Hyperparameter]:
+        if isinstance(self.metric, Distance):
+            metric_hp = self.metric.hyperparameters()
+            if metric_hp is not None:
+                return [Hyperparameter('d_'+hp[0], *hp[1:]) for hp in metric_hp]
+        return []
+
     def get_params(self, deep=True):
         params = super(CustomDistanceKernel, self).get_params(deep=deep)
         params['_is_discrete_mask'] = self._is_discrete_mask
+
+        if isinstance(self.metric, Distance):
+            metric_hp = self._get_metric_hyperparameters()
+            for i, value in enumerate(self.metric.get_hyperparameter_values()):
+                params[metric_hp[i].name] = value
+
         return params
+
+    def set_params(self, **params):
+        super(CustomDistanceKernel, self).set_params(**params)
+
+        if isinstance(self.metric, Distance):
+            values = [getattr(self, hp.name) for hp in self._get_metric_hyperparameters()]
+            self.metric.set_hyperparameter_values(values)
 
     def __call__(self, x, y=None, eval_gradient=False):
         """Return the kernel k(X, Y) and optionally its gradient.
