@@ -149,5 +149,7 @@ class SKLearnGPSurrogateModel(SurrogateModel):
         else:
             is_active = np.atleast_2d(is_active)
 
-        if isinstance(self.kernel, (MixedIntKernel, CustomDistanceKernel)):
-            self.kernel.predict_set_is_active(is_active)
+        for i in range(self._ny):
+            kernel = self._models[i].kernel_
+            if isinstance(kernel, (MixedIntKernel, CustomDistanceKernel)):
+                kernel.predict_set_is_active(is_active)

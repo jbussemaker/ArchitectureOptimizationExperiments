@@ -251,7 +251,7 @@ class CustomDistanceKernel(Matern):
     """
 
     def __init__(self, metric: Union[str, Distance] = None, length_scale=1.0, length_scale_bounds=(1e-5, 1e5), nu=.5,
-                 _is_discrete_mask=None, _train_is_active=None, **metric_hp):
+                 _is_discrete_mask=None, _train_is_active=None, _predict_is_active=None, **metric_hp):
         super(CustomDistanceKernel, self).__init__(
             length_scale=length_scale, length_scale_bounds=length_scale_bounds, nu=nu)
         self.metric = metric if metric is not None else 'euclidean'
@@ -260,7 +260,7 @@ class CustomDistanceKernel(Matern):
         self._is_cont_mask: Optional[IsDiscreteMask] = ~_is_discrete_mask if _is_discrete_mask is not None else None
 
         self._train_is_active = _train_is_active
-        self._predict_is_active = None
+        self._predict_is_active = _predict_is_active
 
         self.__metric_hp = None
         if len(metric_hp) > 0:
@@ -305,6 +305,7 @@ class CustomDistanceKernel(Matern):
         params = super(CustomDistanceKernel, self).get_params(deep=deep)
         params['_is_discrete_mask'] = self._is_discrete_mask
         params['_train_is_active'] = self._train_is_active
+        params['_predict_is_active'] = self._predict_is_active
 
         if isinstance(self.metric, Distance):
             metric_hp = self._get_metric_hyperparameters()
@@ -378,7 +379,7 @@ class CustomDistanceKernel(Matern):
 
         is_active = self._train_is_active
         if is_active is None:
-            is_active = np.ones(x.shape, dtype=bool)
+            raise ValueError('Training activity flags not set!')
 
         k = 0
         for i in range(0, m - 1):
@@ -397,10 +398,10 @@ class CustomDistanceKernel(Matern):
 
         train_is_active = self._train_is_active
         if train_is_active is None:
-            train_is_active = np.ones(y.shape, dtype=bool)
+            raise ValueError('Training activity flags not set!')
         predict_is_active = self._predict_is_active
         if predict_is_active is None:
-            predict_is_active = np.ones(x.shape, dtype=bool)
+            raise ValueError('Prediction activity flags not set!')
 
         for i in range(x.shape[0]):
             for j in range(y.shape[0]):

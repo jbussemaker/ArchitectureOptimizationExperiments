@@ -347,12 +347,12 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         pop = algorithm.evaluator.eval(algorithm.problem, pop, algorithm=algorithm)
         sbo_infill.do(algorithm.problem, pop, 0, algorithm=algorithm)
 
-        sbo_infill.plot_model(i_x=[0], plot_problem=True, show=False)
-        sbo_infill.plot_model(i_x=[1], plot_problem=True, show=False)
-        sbo_infill.plot_model(plot_problem=True)
+        sbo_infill.plot_model(i_x=[0], plot_problem=True, train=False, show=False)
+        sbo_infill.plot_model(i_x=[1], plot_problem=True, train=False, show=False)
+        sbo_infill.plot_model(plot_problem=True, train=False)
 
     def plot_model(self, i_x: List[int] = None, i_y: int = None, line_at_level: float = None, plot_problem=False,
-                   show=True):
+                   train=True, show=True):
 
         has_var = self.supports_variances
         is_one_dim = self.problem.n_var == 1 or (i_x is not None and len(i_x) == 1)
@@ -362,7 +362,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
             i_y = 0
 
         x_train, y_train, is_active = self.x_train, self.y_train, self.is_active
-        self._train_model()
+        if train:
+            self._train_model()
 
         def _problem_eval_norm(xx_eval):
             yy_prob = self.problem.evaluate(self._denormalize(xx_eval))[:, [i_y]]
