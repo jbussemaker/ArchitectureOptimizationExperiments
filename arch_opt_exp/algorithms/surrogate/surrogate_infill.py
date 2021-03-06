@@ -431,7 +431,10 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
                             norm=SymLogNorm(linthresh=1e-3, base=10.))
 
             plt.xlabel('$x_{%d}$' % i_x[0]), plt.ylabel('$x_{%d}$' % i_x[1])
-            plt.colorbar(c).set_label('$err_{%d}$' % i_y)
+            try:
+                plt.colorbar(c).set_label('$err_{%d}$' % i_y)
+            except ValueError:
+                pass
 
             # Problem error
             if plot_problem:
