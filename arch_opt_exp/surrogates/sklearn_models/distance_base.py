@@ -22,14 +22,17 @@ from sklearn.gaussian_process.kernels import \
     Matern, _check_length_scale, pdist, squareform, cdist, gamma, kv, _approx_fprime, KernelOperator, Kernel,\
     ConstantKernel, Hyperparameter
 
-__all__ = ['CustomDistanceKernel', 'MixedIntKernel', 'Distance', 'IsDiscreteMask', 'Hyperparameter']
+__all__ = ['CustomDistanceKernel', 'MixedIntKernel', 'Distance', 'WeightedDistance', 'IsDiscreteMask', 'Hyperparameter']
 
 
 IsDiscreteMask = Union[np.ndarray, List[bool]]
 
 
 class Distance:
-    """Base class for implementing some component-wise distance calculation: d(x, x')"""
+    """
+    Base class for implementing some component-wise distance calculation: d(x, x')
+    Support for integer, categorical, and hierarchical design variables.
+    """
 
     def __init__(self):
         self.xt = None
@@ -61,10 +64,10 @@ class Distance:
     def hyperparameters(self) -> Optional[List[Hyperparameter]]:
         pass
 
-    def get_hyperparameter_values(self) -> List[float]:
+    def get_hyperparameter_values(self) -> list:
         return []
 
-    def set_hyperparameter_values(self, values: List[float]):
+    def set_hyperparameter_values(self, values: list):
         pass
 
     def predict_set_is_active(self, is_active: np.ndarray):
@@ -85,6 +88,45 @@ class Distance:
 
     def __str__(self):
         return self.__class__.__name__
+
+
+class WeightedDistance(Distance):
+    """Distance that uses weighting terms (e.g. theta) in all its dimensions."""
+
+    def __init__(self, theta0=1., fix_theta=False):
+        self.theta = [theta0]
+        self.fix_theta = fix_theta
+        super(WeightedDistance, self).__init__()
+
+    def set_samples(self, *args, **kwargs):
+        super(WeightedDistance, self).set_samples(*args, **kwargs)
+
+        if len(self.theta) == 1:
+            self.theta = np.ones((self.xt.shape[1],)) * self.theta[0]
+            if self.xt.shape[1] == 0:
+                self.fix_theta = True
+
+    def hyperparameters(self) -> Optional[List[Hyperparameter]]:
+        if self.fix_theta:
+            return []
+        return [
+            Hyperparameter('theta', 'numeric', (1e-5, 1e5), n_elements=self.xt.shape[1]),
+        ]
+
+    def get_hyperparameter_values(self) -> list:
+        if self.fix_theta:
+            return []
+        return [self.theta]
+
+    def set_hyperparameter_values(self, values: list):
+        if not self.fix_theta:
+            self.theta, = values
+
+    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
+        raise NotImplementedError
+
+    def kernel(self, **kwargs):
+        raise NotImplementedError
 
 
 class MixedIntKernel(KernelOperator):
@@ -195,27 +237,34 @@ class MixedIntKernel(KernelOperator):
 
 class CustomDistanceKernel(Matern):
     """
-    Same as the Matern kernel, but with a custom (discrete) distance metric:
-    k(x, x') = exp(-theta*d(x, x'))
+    Same as the Matern kernel, but with a custom (discrete) distance metric. Special values of nu:
+    nu=.5     --> k(x, x') = exp(-theta*d(x, x'))
+    nu=np.inf --> k(x, x') = exp(-theta*.5*d(x, x')**2)
 
     The distance metric can be an instance of Distance, or some distance name as available in the scipy.spatial.distance
     package (see https://docs.scipy.org/doc/scipy/reference/spatial.distance.html).
+
+    Note that the length_scale hyperparameter implementation does not work well for discrete variables! It is better to
+    use WeightedDistance to tune the scales for all dimensions separately.
     """
 
-    def __init__(self, metric: Union[str, Distance] = None, length_scale=1.0, length_scale_bounds=(1e-5, 1e5), nu=1.5,
-                 _is_discrete_mask=None, **metric_hp):
+    def __init__(self, metric: Union[str, Distance] = None, length_scale=1.0, length_scale_bounds=(1e-5, 1e5), nu=.5,
+                 _is_discrete_mask=None, _train_is_active=None, **metric_hp):
         super(CustomDistanceKernel, self).__init__(
             length_scale=length_scale, length_scale_bounds=length_scale_bounds, nu=nu)
-        self.metric = metric if metric is not None else 'sqeuclidean'
+        self.metric = metric if metric is not None else 'euclidean'
 
         self._is_discrete_mask: Optional[IsDiscreteMask] = _is_discrete_mask
         self._is_cont_mask: Optional[IsDiscreteMask] = ~_is_discrete_mask if _is_discrete_mask is not None else None
 
-        self._train_is_active = None
+        self._train_is_active = _train_is_active
         self._predict_is_active = None
 
-        for key, value in metric_hp.items():
-            setattr(self, key, value)
+        self.__metric_hp = None
+        if len(metric_hp) > 0:
+            for key, value in metric_hp.items():
+                setattr(self, key, value)
+            self._set_metric_hp_from_attr()
 
     def set_discrete_mask(self, is_discrete_mask: IsDiscreteMask):
         self._is_discrete_mask = MixedIntKernel.get_discrete_mask(is_discrete_mask)
@@ -238,15 +287,22 @@ class CustomDistanceKernel(Matern):
         return hyperparameters
 
     def _get_metric_hyperparameters(self) -> List[Hyperparameter]:
+        if self.__metric_hp is not None:
+            return self.__metric_hp
+
         if isinstance(self.metric, Distance):
             metric_hp = self.metric.hyperparameters()
             if metric_hp is not None:
-                return [Hyperparameter('d_'+hp[0], *hp[1:]) for hp in metric_hp]
-        return []
+                self.__metric_hp = [Hyperparameter('d_'+hp[0], *hp[1:]) for hp in metric_hp]
+                return self.__metric_hp
+
+        self.__metric_hp = []
+        return self.__metric_hp
 
     def get_params(self, deep=True):
         params = super(CustomDistanceKernel, self).get_params(deep=deep)
         params['_is_discrete_mask'] = self._is_discrete_mask
+        params['_train_is_active'] = self._train_is_active
 
         if isinstance(self.metric, Distance):
             metric_hp = self._get_metric_hyperparameters()
@@ -257,39 +313,14 @@ class CustomDistanceKernel(Matern):
 
     def set_params(self, **params):
         super(CustomDistanceKernel, self).set_params(**params)
+        self._set_metric_hp_from_attr()
 
+    def _set_metric_hp_from_attr(self):
         if isinstance(self.metric, Distance):
             values = [getattr(self, hp.name) for hp in self._get_metric_hyperparameters()]
             self.metric.set_hyperparameter_values(values)
 
     def __call__(self, x, y=None, eval_gradient=False):
-        """Return the kernel k(X, Y) and optionally its gradient.
-
-        Parameters
-        ----------
-        X : ndarray of shape (n_samples_X, n_features)
-            Left argument of the returned kernel k(X, Y)
-
-        Y : ndarray of shape (n_samples_Y, n_features), default=None
-            Right argument of the returned kernel k(X, Y). If None, k(X, X)
-            if evaluated instead.
-
-        eval_gradient : bool, default=False
-            Determines whether the gradient with respect to the log of
-            the kernel hyperparameter is computed.
-            Only supported when Y is None.
-
-        Returns
-        -------
-        K : ndarray of shape (n_samples_X, n_samples_Y)
-            Kernel k(X, Y)
-
-        K_gradient : ndarray of shape (n_samples_X, n_samples_X, n_dims), \
-                optional
-            The gradient of the kernel k(X, X) with respect to the log of the
-            hyperparameter of the kernel. Only returned when `eval_gradient`
-            is True.
-        """
         x = np.atleast_2d(x)
         length_scale = _check_length_scale(x, self.length_scale)
         x_norm = x.copy()
@@ -328,40 +359,10 @@ class CustomDistanceKernel(Matern):
             np.fill_diagonal(K, 1)
 
         if eval_gradient:
-            if self.hyperparameter_length_scale.fixed:
-                # Hyperparameter l kept fixed
-                K_gradient = np.empty((x.shape[0], x.shape[0], 0))
-                return K, K_gradient
-
-            # We need to recompute the pairwise dimension-wise distances
-            if self.anisotropic:
-                D = (x[:, np.newaxis, :] - x[np.newaxis, :, :])**2 \
-                    / (length_scale ** 2)
-            else:
-                D = squareform(dists**2)[:, :, np.newaxis]
-
-            if self.nu == 0.5:
-                K_gradient = K[..., np.newaxis] * D \
-                    / np.sqrt(D.sum(2))[:, :, np.newaxis]
-                K_gradient[~np.isfinite(K_gradient)] = 0
-            elif self.nu == 1.5:
-                K_gradient = \
-                    3 * D * np.exp(-np.sqrt(3 * D.sum(-1)))[..., np.newaxis]
-            elif self.nu == 2.5:
-                tmp = np.sqrt(5 * D.sum(-1))[..., np.newaxis]
-                K_gradient = 5.0 / 3.0 * D * (tmp + 1) * np.exp(-tmp)
-            elif self.nu == np.inf:
-                K_gradient = D * K[..., np.newaxis]
-            else:
-                # approximate gradient numerically
-                def f(theta):  # helper function
-                    return self.clone_with_theta(theta)(x, y)
-                return K, _approx_fprime(self.theta, f, 1e-10)
-
-            if not self.anisotropic:
-                return K, K_gradient[:, :].sum(-1)[:, :, np.newaxis]
-            else:
-                return K, K_gradient
+            # We need to approximate numerically; the original derivations are only valid for the euclidean metric
+            def f(theta):  # helper function
+                return self.clone_with_theta(theta)(x, y)
+            return K, _approx_fprime(self.theta, f, 1e-10)
         else:
             return K
 

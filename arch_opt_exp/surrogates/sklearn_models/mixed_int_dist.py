@@ -24,7 +24,7 @@ from arch_opt_exp.surrogates.sklearn_models.distance_base import *
 __all__ = ['GowerDistance', 'SymbolicCovarianceDistance', 'HammingDistance']
 
 
-class GowerDistance(Distance):
+class GowerDistance(WeightedDistance):
     """
     Gower distance. Assumes continuous variables are normalized between [0, 1], and discrete variables have values
     between 0 and n-1 (including).
@@ -38,14 +38,14 @@ class GowerDistance(Distance):
     def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
         uv_cont = uv[self.is_cont_mask, :]
         uv_dis = uv[self.is_discrete_mask, :].astype(np.int)
-        return _gower(uv_cont, uv_dis, self.is_cont_mask, self.is_discrete_mask)
+        return _gower(uv_cont, uv_dis, self.is_cont_mask, self.is_discrete_mask, self.theta)
 
     def kernel(self, **kwargs):
-        return CustomDistanceKernel(metric=self, **kwargs)
+        return CustomDistanceKernel(metric=self, length_scale_bounds='fixed', **kwargs)
 
 
 @numba.jit(nopython=True)
-def _gower(uv_cont: np.ndarray, uv_dis: np.ndarray, is_cont_mask: np.ndarray, is_discrete_mask: np.ndarray) -> float:
+def _gower(uv_cont: np.ndarray, uv_dis: np.ndarray, is_cont_mask, is_discrete_mask, theta) -> float:
 
     s = np.empty((len(is_cont_mask),))
     s[is_cont_mask] = np.abs(uv_cont[:, 0]-uv_cont[:, 1])
@@ -55,10 +55,10 @@ def _gower(uv_cont: np.ndarray, uv_dis: np.ndarray, is_cont_mask: np.ndarray, is
     s_dis[dis_is_same] = 0
     s[is_discrete_mask] = s_dis
 
-    return np.mean(s)  # Eq. 6.36
+    return np.sum(s*theta)
 
 
-class SymbolicCovarianceDistance(Distance):
+class SymbolicCovarianceDistance(WeightedDistance):
     """
     Symbolic Covariance (SC).
 
@@ -138,14 +138,14 @@ class SymbolicCovarianceDistance(Distance):
 
     def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
         """Calculate the distance function using the inverse of the symbolic covariance matrix."""
-        return _sc_dist(self._inv_cov_matrix, uv, self.use_sc_mask)
+        return _sc_dist(self._inv_cov_matrix, uv, self.use_sc_mask, self.theta)
 
     def kernel(self, **kwargs):
-        return CustomDistanceKernel(metric=self, **kwargs)
+        return CustomDistanceKernel(metric=self, length_scale_bounds='fixed', **kwargs)
 
 
 @numba.jit(nopython=True, cache=True)
-def _sc_dist(inv_cov_matrix: np.ndarray, uv: np.ndarray, is_discrete_mask: np.ndarray):
+def _sc_dist(inv_cov_matrix: np.ndarray, uv: np.ndarray, is_discrete_mask: np.ndarray, theta):
     delta_uv = uv[:, 0]-uv[:, 1]
 
     # The delta between symbolic variables is 1 if i < j, -1 if i > j (compare with d_mat)
@@ -153,10 +153,10 @@ def _sc_dist(inv_cov_matrix: np.ndarray, uv: np.ndarray, is_discrete_mask: np.nd
     delta_uv[np.bitwise_and(is_discrete_mask, uv[:, 0] > uv[:, 1])] = -1.
 
     # Calculate Mahalanobis-like distance (Eq. 13)
-    return np.dot(delta_uv, np.dot(inv_cov_matrix, delta_uv))
+    return np.dot(theta*delta_uv, np.dot(inv_cov_matrix, delta_uv))
 
 
-class HammingDistance(Distance):
+class HammingDistance(WeightedDistance):
     """
     Hamming distance for the discrete terms. Based on the principle by Roustant et al. that the kernel value is the
     Hadamard product of the continuous kernel and the discrete kernel. See for example Eq. 8 in:
@@ -164,14 +164,14 @@ class HammingDistance(Distance):
     """
 
     def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray], **kwargs) -> float:
-        return hamming(u, v)
+        return hamming(u, v, w=self.theta)
 
     def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
         raise NotImplementedError
 
     def kernel(self, **kwargs):
         cont_kernel = MixedIntKernel.get_cont_kernel()
-        discrete_kernel = CustomDistanceKernel(self)
+        discrete_kernel = CustomDistanceKernel(self, length_scale_bounds='fixed')
         return MixedIntKernel(cont_kernel, discrete_kernel)
 
 
@@ -188,5 +188,5 @@ if __name__ == '__main__':
     kernel = SymbolicCovarianceDistance(int_as_discrete=True).kernel()
     # kernel = HammingDistance().kernel()
 
-    sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6, int_as_discrete=False)
+    sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6, int_as_discrete=True)
     LOOCrossValidation.check_sample_sizes(sm, problem, show=True, print_progress=True)
