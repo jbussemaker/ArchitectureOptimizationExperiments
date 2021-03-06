@@ -35,23 +35,23 @@ class GowerDistance(WeightedDistance):
     Halstrup 2016, "Black-box Optimization of Mixed Discrete-Continuous Optimization Problems", section 6.6
     """
 
-    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
-        uv_cont = uv[self.is_cont_mask, :]
-        uv_dis = uv[self.is_discrete_mask, :].astype(np.int)
-        return _gower(uv_cont, uv_dis, self.is_cont_mask, self.is_discrete_mask, self.theta)
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
+        u_cont, v_cont = u[self.is_cont_mask], v[self.is_cont_mask]
+        u_dis, v_dis = u[self.is_discrete_mask].astype(np.int), v[self.is_discrete_mask].astype(np.int)
+        return _gower(u_cont, v_cont, u_dis, v_dis, self.is_cont_mask, self.is_discrete_mask, self.theta)
 
     def kernel(self, **kwargs):
         return CustomDistanceKernel(metric=self, length_scale_bounds='fixed', **kwargs)
 
 
 @numba.jit(nopython=True)
-def _gower(uv_cont: np.ndarray, uv_dis: np.ndarray, is_cont_mask, is_discrete_mask, theta) -> float:
+def _gower(u_cont, v_cont, u_dis, v_dis, is_cont_mask, is_discrete_mask, theta) -> float:
 
     s = np.empty((len(is_cont_mask),))
-    s[is_cont_mask] = np.abs(uv_cont[:, 0]-uv_cont[:, 1])
+    s[is_cont_mask] = np.abs(u_cont-v_cont)
 
-    dis_is_same = uv_dis[:, 0] == uv_dis[:, 1]
-    s_dis = np.ones((uv_dis.shape[0],))
+    dis_is_same = u_dis == v_dis
+    s_dis = np.ones((len(u_dis),))
     s_dis[dis_is_same] = 0
     s[is_discrete_mask] = s_dis
 
@@ -136,21 +136,21 @@ class SymbolicCovarianceDistance(WeightedDistance):
 
         return x_means
 
-    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
         """Calculate the distance function using the inverse of the symbolic covariance matrix."""
-        return _sc_dist(self._inv_cov_matrix, uv, self.use_sc_mask, self.theta)
+        return _sc_dist(self._inv_cov_matrix, u, v, self.use_sc_mask, self.theta)
 
     def kernel(self, **kwargs):
         return CustomDistanceKernel(metric=self, length_scale_bounds='fixed', **kwargs)
 
 
 @numba.jit(nopython=True, cache=True)
-def _sc_dist(inv_cov_matrix: np.ndarray, uv: np.ndarray, is_discrete_mask: np.ndarray, theta):
-    delta_uv = uv[:, 0]-uv[:, 1]
+def _sc_dist(inv_cov_matrix: np.ndarray, u: np.ndarray, v: np.ndarray, is_discrete_mask: np.ndarray, theta):
+    delta_uv = u-v
 
     # The delta between symbolic variables is 1 if i < j, -1 if i > j (compare with d_mat)
-    delta_uv[np.bitwise_and(is_discrete_mask, uv[:, 0] < uv[:, 1])] = 1.
-    delta_uv[np.bitwise_and(is_discrete_mask, uv[:, 0] > uv[:, 1])] = -1.
+    delta_uv[np.bitwise_and(is_discrete_mask, u < v)] = 1.
+    delta_uv[np.bitwise_and(is_discrete_mask, u > v)] = -1.
 
     # Calculate Mahalanobis-like distance (Eq. 13)
     return np.dot(theta*delta_uv, np.dot(inv_cov_matrix, delta_uv))
@@ -163,10 +163,10 @@ class HammingDistance(WeightedDistance):
     Pelamatti 2019: "Surrogate Model Based Optimization of Constrained Mixed Variable Problems"
     """
 
-    def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray], **kwargs) -> float:
+    def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray, list], **kwargs) -> float:
         return hamming(u, v, w=self.theta)
 
-    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
+    def _call(self, *args, **kwargs) -> float:
         raise NotImplementedError
 
     def kernel(self, **kwargs):

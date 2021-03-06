@@ -73,14 +73,16 @@ class Distance:
     def predict_set_is_active(self, is_active: np.ndarray):
         self.predict_is_active = is_active
 
-    def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray], uv_is_active: np.ndarray = None,
-                 **kwargs) -> float:
-        uv = np.column_stack([u, v])
-        if uv_is_active is None:
-            uv_is_active = np.ones(uv.shape, dtype=bool)
-        return float(self._call(uv, uv_is_active))
+    def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray, list], u_is_active: np.ndarray = None,
+                 v_is_active: np.ndarray = None, **kwargs) -> float:
+        u, v = np.atleast_1d(u), np.atleast_1d(v)
+        if u_is_active is None:
+            u_is_active = np.ones((len(u),), dtype=bool)
+        if v_is_active is None:
+            v_is_active = np.ones((len(v),), dtype=bool)
+        return float(self._call(u, v, u_is_active, v_is_active))
 
-    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
         raise NotImplementedError
 
     def kernel(self, **kwargs):
@@ -122,7 +124,7 @@ class WeightedDistance(Distance):
         if not self.fix_theta:
             self.theta, = values
 
-    def _call(self, uv: np.ndarray, uv_is_active: np.ndarray) -> float:
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
         raise NotImplementedError
 
     def kernel(self, **kwargs):
@@ -381,8 +383,7 @@ class CustomDistanceKernel(Matern):
         k = 0
         for i in range(0, m - 1):
             for j in range(i + 1, m):
-                uv_is_active = is_active[[i, j], :].T
-                dm[k] = self.metric(x[i], x[j], uv_is_active=uv_is_active)
+                dm[k] = self.metric(x[i], x[j], u_is_active=is_active[i], v_is_active=is_active[j])
                 k = k + 1
         return dm
 
@@ -403,8 +404,7 @@ class CustomDistanceKernel(Matern):
 
         for i in range(x.shape[0]):
             for j in range(y.shape[0]):
-                uv_is_active = np.column_stack([predict_is_active[i, :], train_is_active[j, :]])
-                dm[i, j] = self.metric(x[i], y[j], uv_is_active=uv_is_active)
+                dm[i, j] = self.metric(x[i], y[j], u_is_active=predict_is_active[i], v_is_active=train_is_active[j])
         return dm
 
 
