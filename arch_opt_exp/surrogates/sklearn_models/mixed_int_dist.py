@@ -253,6 +253,9 @@ class LatentVariablesDistance(Distance):
     Latent Variables (LV) distance, based on:
     Zhang 2019, "A Latent Variable Approach to Gaussian Process Modeling with Qualitative and Quantitative Factors"
     Pelamatti 2020, "Bayesian Optimization of Variable-Size Design Space Problems"
+
+    Requires the optimization of many hyperparameters to correctly learn the latent variable space, which might require
+    an unacceptable amount of time if many design variables with many levels are present in the problem.
     """
 
     def __init__(self, theta0=0., fix_theta=False):
