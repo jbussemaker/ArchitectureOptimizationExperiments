@@ -15,7 +15,9 @@ Copyright: (c) 2021, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 
+import numpy as np
 from typing import *
+from arch_opt_exp.problems.discretization import MixedIntProblemHelper
 
 from pymoo.model.repair import Repair
 from pymoo.model.problem import Problem
@@ -33,6 +35,28 @@ from pymoo.operators.sampling.latin_hypercube_sampling import LatinHypercubeSamp
 __all__ = ['InfillBasedAlgorithm', 'ModelBasedInfillCriterion']
 
 
+class RepairedLatinHypercubeSampling(LatinHypercubeSampling):
+
+    def __init__(self, **kwargs):
+        super(RepairedLatinHypercubeSampling, self).__init__(**kwargs)
+
+        self._problem = None
+        self._repair = None
+
+    def _sample(self, n_samples, n_var):
+        x = super(RepairedLatinHypercubeSampling, self)._sample(n_samples, n_var)
+
+        if self._repair is not None:
+            x = self._repair.do(self._problem, x)
+
+        return x
+
+    def _do(self, problem, n_samples, **kwargs):
+        self._problem = problem
+        self._repair = MixedIntProblemHelper.get_repair(problem)
+        return super(RepairedLatinHypercubeSampling, self)._do(problem, n_samples, **kwargs)
+
+
 class InfillBasedAlgorithm(Algorithm):
     """Algorithm that uses some infill criterion to generate new points. The population is kept at the same size
     throughout the optimization, and updated by rank and crowding survival (like NSGA2)."""
@@ -47,12 +71,21 @@ class InfillBasedAlgorithm(Algorithm):
         self.infill = infill_criterion
 
         if init_sampling is None:
-            init_sampling = LatinHypercubeSampling()
+            init_sampling = RepairedLatinHypercubeSampling()
 
         self.initialization = Initialization(init_sampling, repair=infill_criterion.repair,
                                              eliminate_duplicates=infill_criterion.eliminate_duplicates)
 
         self.survival = survival or RankAndCrowdingSurvival()
+
+    def setup(self, *args, **kwargs):
+        super(InfillBasedAlgorithm, self).setup(*args, **kwargs)
+
+        # Set repair from problem
+        repair = MixedIntProblemHelper.get_repair(self.problem)
+        if self.infill.repair is None and repair is not None:
+            self.infill.repair = repair
+            self.initialization.repair = repair
 
     def _initialize(self):
         pop = self.initialization.do(self.problem, self.init_size, algorithm=self)

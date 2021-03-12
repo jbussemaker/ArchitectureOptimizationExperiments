@@ -68,7 +68,7 @@ class MixedIntBaseProblem(Problem):
         return ~self.is_discrete_mask
 
     def get_repair(self) -> Repair:
-        return MixedIntRepair(self.is_discrete_mask)
+        return MixedIntRepair(self.is_discrete_mask, impute=self.impute)
 
     def correct_x(self, x: np.ndarray) -> np.ndarray:
         return MixedIntRepair.correct_x(self.is_discrete_mask, x)
@@ -288,16 +288,20 @@ class MixedIntProblem(MixedIntBaseProblem):
 class MixedIntRepair(Repair):
     """Repair operator to make sure that integer variables are actually integers after sampling or mating."""
 
-    def __init__(self, is_discrete_mask):
+    def __init__(self, is_discrete_mask, impute=True):
         super(MixedIntRepair, self).__init__()
 
         self.is_discrete_mask = is_discrete_mask
+        self.impute = impute
 
     def _do(self, problem: Problem, pop: Union[Population, np.ndarray], **kwargs):
         is_array = not isinstance(pop, Population)
         x = pop if is_array else pop.get("X")
 
         x = self.correct_x(self.is_discrete_mask, x)
+
+        if self.impute:
+            _, x = MixedIntProblemHelper.is_active(problem, x)
 
         if is_array:
             return x
