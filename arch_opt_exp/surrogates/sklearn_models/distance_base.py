@@ -95,9 +95,10 @@ class Distance:
 class WeightedDistance(Distance):
     """Distance that uses weighting terms (e.g. theta) in all its dimensions."""
 
-    def __init__(self, theta0=1., fix_theta=False):
+    def __init__(self, theta0=1., fix_theta=False, theta_bounds=(1e-5, 1e5)):
         self.theta = [theta0]
         self.fix_theta = fix_theta
+        self.theta_bounds = theta_bounds
         super(WeightedDistance, self).__init__()
 
     def set_samples(self, *args, **kwargs):
@@ -112,7 +113,7 @@ class WeightedDistance(Distance):
         if self.fix_theta:
             return []
         return [
-            Hyperparameter('theta', 'numeric', (1e-5, 1e5), n_elements=self.xt.shape[1]),
+            Hyperparameter('theta', 'numeric', self.theta_bounds, n_elements=self.xt.shape[1]),
         ]
 
     def get_hyperparameter_values(self) -> list:

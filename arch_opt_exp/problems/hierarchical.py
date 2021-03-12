@@ -15,12 +15,14 @@ Copyright: (c) 2021, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 
+import enum
 import numpy as np
 from typing import *
 from arch_opt_exp.problems.discrete import *
 from arch_opt_exp.problems.discretization import *
 
-__all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'ZaeffererHierarchicalProblem']
+__all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'ZaeffererHierarchicalProblem',
+           'ZaeffererProblemMode']
 
 
 class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
@@ -317,12 +319,28 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
             plt.show()
 
 
+class ZaeffererProblemMode(enum.Enum):
+    A_OPT_INACT_IMP_PROF_UNI = 'A'
+    B_OPT_INACT_IMP_UNPR_UNI = 'B'
+    C_OPT_ACT_IMP_PROF_BI = 'C'
+    D_OPT_ACT_IMP_UNPR_BI = 'D'
+    E_OPT_DIS_IMP_UNPR_BI = 'E'
+
+
 class ZaeffererHierarchicalProblem(MixedIntBaseProblem):
     """
     Hierarchical test function from:
     Zaefferer 2018: "A First Analysis of Kernels for Kriging-Based Optimization in Hierarchical Search Spaces",
       section 5
     """
+
+    _mode_map = {
+        ZaeffererProblemMode.A_OPT_INACT_IMP_PROF_UNI: (.0, .6, .1),
+        ZaeffererProblemMode.B_OPT_INACT_IMP_UNPR_UNI: (.1, .6, .1),
+        ZaeffererProblemMode.C_OPT_ACT_IMP_PROF_BI: (.0, .4, .7),
+        ZaeffererProblemMode.D_OPT_ACT_IMP_UNPR_BI: (.1, .4, .9),
+        ZaeffererProblemMode.E_OPT_DIS_IMP_UNPR_BI: (.1, .4, .7),
+    }
 
     def __init__(self, b=.1, c=.4, d=.7):
         self.b = b
@@ -335,6 +353,11 @@ class ZaeffererHierarchicalProblem(MixedIntBaseProblem):
         xl, xu = np.zeros((2,)), np.ones((2,))
         super(ZaeffererHierarchicalProblem, self).__init__(
             is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=2, n_obj=1, xl=xl, xu=xu)
+
+    @classmethod
+    def from_mode(cls, problem_mode: ZaeffererProblemMode):
+        b, c, d = cls._mode_map[problem_mode]
+        return cls(b=b, c=c, d=d)
 
     def _evaluate(self, x, out, *args, **kwargs):
         f1 = (x[:, 0] - self.d)**2
