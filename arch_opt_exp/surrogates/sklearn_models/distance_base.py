@@ -241,6 +241,7 @@ class MixedIntKernel(KernelOperator):
 class CustomDistanceKernel(Matern):
     """
     Same as the Matern kernel, but with a custom (discrete) distance metric. Special values of nu:
+    nu=0      --> k(x, x') = d(x, x')
     nu=.5     --> k(x, x') = exp(-theta*d(x, x'))
     nu=np.inf --> k(x, x') = exp(-theta*.5*d(x, x')**2)
 
@@ -339,7 +340,9 @@ class CustomDistanceKernel(Matern):
                     "Gradient can only be evaluated when Y is None.")
             dists = self._cdist(x_norm, y_norm)
 
-        if self.nu == 0.5:
+        if self.nu == 0.:  # Directly use distances as the Kernel
+            K = dists
+        elif self.nu == 0.5:
             K = np.exp(-dists)
         elif self.nu == 1.5:
             K = dists * math.sqrt(3)
