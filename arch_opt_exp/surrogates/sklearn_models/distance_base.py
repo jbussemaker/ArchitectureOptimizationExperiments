@@ -22,7 +22,8 @@ from sklearn.gaussian_process.kernels import \
     Matern, _check_length_scale, pdist, squareform, cdist, gamma, kv, _approx_fprime, KernelOperator, Kernel,\
     ConstantKernel, Hyperparameter
 
-__all__ = ['CustomDistanceKernel', 'MixedIntKernel', 'Distance', 'WeightedDistance', 'IsDiscreteMask', 'Hyperparameter']
+__all__ = ['CustomDistanceKernel', 'DiscreteHierarchicalKernelBase', 'MixedIntKernel', 'Distance', 'WeightedDistance',
+           'IsDiscreteMask', 'Hyperparameter']
 
 
 IsDiscreteMask = Union[np.ndarray, List[bool]]
@@ -132,7 +133,19 @@ class WeightedDistance(Distance):
         raise NotImplementedError
 
 
-class MixedIntKernel(KernelOperator):
+class DiscreteHierarchicalKernelBase:
+
+    def set_discrete_mask(self, is_discrete_mask: IsDiscreteMask):
+        raise NotImplementedError
+
+    def set_samples(self, x, y, is_int_mask: IsDiscreteMask, is_cat_mask: IsDiscreteMask, is_active: np.ndarray = None):
+        raise NotImplementedError
+
+    def predict_set_is_active(self, is_active: np.ndarray):
+        raise NotImplementedError
+
+
+class MixedIntKernel(KernelOperator, DiscreteHierarchicalKernelBase):
     """
     A mixed integer kernel that is based on the principle by Roustant et al. that the kernel value is the Hadamard
     product of the continuous kernel and the discrete kernel.
@@ -153,18 +166,18 @@ class MixedIntKernel(KernelOperator):
         self._is_discrete_mask = MixedIntKernel.get_discrete_mask(is_discrete_mask)
         self._is_cont_mask = ~self._is_discrete_mask
 
-        if isinstance(self.k2, CustomDistanceKernel):
+        if isinstance(self.k2, DiscreteHierarchicalKernelBase):
             self.k2.set_discrete_mask(is_discrete_mask[is_discrete_mask])
 
     def set_samples(self, x, y, is_int_mask: IsDiscreteMask, is_cat_mask: IsDiscreteMask, is_active: np.ndarray = None):
-        if isinstance(self.k2, CustomDistanceKernel):
+        if isinstance(self.k2, DiscreteHierarchicalKernelBase):
             m = self._is_discrete_mask
             if is_active is not None:
                 is_active = is_active[:, m]
             self.k2.set_samples(x[:, m], y, is_int_mask[m], is_cat_mask[m], is_active=is_active)
 
     def predict_set_is_active(self, is_active: np.ndarray):
-        if isinstance(self.k2, CustomDistanceKernel):
+        if isinstance(self.k2, DiscreteHierarchicalKernelBase):
             self.k2.predict_set_is_active(is_active[:, self._is_discrete_mask])
 
     def get_params(self, deep=True):
@@ -234,11 +247,12 @@ class MixedIntKernel(KernelOperator):
         return np.array(is_discrete_mask, dtype=bool)
 
     @staticmethod
-    def get_cont_kernel() -> Kernel:
-        return ConstantKernel(1.)*Matern(1., nu=1.5)
+    def get_cont_kernel(fix_theta=False) -> Kernel:
+        kwargs = {'length_scale_bounds': 'fixed'} if fix_theta else {}
+        return ConstantKernel(1.)*Matern(1., nu=1.5, **kwargs)
 
 
-class CustomDistanceKernel(Matern):
+class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
     """
     Same as the Matern kernel, but with a custom (discrete) distance metric. Special values of nu:
     nu=0      --> k(x, x') = d(x, x')

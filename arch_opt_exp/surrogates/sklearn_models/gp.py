@@ -83,7 +83,7 @@ class SKLearnGPSurrogateModel(SurrogateModel):
         self._is_cat_mask = self._get_mask(x, is_cat_mask)
         self._ny = y.shape[1]
 
-        if isinstance(self.kernel, (MixedIntKernel, CustomDistanceKernel)):
+        if isinstance(self.kernel, DiscreteHierarchicalKernelBase):
             is_discrete_mask = np.bitwise_or(self._is_int_mask, self._is_cat_mask) \
                 if self.int_as_discrete else self._is_cat_mask
             self.kernel.set_discrete_mask(is_discrete_mask)
@@ -151,5 +151,5 @@ class SKLearnGPSurrogateModel(SurrogateModel):
 
         for i in range(self._ny):
             kernel = self._models[i].kernel_
-            if isinstance(kernel, (MixedIntKernel, CustomDistanceKernel)):
+            if isinstance(kernel, DiscreteHierarchicalKernelBase):
                 kernel.predict_set_is_active(is_active)
