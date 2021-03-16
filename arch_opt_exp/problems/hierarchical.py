@@ -20,9 +20,11 @@ import numpy as np
 from typing import *
 from arch_opt_exp.problems.discrete import *
 from arch_opt_exp.problems.discretization import *
+from pymoo.factory import get_reference_directions
 
 __all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'ZaeffererHierarchicalProblem',
-           'ZaeffererProblemMode', 'MOHierarchicalGoldsteinProblem', 'MOHierarchicalRosenbrockProblem']
+           'ZaeffererProblemMode', 'MOHierarchicalGoldsteinProblem', 'MOHierarchicalRosenbrockProblem',
+           'HierarchicalMetaProblem']
 
 
 class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
@@ -441,6 +443,112 @@ class ZaeffererHierarchicalProblem(MixedIntBaseProblem):
             plt.show()
 
 
+class HierarchicalMetaProblem(MixedIntBaseProblem):
+    """
+    Meta problem used for increasing the amount of design variables of an underlying mixed-integer/hierarchical problem.
+    The idea is that design variables are duplicated, and extra design variables are added for switching between the
+    duplicated design variables. Objectives are then slightly modified based on the switching variable.
+
+    For correct modification of the objectives, a range of the to-be-expected objective function values at the Pareto
+    front for each objective dimension should be provided (f_par_range).
+
+    Note that each level will correspond to a new part of the Pareto front.
+    """
+
+    def __init__(self, problem: MixedIntBaseProblem, n_dup=2, n_levels=4, f_par_range=None, impute=None):
+        self._problem = problem
+        if impute is None:
+            impute = problem.impute
+        else:
+            problem.impute = impute
+
+        n_var = problem.n_var*n_dup+1
+        is_int_mask = np.zeros((n_var,), dtype=bool)
+        is_cat_mask = np.zeros((n_var,), dtype=bool)
+        xl, xu = np.zeros((n_var,)), np.ones((n_var,))
+
+        is_cat_mask[0] = True
+        xu[0] = n_levels-1
+
+        for i in range(n_dup):
+            ii = i*problem.n_var+1
+            ii_ = ii+problem.n_var
+            is_int_mask[ii:ii_] = problem.is_int_mask
+            is_cat_mask[ii:ii_] = problem.is_cat_mask
+            xl[ii:ii_] = problem.xl
+            xu[ii:ii_] = problem.xu
+
+        super(HierarchicalMetaProblem, self).__init__(
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, impute=impute, n_var=n_var, n_obj=problem.n_obj,
+            n_constr=problem.n_constr, xl=xl, xu=xu)
+
+        self.n_levels = n_levels
+        self.n_dup = n_dup
+        rng = np.random.RandomState(problem.n_var*problem.n_obj*n_dup*n_levels)
+        self.select_map = [rng.randint(0, n_dup, (problem.n_var,)) for _ in range(n_levels)]
+
+        if f_par_range is None:
+            f_par_range = 1.
+        f_par_range = np.atleast_1d(f_par_range)
+        if len(f_par_range) == 1:
+            f_par_range = np.array([f_par_range[0]]*problem.n_obj)
+
+        ref_dirs = get_reference_directions("uniform", problem.n_obj, n_partitions=n_levels-1)
+        i_rd = np.linspace(0, ref_dirs.shape[0]-1, n_levels).astype(int)
+        self.f_mod = (ref_dirs[i_rd, :]-.5)*f_par_range
+
+    def _evaluate(self, x, out, *args, **kwargs):
+        x = self.correct_x(x)
+        problem = self._problem
+
+        xp, _ = self._get_xp_idx(x)
+        f_mod = np.empty((x.shape[0], self.n_obj))
+        for i in range(x.shape[0]):
+            f_mod[i, :] = self.f_mod[int(x[i, 0]), :]
+
+        fp, g = problem.evaluate(xp, return_values_of=['F', 'G'])
+        f = fp+f_mod
+
+        out['is_active'], out['X'] = self.is_active(x)
+        out['F'] = f
+        if self.n_constr > 0:
+            out['G'] = g
+
+    def _is_active(self, x: np.ndarray) -> np.ndarray:
+        x = self.correct_x(x)
+        is_active = np.zeros(x.shape, dtype=bool)
+        is_active[:, 0] = True
+
+        xp, i_x_u = self._get_xp_idx(x)
+        is_active_u, _ = self._problem.is_active(xp)
+        for i in range(x.shape[0]):
+            is_active[i, i_x_u[i, :]] = is_active_u[i, :]
+
+        return is_active
+
+    def _get_xp_idx(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        xp = np.empty((x.shape[0], self._problem.n_var))
+        i_x_u = np.empty((x.shape[0], self._problem.n_var), dtype=int)
+        for i in range(x.shape[0]):
+            idx = int(x[i, 0])
+            select_map = self.select_map[idx]
+            i_x_u[i, :] = i_x_underlying = 1+select_map*len(select_map)+np.arange(0, len(select_map))
+            xp[i, :] = x[i, i_x_underlying]
+
+        return xp, i_x_u
+
+    def run_test(self):
+        from pymoo.optimize import minimize
+        from pymoo.algorithms.nsga2 import NSGA2
+        from pymoo.visualization.scatter import Scatter
+
+        print('Running hierarchical metaproblem: %d vars (%d dup, %d levels), %d obj, %d constr' %
+              (self.n_var, self.n_dup, self.n_levels, self.n_obj, self.n_constr))
+        res = minimize(self, NSGA2(pop_size=100), termination=('n_gen', 200))
+        idx = res.X[:, 0]
+        Scatter().add(res.F, c=idx, cmap='tab10', vmin=0, vmax=10, color=None).show()
+
+
 if __name__ == '__main__':
     # HierarchicalGoldsteinProblem.validate_ranges(show=False)
     # HierarchicalGoldsteinProblem().so_run()
@@ -450,14 +558,16 @@ if __name__ == '__main__':
     # HierarchicalRosenbrockProblem().so_run(n_repeat=8, n_eval_max=2000, pop_size=30)
     # MOHierarchicalRosenbrockProblem.run_test()
 
+    HierarchicalMetaProblem(MOHierarchicalRosenbrockProblem(), f_par_range=[25, 200]).run_test()
+
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
     # ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1).plot()  # Zaefferer 2018, Fig. 1
 
-    from arch_opt_exp.surrogates.sklearn_models.gp import SKLearnGPSurrogateModel
-    sm = SKLearnGPSurrogateModel()
-    problem = ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7)
-    # problem = ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1)
-    # problem.impute = False
-
-    from arch_opt_exp.algorithms.surrogate.surrogate_infill import SurrogateBasedInfill
-    SurrogateBasedInfill.plot_model_problem(sm, problem, n_pts=150)
+    # from arch_opt_exp.surrogates.sklearn_models.gp import SKLearnGPSurrogateModel
+    # sm = SKLearnGPSurrogateModel()
+    # problem_ = ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7)
+    # # problem_ = ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1)
+    # # problem_.impute = False
+    #
+    # from arch_opt_exp.algorithms.surrogate.surrogate_infill import SurrogateBasedInfill
+    # SurrogateBasedInfill.plot_model_problem(sm, problem_, n_pts=150)

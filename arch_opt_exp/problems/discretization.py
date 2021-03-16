@@ -151,7 +151,7 @@ class MixedIntBaseProblem(Problem):
             return np.ones(x.shape, dtype=bool), x
         return is_active, (self.impute_x(x, is_active) if self.impute else x)
 
-    def _is_active(self, x: np.ndarray) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    def _is_active(self, x: np.ndarray) -> Optional[np.ndarray]:
         """Optionally returns an array of the same shape as x, specifying for each x if it is active or not, to
         communicate information about the hierarchical design space. Return type must be bool. If not provided, it is
         assumed that all design variables are always active."""
