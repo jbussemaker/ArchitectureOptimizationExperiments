@@ -24,7 +24,7 @@ from pymoo.factory import get_reference_directions
 
 __all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'ZaeffererHierarchicalProblem',
            'ZaeffererProblemMode', 'MOHierarchicalGoldsteinProblem', 'MOHierarchicalRosenbrockProblem',
-           'HierarchicalMetaProblem']
+           'HierarchicalMetaProblem', 'MOHierarchicalTestProblem']
 
 
 class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
@@ -544,9 +544,16 @@ class HierarchicalMetaProblem(MixedIntBaseProblem):
 
         print('Running hierarchical metaproblem: %d vars (%d dup, %d levels), %d obj, %d constr' %
               (self.n_var, self.n_dup, self.n_levels, self.n_obj, self.n_constr))
-        res = minimize(self, NSGA2(pop_size=100), termination=('n_gen', 200))
+        res = minimize(self, NSGA2(pop_size=200), termination=('n_gen', 200))
         idx = res.X[:, 0]
         Scatter().add(res.F, c=idx, cmap='tab10', vmin=0, vmax=10, color=None).show()
+
+
+class MOHierarchicalTestProblem(HierarchicalMetaProblem):
+
+    def __init__(self):
+        super(MOHierarchicalTestProblem, self).__init__(
+            MOHierarchicalRosenbrockProblem(), n_dup=2, n_levels=2, f_par_range=[10, 50])
 
 
 if __name__ == '__main__':
@@ -558,7 +565,7 @@ if __name__ == '__main__':
     # HierarchicalRosenbrockProblem().so_run(n_repeat=8, n_eval_max=2000, pop_size=30)
     # MOHierarchicalRosenbrockProblem.run_test()
 
-    HierarchicalMetaProblem(MOHierarchicalRosenbrockProblem(), f_par_range=[25, 200]).run_test()
+    MOHierarchicalTestProblem().run_test()
 
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
     # ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1).plot()  # Zaefferer 2018, Fig. 1
