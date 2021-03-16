@@ -22,7 +22,7 @@ from arch_opt_exp.problems.discrete import *
 from arch_opt_exp.problems.discretization import *
 
 __all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'ZaeffererHierarchicalProblem',
-           'ZaeffererProblemMode']
+           'ZaeffererProblemMode', 'MOHierarchicalGoldsteinProblem', 'MOHierarchicalRosenbrockProblem']
 
 
 class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
@@ -41,6 +41,8 @@ class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
     To validate, use so_run() and compare to Pelamatti 2020, Fig. 7
     """
 
+    _mo = False
+
     def __init__(self):
         n_var = 11
         xl, xu = np.zeros((n_var,)), np.ones((n_var,))
@@ -51,8 +53,9 @@ class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
         is_int_mask = np.array([0]*5+[1]*4+[0]*2, dtype=bool)
         is_cat_mask = np.array([0]*5+[0]*4+[1]*2, dtype=bool)
 
+        n_obj = 2 if self._mo else 1
         super(HierarchicalGoldsteinProblem, self).__init__(
-            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=n_var, n_obj=1, n_constr=1, xl=xl, xu=xu)
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=n_var, n_obj=n_obj, n_constr=1, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
         x = self.correct_x(x)
@@ -60,7 +63,7 @@ class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
         f_h_map = self._map_f_h()
         g_map = self._map_g()
 
-        f = np.empty((x.shape[0], 1))
+        f = np.empty((x.shape[0], self.n_obj))
         g = np.empty((x.shape[0], 1))
         for i in range(x.shape[0]):
             x_i = x[i, :5]
@@ -69,6 +72,9 @@ class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
 
             f_idx = int(w_i[0]+w_i[1]*4)
             f[i, 0] = self.h(*f_h_map[f_idx](x_i, z_i))
+            if self._mo:
+                f2 = self.h(*f_h_map[f_idx](x_i+30, z_i))+(f_idx/7.)*5
+                f[i, 1] = f2
 
             g_idx = int(w_i[0])
             g[i, 0] = self.g(*g_map[g_idx](x_i, z_i))
@@ -189,6 +195,27 @@ class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
             plt.show()
 
 
+class MOHierarchicalGoldsteinProblem(HierarchicalGoldsteinProblem):
+    """
+    Multi-objective adaptation of the hierarchical Goldstein problem. The Pareto front consists of a mix of SP6 and SP8,
+    however it is difficult to get a consistent result with NSGA2.
+
+    See Pelamatti 2020 Fig. 6 to compare. Colors in plot of run_test match colors of figure.
+    """
+
+    _mo = True
+
+    @classmethod
+    def run_test(cls):
+        from pymoo.optimize import minimize
+        from pymoo.algorithms.nsga2 import NSGA2
+        from pymoo.visualization.scatter import Scatter
+
+        res = minimize(cls(), NSGA2(pop_size=200), termination=('n_gen', 200))
+        w_idx = res.X[:, 9] + res.X[:, 10] * 4
+        Scatter().add(res.F, c=w_idx, cmap='tab10', vmin=0, vmax=10, color=None).show()
+
+
 class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
     """
     Variable-size design space Rosenbrock function from:
@@ -204,6 +231,8 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
     To validate, use so_run() and compare to Pelamatti 2020, Fig. 14
     """
 
+    _mo = False
+
     def __init__(self):
         n_var = 13
         xl, xu = np.zeros((n_var,)), np.ones((n_var,))
@@ -215,8 +244,9 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
         is_int_mask = np.array([0]*8+[1]*3+[0]*2, dtype=bool)
         is_cat_mask = np.array([0]*8+[0]*3+[1]*2, dtype=bool)
 
+        n_obj = 2 if self._mo else 1
         super(HierarchicalRosenbrockProblem, self).__init__(
-            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=n_var, n_obj=1, n_constr=2, xl=xl, xu=xu)
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=n_var, n_obj=n_obj, n_constr=2, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
         x = self.correct_x(x)
@@ -227,7 +257,7 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
         x_idx = [[0, 1, 2, 3], [0, 1, 4, 5], [0, 1, 2, 3, 6, 7], [0, 1, 4, 5, 6, 7]]
         x_idx_g2 = [[0, 1, 2, 3], [0, 1, 2, 3, 6, 7]]
 
-        f = np.empty((x.shape[0], 1))
+        f = np.empty((x.shape[0], self.n_obj))
         g = np.empty((x.shape[0], 2))
         for i in range(x.shape[0]):
             x_i = x[i, :8]
@@ -237,7 +267,12 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
             idx = int(w_i[0]*2+w_i[1])
 
             x_fg = x_i[x_idx[idx]]
-            f[i, 0] = self.f(x_fg, z_i[0], z_i[1], z_i[2], a1[idx], a2[idx], add_z3[idx])
+            f[i, 0] = f1 = self.f(x_fg, z_i[0], z_i[1], z_i[2], a1[idx], a2[idx], add_z3[idx])
+            if self._mo:
+                f2 = f1+(x_fg[0]+1)**2*100
+                if idx < 2:
+                    f2 += 25
+                f[i, 1] = f2
 
             g[i, 0] = self.g1(x_fg)
             g[i, 1] = self.g2(x_i[x_idx_g2[idx]]) if idx < 2 else 0.
@@ -265,7 +300,6 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
         is_active[:, 10] = w2 == 1  # z3
 
         return is_active
-
 
     @staticmethod
     def f(x: np.ndarray, z1, z2, z3, a1, a2, add_z3: bool):
@@ -317,6 +351,26 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
 
         if show:
             plt.show()
+
+
+class MOHierarchicalRosenbrockProblem(HierarchicalRosenbrockProblem):
+    """
+    Multi-objective adaptation of the hierarchical Rosenbrock problem.
+
+    See Pelamatti 2020 Fig. 13 to compare. Colors in plot of run_test match colors of figure.
+    """
+
+    _mo = True
+
+    @classmethod
+    def run_test(cls):
+        from pymoo.optimize import minimize
+        from pymoo.algorithms.nsga2 import NSGA2
+        from pymoo.visualization.scatter import Scatter
+
+        res = minimize(cls(), NSGA2(pop_size=100), termination=('n_gen', 200))
+        w_idx = res.X[:, 11]*2 + res.X[:, 12]
+        Scatter().add(res.F, c=w_idx, cmap='tab10', vmin=0, vmax=10, color=None).show()
 
 
 class ZaeffererProblemMode(enum.Enum):
@@ -390,9 +444,11 @@ class ZaeffererHierarchicalProblem(MixedIntBaseProblem):
 if __name__ == '__main__':
     # HierarchicalGoldsteinProblem.validate_ranges(show=False)
     # HierarchicalGoldsteinProblem().so_run()
+    # MOHierarchicalGoldsteinProblem.run_test()
 
     # HierarchicalRosenbrockProblem.validate_ranges(show=False)
     # HierarchicalRosenbrockProblem().so_run(n_repeat=8, n_eval_max=2000, pop_size=30)
+    # MOHierarchicalRosenbrockProblem.run_test()
 
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
     # ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1).plot()  # Zaefferer 2018, Fig. 1
