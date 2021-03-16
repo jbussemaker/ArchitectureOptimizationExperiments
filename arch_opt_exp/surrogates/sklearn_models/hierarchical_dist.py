@@ -387,22 +387,83 @@ def _wedge_tri_d(d, calc_mask, u, xl, xu, theta, theta2, rho_x):
 
 
 if __name__ == '__main__':
-    from arch_opt_exp.surrogates.sklearn_models.gp import *
-
-    from arch_opt_exp.problems.hierarchical import *
-    problem = ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.B_OPT_INACT_IMP_UNPR_UNI)
-    # problem = ZaeffererHierarchicalProblem()
+    # from arch_opt_exp.surrogates.sklearn_models.gp import *
+    #
+    # from arch_opt_exp.problems.hierarchical import *
+    # problem = ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.E_OPT_DIS_IMP_UNPR_BI)
+    # # problem = ZaeffererHierarchicalProblem()
     # problem.impute = False
-
-    # kernel = None
-    # kernel = ArcDistance().kernel()
-    kernel = IndefiniteConditionalDistance().kernel()
-    # kernel = ImputationDistance().kernel()
+    #
+    # # kernel = None
+    # # kernel = ArcDistance().kernel()
+    # # kernel = IndefiniteConditionalDistance().kernel()
+    # # kernel = ImputationDistance().kernel()
     # kernel = WedgeDistance().kernel()
+    #
+    # # sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6, int_as_discrete=True)
+    # sm = SKLearnGPSurrogateModel(alpha=1e-6)
+    #
+    # from arch_opt_exp.algorithms.surrogate.surrogate_infill import SurrogateBasedInfill
+    # SurrogateBasedInfill.plot_model_problem(sm, problem, n_pts=20)
+    # # from arch_opt_exp.surrogates.validation import LOOCrossValidation
+    # # LOOCrossValidation.check_sample_sizes(sm, problem, show=True, print_progress=True)
 
-    sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6, int_as_discrete=True)
+    import matplotlib.pyplot as plt
+    from arch_opt_exp.problems.hierarchical import *
+    from arch_opt_exp.surrogates.sklearn_models.gp import *
+    from arch_opt_exp.problems.discretization import MixedIntProblemHelper
+    from pymoo.model.initialization import Initialization
+    from pymoo.model.duplicate import DefaultDuplicateElimination
+    from pymoo.operators.sampling.latin_hypercube_sampling import LatinHypercubeSampling
 
-    from arch_opt_exp.algorithms.surrogate.surrogate_infill import SurrogateBasedInfill
-    SurrogateBasedInfill.plot_model_problem(sm, problem, n_pts=20)
-    # from arch_opt_exp.surrogates.validation import LOOCrossValidation
-    # LOOCrossValidation.check_sample_sizes(sm, problem, show=True, print_progress=True)
+    def plot_contour_small(sm_, prob_, sample_problem=False):
+        is_int_mask = MixedIntProblemHelper.get_is_int_mask(prob_)
+        is_cat_mask = MixedIntProblemHelper.get_is_cat_mask(prob_)
+        repair = MixedIntProblemHelper.get_repair(prob_)
+
+        init_sampling = Initialization(LatinHypercubeSampling(), repair=repair,
+                                       eliminate_duplicates=DefaultDuplicateElimination())
+
+        np.random.seed(1)
+        xt = init_sampling.do(prob_, 20).get('X')
+        yt = prob_.evaluate(xt)
+        is_active, xt = MixedIntProblemHelper.is_active(prob_, xt)
+
+        x = np.linspace(0, 1, 100)
+        xx1, xx2 = np.meshgrid(x, x)
+        xx = np.column_stack([xx1.ravel(), xx2.ravel()])
+        xx_is_active, xx = MixedIntProblemHelper.is_active(prob_, xx)
+        if sample_problem:
+            yy = prob_.evaluate(xx).reshape(xx1.shape)
+        else:
+            sm_.set_samples(xt, yt, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, is_active=is_active)
+            sm_.train()
+            yy = sm_.predict(xx, xx_is_active)[:, 0].reshape(xx1.shape)
+
+        plt.figure(figsize=(3, 3))
+        c = plt.contourf(xx1, xx2, yy, 50, cmap='Blues_r')
+        for edge in c.collections:
+            edge.set_edgecolor('face')
+        plt.contour(xx1, xx2, yy, 5, colors='k', alpha=.5)
+        if not sample_problem:
+            # plt.scatter(xt[:, 0], xt[:, 1], s=20, c='w', edgecolors='k')
+            plt.scatter(xt[:, 0], xt[:, 1], s=30, marker='x', c='k')
+        plt.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
+        plt.xlabel('$x_1$'), plt.ylabel('$y_1$')
+
+    sms = [
+        SKLearnGPSurrogateModel(alpha=1e-6),
+        SKLearnGPSurrogateModel(alpha=1e-6),
+        SKLearnGPSurrogateModel(kernel=WedgeDistance().kernel(), alpha=1e-6),
+    ]
+    problems = [
+        ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.E_OPT_DIS_IMP_UNPR_BI),
+        ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.E_OPT_DIS_IMP_UNPR_BI),
+        ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.E_OPT_DIS_IMP_UNPR_BI),
+    ]
+    problems[0].impute = False
+    for i, sm in enumerate(sms):
+        plot_contour_small(sm, problems[i])
+    plot_contour_small(sms[0], prob_=problems[0], sample_problem=True)
+    plt.show()
+
