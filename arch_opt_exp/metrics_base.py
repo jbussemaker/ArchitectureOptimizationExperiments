@@ -18,6 +18,7 @@ Contact: jasper.bussemaker@dlr.de
 import numpy as np
 from typing import *
 import matplotlib.pyplot as plt
+from werkzeug.utils import secure_filename
 
 from pymoo.model.algorithm import Algorithm
 from pymoo.model.indicator import Indicator
@@ -51,7 +52,8 @@ class Metric:
 
     @staticmethod
     def plot_multiple(metrics: List['Metric'], titles: List[str] = None, colors: List[str] = None,
-                      plot_value_names: List[str] = None, std_sigma=1., n_eval: List[List[float]] = None, show=True):
+                      plot_value_names: List[str] = None, std_sigma=1., n_eval: List[List[float]] = None,
+                      save_filename=None, show=True):
         """Function for plotting multiple metrics of the same kind, but coming from different optimization runs."""
 
         type_ = type(metrics[0])
@@ -117,6 +119,11 @@ class Metric:
 
             if titles is not None:
                 plt.legend()
+
+            if save_filename is not None:
+                save_value_filename = '%s_%s' % (save_filename, secure_filename(value_name))
+                plt.savefig(save_value_filename+'.png')
+                plt.savefig(save_value_filename+'.svg')
 
         if show:
             plt.show()

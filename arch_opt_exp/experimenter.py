@@ -62,6 +62,7 @@ class ExperimenterResult(Result):
     def __init__(self):
         super(ExperimenterResult, self).__init__()
 
+        self.algorithm_name = None
         self.metrics: Dict[str, Metric] = {}
         self.metric_converged = None
         self.termination: Optional[MetricTermination] = None
@@ -93,6 +94,7 @@ class ExperimenterResult(Result):
         adding standard deviations."""
         result = cls()
 
+        result.algorithm_name = results[0].algorithm_name
         result.exec_time, result.exec_time_std = cls._get_mean_std(results, lambda r: r.exec_time)
         result.n_steps, result.n_steps_std = cls._get_mean_std(results, lambda r: r.n_steps)
         result.n_eval, result.n_eval_std = cls._get_mean_std(results, lambda r: r.n_eval)
@@ -160,6 +162,8 @@ class ExperimenterResult(Result):
     def plot_compare_metrics(results: List['ExperimenterResult'], metric_name: str, plot_evaluations=False, **kwargs):
         metrics = [res.metrics[metric_name] for res in results]
         n_eval = [res.n_eval for res in results] if plot_evaluations else None
+        if kwargs.get('titles') is None:
+            kwargs['titles'] = [res.algorithm_name for res in results]
         Metric.plot_multiple(metrics, n_eval=n_eval, **kwargs)
 
     @staticmethod
@@ -252,6 +256,7 @@ class Experimenter:
 
         # Prepare experimenter results by including metrics
         result = ExperimenterResult.from_result(result)
+        result.algorithm_name = self.algorithm_name
         metrics: List[Metric] = result.algorithm.termination.metrics
         result.metrics = {met.name: met for met in metrics}
 
@@ -338,6 +343,7 @@ class Experimenter:
 
                 # Modify metrics to reflect number of steps
                 result = ExperimenterResult.from_result(result)
+                result.algorithm_name = self.algorithm_name
                 result.metric_converged = True
                 result.termination = termination
 
@@ -413,7 +419,7 @@ class Experimenter:
         problem_algo_path = '%s/%s' % (secure_filename(self.problem.name()), secure_filename(self.algorithm_name))
         if sub_path is not None:
             problem_algo_path += '/'+sub_path
-        return self._get_results_path(sub_path)
+        return self._get_results_path(problem_algo_path)
 
     def _get_results_path(self, sub_path: str = None) -> str:
         if self.results_folder is None:

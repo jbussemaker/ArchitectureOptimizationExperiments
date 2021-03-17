@@ -144,7 +144,11 @@ class CrowdingDistanceMetric(Metric):
 
         # Do not take infinites into account (cd = inf for points at the edge of each rank)
         crowding_distances[crowding_distances == np.inf] = np.nan
+        crowding_distances = crowding_distances.astype(float)
+        # crowding_distances[crowding_distances == None] = np.nan
 
+        if np.all(np.isnan(crowding_distances)):
+            return [np.nan, np.nan, np.nan]
         return [
             np.nanmax(crowding_distances),
             np.nanmin(crowding_distances),
