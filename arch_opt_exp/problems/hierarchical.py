@@ -19,6 +19,7 @@ import enum
 import numpy as np
 from typing import *
 from arch_opt_exp.problems.discrete import *
+from arch_opt_exp.problems.pareto_front import *
 from arch_opt_exp.problems.discretization import *
 from pymoo.factory import get_reference_directions
 
@@ -196,8 +197,11 @@ class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
         if show:
             plt.show()
 
+    def __repr__(self):
+        return '%s()' % self.__class__.__name__
 
-class MOHierarchicalGoldsteinProblem(HierarchicalGoldsteinProblem):
+
+class MOHierarchicalGoldsteinProblem(CachedParetoFrontMixin, HierarchicalGoldsteinProblem):
     """
     Multi-objective adaptation of the hierarchical Goldstein problem. The Pareto front consists of a mix of SP6 and SP8,
     however it is difficult to get a consistent result with NSGA2.
@@ -354,8 +358,11 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
         if show:
             plt.show()
 
+    def __repr__(self):
+        return '%s()' % self.__class__.__name__
 
-class MOHierarchicalRosenbrockProblem(HierarchicalRosenbrockProblem):
+
+class MOHierarchicalRosenbrockProblem(CachedParetoFrontMixin, HierarchicalRosenbrockProblem):
     """
     Multi-objective adaptation of the hierarchical Rosenbrock problem.
 
@@ -441,8 +448,11 @@ class ZaeffererHierarchicalProblem(MixedIntBaseProblem):
         if show:
             plt.show()
 
+    def __repr__(self):
+        return '%s(b=%r, c=%r, d=%r)' % (self.__class__.__name__, self.b, self.c, self.d)
 
-class HierarchicalMetaProblem(MixedIntBaseProblem):
+
+class HierarchicalMetaProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
     """
     Meta problem used for increasing the amount of design variables of an underlying mixed-integer/hierarchical problem.
     The idea is that design variables are repeated, and extra design variables are added for switching between the
@@ -498,6 +508,7 @@ class HierarchicalMetaProblem(MixedIntBaseProblem):
         f_par_range = np.atleast_1d(f_par_range)
         if len(f_par_range) == 1:
             f_par_range = np.array([f_par_range[0]]*problem.n_obj)
+        self.f_par_range = f_par_range
 
         ref_dirs = get_reference_directions("uniform", problem.n_obj, n_partitions=n_maps-1)
         i_rd = np.linspace(0, ref_dirs.shape[0]-1, n_maps).astype(int)
@@ -585,12 +596,19 @@ class HierarchicalMetaProblem(MixedIntBaseProblem):
         if show:
             plt.show()
 
+    def __repr__(self):
+        return '%s(%r, n_rep=%r, n_maps=%r, f_par_range=%r, impute=%r)' % \
+               (self.__class__.__name__, self._problem, self.n_rep, self.n_maps, self.f_par_range, self.impute)
+
 
 class MOHierarchicalTestProblem(HierarchicalMetaProblem):
 
     def __init__(self):
         super(MOHierarchicalTestProblem, self).__init__(
             MOHierarchicalRosenbrockProblem(), n_rep=2, n_maps=2, f_par_range=[10, 50])
+
+    def __repr__(self):
+        return '%s()' % self.__class__.__name__
 
 
 if __name__ == '__main__':
@@ -601,8 +619,10 @@ if __name__ == '__main__':
     # HierarchicalRosenbrockProblem.validate_ranges(show=False)
     # HierarchicalRosenbrockProblem().so_run(n_repeat=8, n_eval_max=2000, pop_size=30)
 
-    MOHierarchicalRosenbrockProblem.run_test(show=False)
-    MOHierarchicalTestProblem().run_test()
+    # MOHierarchicalRosenbrockProblem.run_test(show=False)
+    # MOHierarchicalTestProblem().run_test()
+
+    MOHierarchicalTestProblem().plot_pf()
 
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
     # ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1).plot()  # Zaefferer 2018, Fig. 1

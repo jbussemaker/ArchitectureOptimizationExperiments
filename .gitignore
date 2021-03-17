@@ -129,3 +129,5 @@ dmypy.json
 .pyre/
 
 dump.pkl
+pf_cache
+results

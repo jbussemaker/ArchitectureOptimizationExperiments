@@ -18,8 +18,8 @@ Contact: jasper.bussemaker@dlr.de
 import numpy as np
 from typing import *
 from pymoo.model.repair import Repair
+from pymoo.model.problem import Problem
 from pymoo.model.population import Population
-from pymoo.model.problem import MetaProblem, Problem
 
 __all__ = ['MixedIntBaseProblem', 'MixedIntProblemHelper', 'MixedIntProblem', 'MixedIntRepair']
 
