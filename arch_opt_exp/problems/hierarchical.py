@@ -365,14 +365,13 @@ class MOHierarchicalRosenbrockProblem(HierarchicalRosenbrockProblem):
     _mo = True
 
     @classmethod
-    def run_test(cls):
+    def run_test(cls, show=True):
         from pymoo.optimize import minimize
         from pymoo.algorithms.nsga2 import NSGA2
-        from pymoo.visualization.scatter import Scatter
 
-        res = minimize(cls(), NSGA2(pop_size=100), termination=('n_gen', 200))
+        res = minimize(cls(), NSGA2(pop_size=200), termination=('n_gen', 200))
         w_idx = res.X[:, 11]*2 + res.X[:, 12]
-        Scatter().add(res.F, c=w_idx, cmap='tab10', vmin=0, vmax=10, color=None).show()
+        HierarchicalMetaProblem.plot_sub_problems(w_idx, res.F, show=show)
 
 
 class ZaeffererProblemMode(enum.Enum):
@@ -446,31 +445,32 @@ class ZaeffererHierarchicalProblem(MixedIntBaseProblem):
 class HierarchicalMetaProblem(MixedIntBaseProblem):
     """
     Meta problem used for increasing the amount of design variables of an underlying mixed-integer/hierarchical problem.
-    The idea is that design variables are duplicated, and extra design variables are added for switching between the
-    duplicated design variables. Objectives are then slightly modified based on the switching variable.
+    The idea is that design variables are repeated, and extra design variables are added for switching between the
+    repeated design variables. Objectives are then slightly modified based on the switching variable.
 
     For correct modification of the objectives, a range of the to-be-expected objective function values at the Pareto
     front for each objective dimension should be provided (f_par_range).
 
-    Note that each level will correspond to a new part of the Pareto front.
+    Note that each map will correspond to a new part of the Pareto front.
     """
 
-    def __init__(self, problem: MixedIntBaseProblem, n_dup=2, n_levels=4, f_par_range=None, impute=None):
+    def __init__(self, problem: MixedIntBaseProblem, n_rep=2, n_maps=4, f_par_range=None, impute=None):
         self._problem = problem
         if impute is None:
             impute = problem.impute
         else:
             problem.impute = impute
 
-        n_var = problem.n_var*n_dup+1
+        # Create design vector: 1 selection variables and n_rep repetitions of underlying design variables
+        n_var = problem.n_var * n_rep + 1
         is_int_mask = np.zeros((n_var,), dtype=bool)
         is_cat_mask = np.zeros((n_var,), dtype=bool)
         xl, xu = np.zeros((n_var,)), np.ones((n_var,))
 
         is_cat_mask[0] = True
-        xu[0] = n_levels-1
+        xu[0] = n_maps - 1
 
-        for i in range(n_dup):
+        for i in range(n_rep):
             ii = i*problem.n_var+1
             ii_ = ii+problem.n_var
             is_int_mask[ii:ii_] = problem.is_int_mask
@@ -482,19 +482,25 @@ class HierarchicalMetaProblem(MixedIntBaseProblem):
             is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, impute=impute, n_var=n_var, n_obj=problem.n_obj,
             n_constr=problem.n_constr, xl=xl, xu=xu)
 
-        self.n_levels = n_levels
-        self.n_dup = n_dup
-        rng = np.random.RandomState(problem.n_var*problem.n_obj*n_dup*n_levels)
-        self.select_map = [rng.randint(0, n_dup, (problem.n_var,)) for _ in range(n_levels)]
+        self.n_maps = n_maps
+        self.n_rep = n_rep
 
+        # Create the mappings between repeated design variables and underlying: select_map specifies which of the
+        # repeated variables to use to fill the values of the original design variables
+        # The mappings are semi-random: different for different problem configurations, but repeatable for same configs
+        rng = np.random.RandomState(problem.n_var * problem.n_obj * n_rep * n_maps)
+        self.select_map = [rng.randint(0, n_rep, (problem.n_var,)) for _ in range(n_maps)]
+
+        # Determine how to move the existing Pareto fronts: move them along the Pareto front dimensions to create a
+        # composed Pareto front
         if f_par_range is None:
             f_par_range = 1.
         f_par_range = np.atleast_1d(f_par_range)
         if len(f_par_range) == 1:
             f_par_range = np.array([f_par_range[0]]*problem.n_obj)
 
-        ref_dirs = get_reference_directions("uniform", problem.n_obj, n_partitions=n_levels-1)
-        i_rd = np.linspace(0, ref_dirs.shape[0]-1, n_levels).astype(int)
+        ref_dirs = get_reference_directions("uniform", problem.n_obj, n_partitions=n_maps-1)
+        i_rd = np.linspace(0, ref_dirs.shape[0]-1, n_maps).astype(int)
         self.f_mod = (ref_dirs[i_rd, :]-.5)*f_par_range
 
     def _evaluate(self, x, out, *args, **kwargs):
@@ -527,6 +533,7 @@ class HierarchicalMetaProblem(MixedIntBaseProblem):
         return is_active
 
     def _get_xp_idx(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Select design variables of the underlying problem based on the repeated variables and the selected mapping"""
         xp = np.empty((x.shape[0], self._problem.n_var))
         i_x_u = np.empty((x.shape[0], self._problem.n_var), dtype=int)
         for i in range(x.shape[0]):
@@ -537,23 +544,53 @@ class HierarchicalMetaProblem(MixedIntBaseProblem):
 
         return xp, i_x_u
 
-    def run_test(self):
+    def run_test(self, show=True):
         from pymoo.optimize import minimize
         from pymoo.algorithms.nsga2 import NSGA2
-        from pymoo.visualization.scatter import Scatter
 
-        print('Running hierarchical metaproblem: %d vars (%d dup, %d levels), %d obj, %d constr' %
-              (self.n_var, self.n_dup, self.n_levels, self.n_obj, self.n_constr))
+        print('Running hierarchical metaproblem: %d vars (%d rep, %d maps), %d obj, %d constr' %
+              (self.n_var, self.n_rep, self.n_maps, self.n_obj, self.n_constr))
         res = minimize(self, NSGA2(pop_size=200), termination=('n_gen', 200))
-        idx = res.X[:, 0]
-        Scatter().add(res.F, c=idx, cmap='tab10', vmin=0, vmax=10, color=None).show()
+
+        idx_rep = res.X[:, 0]
+        xp, _ = self._get_xp_idx(res.X)
+        w_idx = xp[:, 11]*2 + xp[:, 12]
+        sp_idx = idx_rep * self.n_rep + w_idx
+        sp_labels = ['Rep. %d, SP %d' % (i_rep+1, i+1) for i_rep in range(self.n_rep) for i in range(4)]
+
+        self.plot_sub_problems(sp_idx, res.F, sp_labels=sp_labels, show=show)
+
+    @staticmethod
+    def plot_sub_problems(sp_idx: np.ndarray, f: np.ndarray, sp_labels=None, show=True):
+        import matplotlib.pyplot as plt
+
+        if f.shape[1] != 2:
+            raise RuntimeError('Only for bi-objective optimization!')
+
+        plt.figure(figsize=(4, 2))
+        colors = plt.get_cmap('tab10')
+        for sp_val in np.unique(sp_idx):
+            sp_val = int(sp_val)
+            sp_idx_mask = sp_idx == sp_val
+            label = ('SP %d' % (sp_val+1,)) if sp_labels is None else sp_labels[sp_val]
+            plt.scatter(f[sp_idx_mask, 0], f[sp_idx_mask, 1], color=colors.colors[sp_val], s=10, label=label)
+
+        ax = plt.gca()
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+        plt.legend(frameon=False)
+        plt.xlabel('$f_1$'), plt.ylabel('$f_2$')
+
+        if show:
+            plt.show()
 
 
 class MOHierarchicalTestProblem(HierarchicalMetaProblem):
 
     def __init__(self):
         super(MOHierarchicalTestProblem, self).__init__(
-            MOHierarchicalRosenbrockProblem(), n_dup=2, n_levels=2, f_par_range=[10, 50])
+            MOHierarchicalRosenbrockProblem(), n_rep=2, n_maps=2, f_par_range=[10, 50])
 
 
 if __name__ == '__main__':
@@ -563,8 +600,8 @@ if __name__ == '__main__':
 
     # HierarchicalRosenbrockProblem.validate_ranges(show=False)
     # HierarchicalRosenbrockProblem().so_run(n_repeat=8, n_eval_max=2000, pop_size=30)
-    # MOHierarchicalRosenbrockProblem.run_test()
 
+    MOHierarchicalRosenbrockProblem.run_test(show=False)
     MOHierarchicalTestProblem().run_test()
 
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
