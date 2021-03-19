@@ -68,6 +68,8 @@ class SMTSurrogateModel(SurrogateModel):
 
                 elif is_cat_mask[i_x]:
                     n = int(np.max(x[:, i_x])+1)
+                    if n == 1:
+                        n = 2
                     x_types += [(ENUM, n)]
                     x_limits += [[0, n-1]]
 
@@ -86,7 +88,10 @@ class SMTSurrogateModel(SurrogateModel):
         return self._smt.predict_values(x)
 
     def supports_variance(self) -> bool:
-        return self._smt.supports['variances']
+        smt = self._smt
+        if smt is None:
+            smt = self._create_surrogate_model()
+        return smt.supports['variances']
 
     def predict_variance(self, x: np.ndarray, is_active: np.ndarray = None) -> np.ndarray:
         # There is a bug in SMT preventing a vectorized evaluation:

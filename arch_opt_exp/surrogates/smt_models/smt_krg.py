@@ -18,6 +18,7 @@ Contact: jasper.bussemaker@dlr.de
 import numpy as np
 from smt.surrogate_models.krg import KRG
 from smt.surrogate_models.kpls import KPLS
+from smt.applications.mixed_integer import MixedIntegerSurrogateModel
 from arch_opt_exp.surrogates.smt_models.smt_surrogate_model import SMTSurrogateModel
 
 __all__ = ['SMTKrigingSurrogateModel', 'SMTKPLSSurrogateModel']
@@ -46,8 +47,12 @@ class SMTKrigingSurrogateModel(SMTSurrogateModel):
         )
 
     def train(self):
-        n_x = self._xt_last.shape[1]
-        self._smt.options['theta0'] = self.theta0(n_x)
+        smt = self._smt
+        if isinstance(smt, MixedIntegerSurrogateModel):
+            smt = smt._surrogate
+        if 'theta0' in smt.options:
+            smt.options['theta0'] = self.theta0(smt.nx)
+
         self._smt.train()
 
 
@@ -70,5 +75,10 @@ class SMTKPLSSurrogateModel(SMTKrigingSurrogateModel):
         )
 
     def train(self):
-        self._smt.options['theta0'] = self.theta0(self.n_comp)
+        smt = self._smt
+        if isinstance(smt, MixedIntegerSurrogateModel):
+            smt = smt._surrogate
+        if 'theta0' in smt.options:
+            smt.options['theta0'] = self.theta0(self.n_comp)
+
         self._smt.train()
