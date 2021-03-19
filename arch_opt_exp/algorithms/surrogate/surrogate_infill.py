@@ -85,12 +85,24 @@ class SurrogateInfill:
         self.is_cat_mask = is_cat_mask
 
     def predict(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        y = self.surrogate_model.predict(x, is_active=self.is_active)
+        is_active, x = self._is_active(x)
+        y = self.surrogate_model.predict(x, is_active=is_active)
         return self._split_f_g(y)
 
     def predict_variance(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        y_var = self.surrogate_model.predict_variance(x, is_active=self.is_active)
+        is_active, x = self._is_active(x)
+        y_var = self.surrogate_model.predict_variance(x, is_active=is_active)
         return self._split_f_g(y_var)
+
+    def _is_active(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        is_active, x = MixedIntProblemHelper.is_active(self.problem, self._denormalize(x))
+        return is_active, self._normalize(x)
+
+    def _normalize(self, x) -> np.ndarray:
+        return MixedIntProblemHelper.normalize(self.problem, x)
+
+    def _denormalize(self, x_norm) -> np.ndarray:
+        return MixedIntProblemHelper.denormalize(self.problem, x_norm)
 
     def _split_f_g(self, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         if self.n_constr > 0:
