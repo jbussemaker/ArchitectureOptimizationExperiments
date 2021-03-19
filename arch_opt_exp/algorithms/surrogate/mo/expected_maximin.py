@@ -220,7 +220,7 @@ if __name__ == '__main__':
             DeltaHVMetric(pf),
             IGDMetric(pf),
             InfillMetric(),
-            NrTrainMetric(),
+            TrainingMetric(),
 
             # Metrics for detecting convergence
             ExpMovingAverageFilter(ConsolidationRatioMetric(), n=5),

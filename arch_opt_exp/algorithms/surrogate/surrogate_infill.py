@@ -15,6 +15,7 @@ Copyright: (c) 2021, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 
+import timeit
 import logging
 import numpy as np
 from typing import *
@@ -37,7 +38,7 @@ from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 from pymoo.util.termination.max_gen import MaximumGenerationTermination
 
 __all__ = ['SurrogateInfill', 'SurrogateBasedInfill', 'SurrogateInfillOptimizationProblem', 'InfillMetric',
-           'NrTrainMetric']
+           'TrainingMetric']
 
 log = logging.getLogger('arch_opt_exp.sur')
 
@@ -61,6 +62,8 @@ class SurrogateInfill:
 
         self.f_infill_log = []
         self.g_infill_log = []
+        self.n_eval_infill = 0
+        self.time_eval_infill = 0.
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -124,13 +127,20 @@ class SurrogateInfill:
     def reset_infill_log(self):
         self.f_infill_log = []
         self.g_infill_log = []
+        self.n_eval_infill = 0
+        self.time_eval_infill = 0.
 
     def evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
         """Evaluate the surrogate infill objectives (and optionally constraints). Use the predict and predict_variance
         methods to query the surrogate model on its objectives and constraints."""
+
+        s = timeit.default_timer()
         f_infill, g_infill = self._evaluate(x)
+        self.time_eval_infill += timeit.default_timer()-s
+
         self.f_infill_log.append(f_infill)
         self.g_infill_log.append(g_infill)
+        self.n_eval_infill += x.shape[0]
         return f_infill, g_infill
 
     def _initialize(self):
@@ -170,6 +180,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self.y_train_centered = None
         self.n_train = 0
         self.is_active = None
+        self.time_train = None
 
         self.pop_size = pop_size or 100
         self.termination = termination
@@ -244,6 +255,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self._train_model()
 
     def _train_model(self):
+        s = timeit.default_timer()
         is_int_mask, is_cat_mask = self.is_int_mask, self.is_cat_mask
         self.surrogate_model.set_samples(self.x_train, self.y_train, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask,
                                          is_active=self.is_active)
@@ -252,6 +264,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
         self.surrogate_model.train()
         self.n_train += 1
+        self.time_train = timeit.default_timer()-s
 
     def _normalize(self, x: np.ndarray) -> np.ndarray:
         return MixedIntProblemHelper.normalize(self.problem, x)
@@ -518,12 +531,12 @@ class InfillMetric(Metric):
 
     @property
     def value_names(self) -> List[str]:
-        return ['min', 'max', 'min_range', 'g_min', 'g_max', 'g_min_range']
+        return ['min', 'max', 'min_range', 'g_min', 'g_max', 'g_min_range', 'time_infill']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         surrogate_infill = self._get_surrogate_infill(algorithm)
         if surrogate_infill is None:
-            return [np.nan]*6
+            return [np.nan]*7
 
         f_infill, g_infill = surrogate_infill.f_infill_log, surrogate_infill.g_infill_log
 
@@ -537,10 +550,15 @@ class InfillMetric(Metric):
         if g_all is not None:
             g_min, g_max, g_min_range = self._get_metrics(g_all)
 
+        if surrogate_infill.n_eval_infill == 0:
+            time_per_infill_sample = np.nan
+        else:
+            time_per_infill_sample = surrogate_infill.time_eval_infill/surrogate_infill.n_eval_infill
+
         # Reset the infill values log to track values in the next infill iteration
         surrogate_infill.reset_infill_log()
 
-        return f_min, f_max, f_min_range, g_min, g_max, g_min_range
+        return f_min, f_max, f_min_range, g_min, g_max, g_min_range, time_per_infill_sample
 
     @staticmethod
     def _concatenated_values(infill_values: List[Optional[np.ndarray]]) -> Optional[np.ndarray]:
@@ -569,23 +587,27 @@ class InfillMetric(Metric):
             return algorithm.infill.infill
 
 
-class NrTrainMetric(Metric):
+class TrainingMetric(Metric):
     """Metric that tracks the number of times the used surrogate model was trained."""
 
     @property
     def name(self) -> str:
-        return 'n_train'
+        return 'training'
 
     @property
     def value_names(self) -> List[str]:
-        return ['n_train']
+        return ['n_train', 'n_samples', 'time_train']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         surrogate_infill = self._get_surrogate_infill(algorithm)
         if surrogate_infill is None:
-            return [np.nan]
+            return [np.nan]*3
 
-        return [surrogate_infill.n_train]
+        n_train = surrogate_infill.n_train
+        n_samples = surrogate_infill.x_train.shape[0] if surrogate_infill.x_train is not None else np.nan
+        time_train = surrogate_infill.time_train or np.nan
+
+        return [n_train, n_samples, time_train]
 
     @staticmethod
     def _get_surrogate_infill(algorithm: Algorithm) -> Optional[SurrogateBasedInfill]:
