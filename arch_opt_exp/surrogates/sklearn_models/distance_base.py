@@ -35,6 +35,8 @@ class Distance:
     Support for integer, categorical, and hierarchical design variables.
     """
 
+    has_gradient = False
+
     def __init__(self):
         self.xt = None
         self.yt = None
@@ -75,16 +77,25 @@ class Distance:
         self.predict_is_active = is_active
 
     def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray, list], u_is_active: np.ndarray = None,
-                 v_is_active: np.ndarray = None, **kwargs) -> float:
+                 v_is_active: np.ndarray = None, eval_gradient=False, **kwargs):
         u, v = np.atleast_1d(u), np.atleast_1d(v)
         if u_is_active is None:
             u_is_active = np.ones((len(u),), dtype=bool)
         if v_is_active is None:
             v_is_active = np.ones((len(v),), dtype=bool)
-        return float(self._call(u, v, u_is_active, v_is_active))
+        res = self._call(u, v, u_is_active, v_is_active, eval_gradient=eval_gradient)
+        return (float(res[0]), res[1:]) if eval_gradient else float(res[0])
 
-    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
+              eval_gradient=False) -> Tuple[float]:
+        """Returns a list with floats: dist + ddist/dhp (gradient wrt hyperparams).
+        Do not return gradients of fixed hyperparameters!"""
         raise NotImplementedError
+
+    @staticmethod
+    def approx_theta_grad(d, theta, f, eps=1e-10):
+        dt = np.eye(len(theta)) * eps * theta
+        return [(f(theta+dt[i, :]) - d) / eps for i in range(len(theta))]
 
     def kernel(self, **kwargs):
         raise NotImplementedError
@@ -126,7 +137,8 @@ class WeightedDistance(Distance):
         if not self.fix_theta:
             self.theta, = values
 
-    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
+              eval_gradient=False) -> Tuple[float]:
         raise NotImplementedError
 
     def kernel(self, **kwargs):
@@ -266,6 +278,9 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
     use WeightedDistance to tune the scales for all dimensions separately.
     """
 
+    _param_keys_cache = {}
+    _hp_cache = {}
+
     def __init__(self, metric: Union[str, Distance] = None, length_scale=1.0, length_scale_bounds=(1e-5, 1e5), nu=.5,
                  _is_discrete_mask=None, _train_is_active=None, _predict_is_active=None, **metric_hp):
         super(CustomDistanceKernel, self).__init__(
@@ -300,9 +315,13 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
 
     @property
     def hyperparameters(self):
-        hyperparameters = super(CustomDistanceKernel, self).hyperparameters
-        hyperparameters += self._get_metric_hyperparameters()
-        return hyperparameters
+        key = (self.__class__, self.metric.__class__)
+        if key not in self._hp_cache:
+            hyperparameters = super(CustomDistanceKernel, self).hyperparameters
+            hyperparameters += self._get_metric_hyperparameters()
+            self._hp_cache[key] = hyperparameters
+            return hyperparameters
+        return self._hp_cache[key]
 
     def _get_metric_hyperparameters(self) -> List[Hyperparameter]:
         if self.__metric_hp is not None:
@@ -318,7 +337,12 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
         return self.__metric_hp
 
     def get_params(self, deep=True):
-        params = super(CustomDistanceKernel, self).get_params(deep=deep)
+        if self.__class__ not in self._param_keys_cache:
+            params = super(CustomDistanceKernel, self).get_params(deep=deep)
+            self._param_keys_cache[self.__class__] = set(params.keys())
+        else:
+            params = {key: getattr(self, key) for key in self._param_keys_cache[self.__class__]}
+
         params['_is_discrete_mask'] = self._is_discrete_mask
         params['_train_is_active'] = self._train_is_active
         params['_predict_is_active'] = self._predict_is_active
@@ -344,8 +368,11 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
         length_scale = _check_length_scale(x, self.length_scale)
         x_norm = x.copy()
         x_norm[:, self._is_cont_mask] = x_norm[:, self._is_cont_mask] / length_scale
+        dists_grad = None
         if y is None:
-            dists = self._pdist(x_norm)
+            dists = self._pdist(x_norm, eval_gradient=eval_gradient)
+            if eval_gradient:
+                dists, dists_grad = dists
         else:
             y_norm = y.copy()
             y_norm[:, self._is_cont_mask] = y_norm[:, self._is_cont_mask] / length_scale
@@ -380,20 +407,44 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
             np.fill_diagonal(K, 1)
 
         if eval_gradient:
-            # We need to approximate numerically; the original derivations are only valid for the euclidean metric
-            def f(theta):  # helper function
-                return self.clone_with_theta(theta)(x, y)
-            return K, _approx_fprime(self.theta, f, 1e-10)
+            if dists_grad is None:
+                def f(theta):  # helper function
+                    return self.clone_with_theta(theta)(x, y)
+                return K, _approx_fprime(self.theta, f, 1e-10)
+
+            if self.length_scale_bounds == 'fixed':
+                theta_grad = np.zeros(K.shape+(0,))
+            else:
+                def f(theta):  # helper function
+                    return self.clone_with_theta([theta]+all_theta[1:])(x, y)
+                all_theta = self.theta
+                theta_grad = _approx_fprime(all_theta[:1], f, 1e-10)
+
+            if self.nu == 0.:
+                K_grad_sq = [squareform(dists_grad[:, i]) for i in range(dists_grad.shape[1])]
+                K_grad = np.dstack([theta_grad]+K_grad_sq)
+            elif self.nu == .5:
+                K_grad_sq = [-K*squareform(dists_grad[:, i]) for i in range(dists_grad.shape[1])]
+                K_grad = np.dstack([theta_grad]+K_grad_sq)
+            else:
+                def f(theta):  # helper function
+                    return self.clone_with_theta(theta)(x, y)
+                K_grad = _approx_fprime(self.theta, f, 1e-10)
+
+            return K, K_grad
         else:
             return K
 
-    def _pdist(self, x: np.ndarray):  # Called during training
+    def _pdist(self, x: np.ndarray, eval_gradient=False):  # Called during training
         if not isinstance(self.metric, Distance):
-            return pdist(x, metric=self.metric)
+            dm = pdist(x, metric=self.metric)
+            return (dm, np.zeros(dm.shape+(0,))) if eval_gradient else dm
 
         x = np.asarray(x, order='c')
         m, n = x.shape
         dm = np.empty((m * (m - 1)) // 2, dtype=np.double)
+        dm_grad = None
+        do_grad = self.metric.has_gradient and eval_gradient
 
         is_active = self._train_is_active
         if is_active is None:
@@ -402,9 +453,16 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
         k = 0
         for i in range(0, m - 1):
             for j in range(i + 1, m):
-                dm[k] = self.metric(x[i], x[j], u_is_active=is_active[i], v_is_active=is_active[j])
+                res = self.metric(x[i], x[j], u_is_active=is_active[i], v_is_active=is_active[j], eval_gradient=do_grad)
+                if do_grad:
+                    dm[k], grad = res
+                    if dm_grad is None:
+                        dm_grad = np.empty(dm.shape+(len(grad),))
+                    dm_grad[k, :] = grad
+                else:
+                    dm[k] = res
                 k = k + 1
-        return dm
+        return (dm, dm_grad) if eval_gradient else dm
 
     def _cdist(self, x: np.ndarray, y: np.ndarray):  # Called during prediction
         if not isinstance(self.metric, Distance):

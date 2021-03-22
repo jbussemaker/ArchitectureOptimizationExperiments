@@ -18,7 +18,6 @@ Contact: jasper.bussemaker@dlr.de
 import numba
 import numpy as np
 from typing import *
-from scipy.spatial.distance import hamming
 from arch_opt_exp.surrogates.sklearn_models.distance_base import *
 
 __all__ = ['GowerDistance', 'SymbolicCovarianceDistance', 'HammingDistance', 'CompoundSymmetryKernel',
@@ -36,7 +35,8 @@ class GowerDistance(WeightedDistance):
     Halstrup 2016, "Black-box Optimization of Mixed Discrete-Continuous Optimization Problems", section 6.6
     """
 
-    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
+              eval_gradient=False) -> Tuple[float]:
         u_cont, v_cont = u[self.is_cont_mask], v[self.is_cont_mask]
         u_dis, v_dis = u[self.is_discrete_mask].astype(np.int), v[self.is_discrete_mask].astype(np.int)
         return _gower(u_cont, v_cont, u_dis, v_dis, self.is_cont_mask, self.is_discrete_mask, self.theta)
@@ -137,7 +137,8 @@ class SymbolicCovarianceDistance(WeightedDistance):
 
         return x_means
 
-    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
+              eval_gradient=False) -> Tuple[float]:
         """Calculate the distance function using the inverse of the symbolic covariance matrix."""
         return _sc_dist(self._inv_cov_matrix, u, v, self.use_sc_mask, self.theta)
 
@@ -164,8 +165,15 @@ class HammingDistance(WeightedDistance):
     Pelamatti 2019: "Surrogate Model Based Optimization of Constrained Mixed Variable Problems"
     """
 
-    def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray, list], **kwargs) -> float:
-        return hamming(u, v, w=self.theta)
+    has_gradient = True
+
+    def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray, list], u_is_active: np.ndarray = None,
+                 v_is_active: np.ndarray = None, eval_gradient=False, **kwargs):
+        d = hamming_scalar(u, v, self.theta)
+        if eval_gradient:
+            grad = self.approx_theta_grad(d, self.theta, lambda theta_: hamming_scalar(u, v, theta_))
+            return d, grad
+        return d
 
     def _call(self, *args, **kwargs) -> float:
         raise NotImplementedError
@@ -174,6 +182,16 @@ class HammingDistance(WeightedDistance):
         cont_kernel = MixedIntKernel.get_cont_kernel()
         discrete_kernel = CustomDistanceKernel(self, length_scale_bounds='fixed')
         return MixedIntKernel(cont_kernel, discrete_kernel)
+
+
+@numba.jit(nopython=True, cache=True)
+def hamming_scalar(u, v, w):  # Based on scipy.spatial.distance.hamming
+    u_ne_v = u != v
+    w_ne = w[u_ne_v]
+
+    d = np.zeros((u.size,))
+    d[u_ne_v] = w_ne/np.sum(w)
+    return np.sum(d)
 
 
 class CompoundSymmetryKernel(Distance):
@@ -212,7 +230,8 @@ class CompoundSymmetryKernel(Distance):
         self.cf_x = np.log10(self.cf)
         self.c = self.v*(self.cf_x*(1-self._cv_l)+self._cv_l)
 
-    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
+              eval_gradient=False) -> Tuple[float]:
         if len(u) == 0:
             return 1.
         return _cs(u, v, self.c, self.v)
@@ -306,7 +325,8 @@ class LatentVariablesDistance(Distance):
 
             theta_values = theta_values[n_theta_x:]
 
-    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray) -> float:
+    def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
+              eval_gradient=False) -> Tuple[float]:
         if len(u) == 0:
             return 0.
         return _lv(u, v, self.theta_x)
@@ -354,10 +374,11 @@ if __name__ == '__main__':
 
     # kernel = None
     # kernel = GowerDistance().kernel()
-    kernel = SymbolicCovarianceDistance(int_as_discrete=True).kernel()
-    # kernel = HammingDistance().kernel()
+    # kernel = SymbolicCovarianceDistance(int_as_discrete=True).kernel()
+    kernel = HammingDistance().kernel()
     # kernel = CompoundSymmetryKernel().kernel()
     # kernel = LatentVariablesDistance().kernel()
 
     sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6, int_as_discrete=True)
-    LOOCrossValidation.check_sample_sizes(sm, problem, show=True, print_progress=True)
+    # LOOCrossValidation.check_sample_sizes(sm, problem, show=True, print_progress=True)
+    LOOCrossValidation.check_sample_sizes(sm, problem, show=False, print_progress=True, n_pts_test=[10])
