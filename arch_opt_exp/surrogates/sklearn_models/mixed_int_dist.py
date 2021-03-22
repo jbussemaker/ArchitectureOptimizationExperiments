@@ -35,17 +35,23 @@ class GowerDistance(WeightedDistance):
     Halstrup 2016, "Black-box Optimization of Mixed Discrete-Continuous Optimization Problems", section 6.6
     """
 
+    has_gradient = True
+
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
         u_cont, v_cont = u[self.is_cont_mask], v[self.is_cont_mask]
         u_dis, v_dis = u[self.is_discrete_mask].astype(np.int), v[self.is_discrete_mask].astype(np.int)
-        return _gower(u_cont, v_cont, u_dis, v_dis, self.is_cont_mask, self.is_discrete_mask, self.theta)
+        d = _gower(u_cont, v_cont, u_dis, v_dis, self.is_cont_mask, self.is_discrete_mask, self.theta)
+        if eval_gradient:
+            d_grad = _gower_grad(u_cont, v_cont, u_dis, v_dis, self.is_cont_mask, self.is_discrete_mask, self.theta)
+            return d, d_grad
+        return d
 
     def kernel(self, **kwargs):
         return CustomDistanceKernel(metric=self, length_scale_bounds='fixed', **kwargs)
 
 
-@numba.jit(nopython=True)
+@numba.jit(nopython=True, cache=True)
 def _gower(u_cont, v_cont, u_dis, v_dis, is_cont_mask, is_discrete_mask, theta) -> float:
 
     s = np.empty((len(is_cont_mask),))
@@ -59,6 +65,20 @@ def _gower(u_cont, v_cont, u_dis, v_dis, is_cont_mask, is_discrete_mask, theta) 
     return np.sum(s*theta)
 
 
+@numba.jit(nopython=True, cache=True)
+def _gower_grad(u_cont, v_cont, u_dis, v_dis, is_cont_mask, is_discrete_mask, theta):
+
+    s = np.empty((len(is_cont_mask),))
+    s[is_cont_mask] = np.abs(u_cont-v_cont)
+
+    dis_is_same = u_dis == v_dis
+    s_dis = np.ones((len(u_dis),))
+    s_dis[dis_is_same] = 0
+    s[is_discrete_mask] = s_dis
+
+    return s*theta
+
+
 class SymbolicCovarianceDistance(WeightedDistance):
     """
     Symbolic Covariance (SC).
@@ -68,6 +88,8 @@ class SymbolicCovarianceDistance(WeightedDistance):
     - provided R code
     - https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Two-pass
     """
+
+    has_gradient = True
 
     def __init__(self, int_as_discrete=True):
         super(SymbolicCovarianceDistance, self).__init__()
@@ -138,9 +160,13 @@ class SymbolicCovarianceDistance(WeightedDistance):
         return x_means
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
         """Calculate the distance function using the inverse of the symbolic covariance matrix."""
-        return _sc_dist(self._inv_cov_matrix, u, v, self.use_sc_mask, self.theta)
+        use_sc_mask = self.use_sc_mask
+        d = _sc_dist(self._inv_cov_matrix, u, v, use_sc_mask, self.theta)
+        if eval_gradient:
+            return d, _sc_dist_grad(self._inv_cov_matrix, u, v, use_sc_mask, self.theta)
+        return d
 
     def kernel(self, **kwargs):
         return CustomDistanceKernel(metric=self, length_scale_bounds='fixed', **kwargs)
@@ -156,6 +182,17 @@ def _sc_dist(inv_cov_matrix: np.ndarray, u: np.ndarray, v: np.ndarray, is_discre
 
     # Calculate Mahalanobis-like distance (Eq. 13)
     return np.dot(theta*delta_uv, np.dot(inv_cov_matrix, delta_uv))
+
+
+@numba.jit(nopython=True, cache=True)
+def _sc_dist_grad(inv_cov_matrix: np.ndarray, u: np.ndarray, v: np.ndarray, is_discrete_mask: np.ndarray, theta):
+    delta_uv = u-v
+
+    # The delta between symbolic variables is 1 if i < j, -1 if i > j (compare with d_mat)
+    delta_uv[np.bitwise_and(is_discrete_mask, u < v)] = 1.
+    delta_uv[np.bitwise_and(is_discrete_mask, u > v)] = -1.
+
+    return theta*delta_uv*np.dot(inv_cov_matrix, delta_uv)
 
 
 class HammingDistance(WeightedDistance):
@@ -201,6 +238,8 @@ class CompoundSymmetryKernel(Distance):
     Pelamatti 2019, "Surrogate Model Based Optimization of Constrained Mixed Variable Problems"
     """
 
+    has_gradient = True
+
     def __init__(self, v0=1., fix_v=False, cf0=.5, fix_cf=False):
         self.v = [v0]
         self.fix_v = fix_v
@@ -211,6 +250,9 @@ class CompoundSymmetryKernel(Distance):
         self.cf_x = None
         self.cf_l = None
         self.c = None
+        self.dv = None
+        self.dc_dv = None
+        self.dc_dcf = None
         self._n_dis_values = None
 
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
@@ -230,11 +272,37 @@ class CompoundSymmetryKernel(Distance):
         self.cf_x = np.log10(self.cf)
         self.c = self.v*(self.cf_x*(1-self._cv_l)+self._cv_l)
 
+        self.dv = dv = np.zeros((len(self.v),)) if self.fix_v else self.v
+        self.dc_dv = dv*(self.cf_x*(1-self._cv_l)+self._cv_l)
+        dcf_x = np.ones((len(self.cf),))/np.log(10.)
+        self.dc_dcf = self.v*dcf_x*(1-self._cv_l)
+
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
+        grad_v = None if self.fix_v else np.zeros((self.xt.shape[1],))
+        grad_cf = None if self.fix_cf else np.zeros((self.xt.shape[1],))
         if len(u) == 0:
+            if eval_gradient:
+                grad = grad_v
+                if grad_cf is not None:
+                    grad = grad_cf if grad is None else np.concatenate([grad, grad_cf])
+                if grad is None:
+                    grad = np.empty((0,))
+                return 1., grad
             return 1.
-        return _cs(u, v, self.c, self.v)
+
+        d = _cs(u, v, self.c, self.v)
+        if eval_gradient:
+            grad = None
+            if not self.fix_v:
+                grad = _cs_grad_v(u, v, self.c, self.v, self.dv, self.dc_dv)
+            if not self.fix_cf:
+                grad_c = _cs_grad_c(u, v, self.c, self.v, self.dc_dcf)
+                grad = grad_c if grad is None else np.concatenate([grad, grad_c])
+            if grad is None:
+                grad = np.empty((0,))
+            return d, grad
+        return d
 
     def kernel(self, **kwargs):
         cont_kernel = MixedIntKernel.get_cont_kernel()
@@ -257,7 +325,7 @@ class CompoundSymmetryKernel(Distance):
         self._set_cf_x()
 
 
-@numba.jit(nopython=True)
+@numba.jit(nopython=True, cache=True)
 def _cs(u, v, cs_c, cs_v):
     d = np.ones((len(u),))*cs_c
 
@@ -265,6 +333,42 @@ def _cs(u, v, cs_c, cs_v):
     d[is_same_mask] = cs_v[is_same_mask]
 
     return np.prod(d)
+
+
+@numba.jit(nopython=True, cache=True)
+def _cs_grad_c(u, v, cs_c, cs_v, dc):
+    d = np.ones((len(u),))*cs_c
+
+    is_same_mask = u == v
+    d[is_same_mask] = cs_v[is_same_mask]
+
+    d_grad = np.repeat(d, len(u)).reshape(-1, len(u)).T
+    dc_same = dc*1.
+    dc_same[is_same_mask] = 0.
+    np.fill_diagonal(d_grad, dc_same)
+
+    d_grad_prod = d_grad[:, 0]
+    for i in range(1, d_grad.shape[1]):
+        d_grad_prod *= d_grad[:, i]
+    return d_grad_prod
+
+
+@numba.jit(nopython=True, cache=True)
+def _cs_grad_v(u, v, cs_c, cs_v, dv, dc_dv):
+    d = np.ones((len(u),))*cs_c
+
+    is_same_mask = u == v
+    d[is_same_mask] = cs_v[is_same_mask]
+
+    d_grad = np.repeat(d, len(u)).reshape(-1, len(u)).T
+    dc_same = dc_dv*1.
+    dc_same[is_same_mask] = dv[is_same_mask]
+    np.fill_diagonal(d_grad, dc_same)
+
+    d_grad_prod = d_grad[:, 0]
+    for i in range(1, d_grad.shape[1]):
+        d_grad_prod *= d_grad[:, i]
+    return d_grad_prod
 
 
 class LatentVariablesDistance(Distance):
@@ -277,24 +381,17 @@ class LatentVariablesDistance(Distance):
     an unacceptable amount of time if many design variables with many levels are present in the problem.
     """
 
+    has_gradient = True
+
     def __init__(self, theta0=0., fix_theta=False):
         self.theta = [10**theta0]
         self.fix_theta = fix_theta
         super(LatentVariablesDistance, self).__init__()
 
         self.theta_x = None
+        self.dtx = None
+        self.dtx_idx = None
         self._n_dis_values = None
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        if state['theta_x'] is not None:
-            state['theta_x'] = True
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__ = state
-        if state['theta_x'] is True:
-            self._set_theta_x()
 
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
         self._n_dis_values = n_dis_values = [int(n) for n in np.max(x, axis=0)+1]
@@ -312,24 +409,48 @@ class LatentVariablesDistance(Distance):
 
     def _set_theta_x(self):
         theta_values = np.log10(self.theta)
+        dtx_values = np.ones((len(theta_values),))/np.log(10.)
 
         # Map each level of each discrete variable to its latent variable coordinates determine by theta
         # The first level is at (0,0), the second level is at the x-axis (0,...); therefore 3 theta's are skipped
         n_dis_values = self._n_dis_values
-        self.theta_x = theta_x = numba.typed.List()
+        n_dis_max = np.max(n_dis_values)
+        self.theta_x = theta_x = np.zeros((n_dis_max, 2, len(n_dis_values)))
+        self.dtx = dtx = np.zeros((n_dis_max, 2, len(n_dis_values)))
+        self.dtx_idx = dtx_idx = np.zeros((n_dis_max, 2, len(n_dis_values)))
+        idx = 0
         for i in range(len(n_dis_values)):
-            theta_x_i = np.zeros((n_dis_values[i]*2,))
+            n = n_dis_values[i]
+            theta_x_i = np.zeros((n*2,))
             n_theta_x = len(theta_x_i)-3
             theta_x_i[3:] = theta_values[:n_theta_x]
-            theta_x.append(theta_x_i.reshape((n_dis_values[i], 2)))
+            theta_x[:n, :, i] = theta_x_i.reshape((n, 2))
+
+            dtx_i = np.zeros((n_dis_values[i]*2,))
+            dtx_i[3:] = dtx_values[:n_theta_x]
+            dtx_idx_i = np.zeros(dtx_i.shape, dtype=int)-1
+            dtx_idx_i[3:] = list(range(idx, idx+n_theta_x))
+            dtx[:n, :, i] = dtx_i.reshape((n_dis_values[i], 2))
+            dtx_idx[:n, :, i] = dtx_idx_i.reshape((n_dis_values[i], 2))
 
             theta_values = theta_values[n_theta_x:]
+            dtx_values = dtx_values[n_theta_x:]
+            idx += n_theta_x
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
         if len(u) == 0:
+            if eval_gradient:
+                grad = np.zeros((0,)) if self.fix_theta else np.zeros((len(self.theta),))
+                return 0., grad
             return 0.
-        return _lv(u, v, self.theta_x)
+
+        d = _lv(u, v, self.theta_x)
+        if eval_gradient:
+            if self.fix_theta:
+                return d, np.zeros((0,))
+            return d, _lv_grad(u, v, self.theta_x, self.dtx, self.dtx_idx, len(self.theta))
+        return d
 
     def kernel(self, **kwargs):
         cont_kernel = MixedIntKernel.get_cont_kernel()
@@ -352,16 +473,35 @@ class LatentVariablesDistance(Distance):
         self._set_theta_x()
 
 
-@numba.jit(nopython=True)
+@numba.jit(nopython=True, cache=True)
 def _lv(u, v, theta_x):
-    u_latent = np.empty((len(theta_x), 2))
-    v_latent = np.empty((len(theta_x), 2))
-    for i in range(len(theta_x)):
-        u_latent[i, :] = theta_x[i][u[i], :]
-        v_latent[i, :] = theta_x[i][v[i], :]
+    u_latent = np.empty((theta_x.shape[2], 2))
+    v_latent = np.empty((theta_x.shape[2], 2))
+    for i in range(theta_x.shape[2]):
+        u_latent[i, :] = theta_x[u[i], :, i]
+        v_latent[i, :] = theta_x[v[i], :, i]
 
     d_latent = u_latent-v_latent
     return np.sum(d_latent**2)
+
+
+@numba.jit(nopython=True, cache=True)
+def _lv_grad(u, v, theta_x, dt, dt_idx, n):
+    u_latent = np.empty((theta_x.shape[2], 2))
+    v_latent = np.empty((theta_x.shape[2], 2))
+    dd = np.zeros((theta_x.shape[2], 2, n))
+    for ii in range(n):
+        dt_ii = dt*(dt_idx == ii)
+
+        for i in range(theta_x.shape[2]):
+            u_latent[i, :] = theta_x[u[i], :, i]
+            v_latent[i, :] = theta_x[v[i], :, i]
+
+            dd[i, :, ii] = dt_ii[u[i], :, i] - dt_ii[v[i], :, i]
+
+    d_latent = np.empty((theta_x.shape[2], 2, 1))
+    d_latent[:, :, 0] = u_latent-v_latent
+    return np.sum(np.sum(2*d_latent*dd, axis=0), axis=0)
 
 
 if __name__ == '__main__':

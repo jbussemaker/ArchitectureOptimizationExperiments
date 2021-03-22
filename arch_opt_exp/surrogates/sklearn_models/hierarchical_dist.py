@@ -45,7 +45,7 @@ class ArcDistance(WeightedDistance):
             self.rho = np.ones((self.xt.shape[1],))*self.rho[0]
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
         return _arc(u, v, u_is_active, v_is_active, self.is_cont_mask, self.is_discrete_mask, self._n_dis_values,
                     self.theta, self.rho)
 
@@ -122,7 +122,7 @@ class IndefiniteConditionalDistance(WeightedDistance):
                 self.fix_rho = True
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
         return _ico(u, v, u_is_active, v_is_active, self.is_cont_mask, self.is_discrete_mask, self.theta, self.rho)
 
     def kernel(self, **kwargs):
@@ -236,7 +236,7 @@ class ImputationDistance(WeightedDistance):
         self.rho_x = rho_x
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
         return _imp(u, v, u_is_active, v_is_active, self.is_cont_mask, self.is_discrete_mask, self.theta, self.rho_x)
 
     def kernel(self, **kwargs):
@@ -311,7 +311,7 @@ class WedgeDistance(WeightedDistance):
         self.rho_x = np.log10(self.rho)*np.pi
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
         return _wedge(u, v, u_is_active, v_is_active, self.xl, self.xu, self.is_cont_mask, self.is_discrete_mask,
                       self.theta, self.theta2, self.rho_x)
 

@@ -20,7 +20,7 @@ import numpy as np
 from typing import *
 from sklearn.gaussian_process.kernels import \
     Matern, _check_length_scale, pdist, squareform, cdist, gamma, kv, _approx_fprime, KernelOperator, Kernel,\
-    ConstantKernel, Hyperparameter
+    ConstantKernel, Hyperparameter, Product
 
 __all__ = ['CustomDistanceKernel', 'DiscreteHierarchicalKernelBase', 'MixedIntKernel', 'Distance', 'WeightedDistance',
            'IsDiscreteMask', 'Hyperparameter']
@@ -78,17 +78,16 @@ class Distance:
 
     def __call__(self, u: Union[np.ndarray, list], v: Union[np.ndarray, list], u_is_active: np.ndarray = None,
                  v_is_active: np.ndarray = None, eval_gradient=False, **kwargs):
-        u, v = np.atleast_1d(u), np.atleast_1d(v)
+        # u, v = np.atleast_1d(u), np.atleast_1d(v)
         if u_is_active is None:
             u_is_active = np.ones((len(u),), dtype=bool)
         if v_is_active is None:
             v_is_active = np.ones((len(v),), dtype=bool)
-        res = self._call(u, v, u_is_active, v_is_active, eval_gradient=eval_gradient)
-        return (float(res[0]), res[1:]) if eval_gradient else float(res[0])
+        return self._call(u, v, u_is_active, v_is_active, eval_gradient=eval_gradient)
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
-        """Returns a list with floats: dist + ddist/dhp (gradient wrt hyperparams).
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
+        """Returns dist + optionally a list with floats: ddist/dhp (gradient wrt hyperparams).
         Do not return gradients of fixed hyperparameters!"""
         raise NotImplementedError
 
@@ -105,7 +104,13 @@ class Distance:
 
 
 class WeightedDistance(Distance):
-    """Distance that uses weighting terms (e.g. theta) in all its dimensions."""
+    """
+    Distance that uses weighting terms (e.g. theta) in all its dimensions.
+
+    For gradient calculation: hyperparameters are encoded in natural logarithmic space; this means that the derivative
+    of the hyperparameters themselves is the value of the hyperparameter (i.e. not 1!). For example:
+    f(x, theta) = x*theta --> df/dtheta = x*theta
+    """
 
     def __init__(self, theta0=1., fix_theta=False, theta_bounds=(1e-5, 1e5)):
         self.theta = [theta0]
@@ -138,7 +143,7 @@ class WeightedDistance(Distance):
             self.theta, = values
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
-              eval_gradient=False) -> Tuple[float]:
+              eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
         raise NotImplementedError
 
     def kernel(self, **kwargs):
@@ -278,7 +283,49 @@ class MixedIntKernel(KernelOperator, DiscreteHierarchicalKernelBase):
     @staticmethod
     def get_cont_kernel(fix_theta=False) -> Kernel:
         kwargs = {'length_scale_bounds': 'fixed'} if fix_theta else {}
-        return ConstantKernel(1.)*Matern(1., nu=1.5, **kwargs)
+        return FastProductKernel(ConstantKernel(1.), Matern(1., nu=1.5, **kwargs))
+
+
+class FastProductKernel(Product):
+
+    _n_dims_cache = {}
+    _hp_cache = {}
+    _params_cache = {}
+
+    def __init__(self, k1, k2):
+        super(FastProductKernel, self).__init__(k1, k2)
+
+        self._key = (self.__class__, self.k1.__class__, self.k2.__class__)
+
+    @property
+    def n_dims(self):
+        key = self._key
+        if key not in self._n_dims_cache:
+            self._n_dims_cache[key] = super(FastProductKernel, self).n_dims
+        return self._n_dims_cache[key]
+
+    @property
+    def hyperparameters(self):
+        key = self._key
+        if key not in self._hp_cache:
+            self._hp_cache[key] = super(FastProductKernel, self).hyperparameters
+        return self._hp_cache[key]
+
+    def get_params(self, deep=True):
+        key = self._key
+        if key not in self._params_cache:
+            k1_deep_items = self.k1.get_params()
+            k2_deep_items = self.k2.get_params()
+            self._params_cache[key] = (set(k1_deep_items.keys()), set(k2_deep_items.keys()))
+
+        params = dict(k1=self.k1, k2=self.k2)
+        if deep:
+            k1_keys, k2_keys = self._params_cache[key]
+            for key in k1_keys:
+                params['k1__'+key] = getattr(self.k1, key)
+            for key in k2_keys:
+                params['k2__'+key] = getattr(self.k2, key)
+        return params
 
 
 class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
@@ -447,6 +494,11 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
                 def f(theta):  # helper function
                     return self.clone_with_theta(theta)(x, y)
                 K_grad = _approx_fprime(self.theta, f, 1e-10)
+
+            # def f(theta):  # helper function
+            #     return self.clone_with_theta(theta)(x, y)
+            # K_grad_check = _approx_fprime(self.theta, f, 1e-10)
+            # print(np.max(np.abs(K_grad_check-K_grad)))  # Validate analytical gradient
 
             return K, K_grad
         else:
