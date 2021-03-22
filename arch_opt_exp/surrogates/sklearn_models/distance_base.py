@@ -168,6 +168,9 @@ class MixedIntKernel(KernelOperator, DiscreteHierarchicalKernelBase):
     Implementation inspired by the Product KernelOperator.
     """
 
+    _n_dims_cache = {}
+    _hp_cache = {}
+
     def __init__(self, cont_kernel: Kernel, discrete_kernel: Kernel, is_discrete_mask=None):
         super(MixedIntKernel, self).__init__(cont_kernel, discrete_kernel)
 
@@ -191,6 +194,20 @@ class MixedIntKernel(KernelOperator, DiscreteHierarchicalKernelBase):
     def predict_set_is_active(self, is_active: np.ndarray):
         if isinstance(self.k2, DiscreteHierarchicalKernelBase):
             self.k2.predict_set_is_active(is_active[:, self._is_discrete_mask])
+
+    @property
+    def n_dims(self):
+        key = (self.__class__.__name__, self.k1.__class__, self.k2.__class__)
+        if key not in self._n_dims_cache:
+            self._n_dims_cache[key] = super(MixedIntKernel, self).n_dims
+        return self._n_dims_cache[key]
+
+    @property
+    def hyperparameters(self):
+        key = (self.__class__.__name__, self.k1.__class__, self.k2.__class__)
+        if key not in self._hp_cache:
+            self._hp_cache[key] = super(MixedIntKernel, self).hyperparameters
+        return self._hp_cache[key]
 
     def get_params(self, deep=True):
         params = {
