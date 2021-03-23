@@ -36,7 +36,8 @@ class ArcDistance(WeightedDistance):
     has_gradient = True
 
     def __init__(self, rho0=1., **kwargs):
-        self.rho = [rho0]
+        self.rho0 = rho0
+        self.rho = None
         super(ArcDistance, self).__init__(**kwargs)
 
         self._n_dis_values = None
@@ -44,8 +45,7 @@ class ArcDistance(WeightedDistance):
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
         self._n_dis_values = np.max(x, axis=0)+1
 
-        if len(self.rho) == 1:
-            self.rho = np.ones((self.xt.shape[1],))*self.rho[0]
+        self.rho = np.ones((self.xt.shape[1],))*self.rho0
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
               eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
@@ -156,15 +156,15 @@ class IndefiniteConditionalDistance(WeightedDistance):
     has_gradient = True
 
     def __init__(self, rho0=1., fix_rho=False, **kwargs):
-        self.rho = [rho0]
+        self.rho0 = rho0
+        self.rho = None
+        self.fix_rho0 = fix_rho
         self.fix_rho = fix_rho
         super(IndefiniteConditionalDistance, self).__init__(**kwargs)
 
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
-        if len(self.rho) == 1:
-            self.rho = np.ones((self.xt.shape[1],))*self.rho[0]
-            if self.xt.shape[1] == 0:
-                self.fix_rho = True
+        self.rho = np.ones((self.xt.shape[1],))*self.rho0
+        self.fix_rho = True if self.xt.shape[1] == 0 else self.fix_rho0
 
     def _call(self, u: np.ndarray, v: np.ndarray, u_is_active: np.ndarray, v_is_active: np.ndarray,
               eval_gradient=False) -> Union[float, Tuple[float, Sequence[float]]]:
@@ -298,7 +298,9 @@ class ImputationDistance(WeightedDistance):
     has_gradient = True
 
     def __init__(self, rho0=.5, fix_rho=False, **kwargs):
-        self.rho = [10**rho0]
+        self.rho0 = 10**rho0
+        self.rho = None
+        self.fix_rho0 = fix_rho
         self.fix_rho = fix_rho
         if 'theta_bounds' not in kwargs:
             kwargs['theta_bounds'] = (1e-2, 1e2)
@@ -320,11 +322,9 @@ class ImputationDistance(WeightedDistance):
         self.rho_u = xu+2*x_range
         self.n_cont = len(np.where(self.is_cont_mask)[0])
 
-        if len(self.rho) == 1:
-            self.rho = np.ones((self.n_cont,))*self.rho[0]
-            self._set_rho_x()
-            if self.n_cont == 0:
-                self.fix_rho = True
+        self.rho = np.ones((self.n_cont,))*self.rho0
+        self._set_rho_x()
+        self.fix_rho = True if self.n_cont == 0 else self.fix_rho0
 
     def _set_rho_x(self):
         icm = self.is_cont_mask
@@ -436,10 +436,13 @@ class WedgeDistance(WeightedDistance):
     has_gradient = True
 
     def __init__(self, rho0=.5, fix_rho=False, **kwargs):
-        self.rho = [10**rho0]
+        self.rho0 = 10**rho0
+        self.rho = None
+        self.fix_rho0 = fix_rho
         self.fix_rho = fix_rho
         super(WedgeDistance, self).__init__(**kwargs)
-        self.theta2 = [self.theta[0]]
+        self.theta20 = self.theta0
+        self.theta2 = None
 
         self._n_dis_values = None
         self.xl = None
@@ -455,12 +458,10 @@ class WedgeDistance(WeightedDistance):
         self.xl = np.min(x, axis=0)
         self.xu = np.max(x, axis=0)
 
-        if len(self.rho) == 1:
-            self.rho = np.ones((self.xt.shape[1],))*self.rho[0]
-            if self.xt.shape[1] == 0:
-                self.fix_rho = True
-        if len(self.theta2) == 1:
-            self.theta2 = np.ones((self.xt.shape[1],))*self.theta2[0]
+        self.rho = np.ones((self.xt.shape[1],))*self.rho0
+        self.fix_rho = True if self.xt.shape[1] == 0 else self.fix_rho0
+
+        self.theta2 = np.ones((self.xt.shape[1],))*self.theta20
 
     def _update_derived_values(self):
         self.rho_x = np.log10(self.rho)*np.pi

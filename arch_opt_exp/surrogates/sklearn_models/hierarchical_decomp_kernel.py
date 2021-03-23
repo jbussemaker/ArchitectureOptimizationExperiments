@@ -60,6 +60,7 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
         self._cross_mi_kernel_mask = _cross_mi_kernel_mask
         self._shared_kernel_mask = _shared_kernel_mask
         self._mi_kernels: List[Kernel] = [k for _, k in sorted(list(mi_kernels.items()), key=lambda k: int(k[0][1:]))]
+        self._mi_kernels_n = [ker.n_dims for ker in self._mi_kernels]
         for key, ker in mi_kernels.items():
             setattr(self, key, ker)
 
@@ -98,8 +99,8 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
     @theta.setter
     def theta(self, theta):
         remaining_theta = theta
-        for ker in self._mi_kernels:
-            n = ker.n_dims
+        for i, ker in enumerate(self._mi_kernels):
+            n = self._mi_kernels_n[i]
             ker.theta = remaining_theta[:n]
             remaining_theta = remaining_theta[n:]
 
@@ -270,6 +271,8 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
             self._shared_kernel_mask = (len(mi_kernels), is_shared)
             mi_kernels.append(_create_kernel(is_shared))
 
+        self._mi_kernels_n = [ker.n_dims for ker in self._mi_kernels]
+
     def is_stationary(self):
         return all([ker.is_stationary() for ker in self._mi_kernels])
 
@@ -410,9 +413,9 @@ if __name__ == '__main__':
     from arch_opt_exp.surrogates.sklearn_models.hierarchical_dist import *
 
     from arch_opt_exp.problems.hierarchical import *
-    problem = ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.E_OPT_DIS_IMP_UNPR_BI)
+    # problem = ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.E_OPT_DIS_IMP_UNPR_BI)
     # problem = HierarchicalGoldsteinProblem()
-    # problem = HierarchicalRosenbrockProblem()
+    problem = HierarchicalRosenbrockProblem()
     # problem.impute = False
 
     # kernel = None
@@ -427,7 +430,8 @@ if __name__ == '__main__':
 
     sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6, int_as_discrete=True)
 
-    from arch_opt_exp.algorithms.surrogate.surrogate_infill import SurrogateBasedInfill
-    SurrogateBasedInfill.plot_model_problem(sm, problem, n_pts=20)
-    # from arch_opt_exp.surrogates.validation import LOOCrossValidation
+    # from arch_opt_exp.algorithms.surrogate.surrogate_infill import SurrogateBasedInfill
+    # SurrogateBasedInfill.plot_model_problem(sm, problem, n_pts=20)
+    from arch_opt_exp.surrogates.validation import LOOCrossValidation
     # LOOCrossValidation.check_sample_sizes(sm, problem, show=True, print_progress=True)
+    LOOCrossValidation.check_sample_sizes(sm, problem, show=False, print_progress=True, n_pts_test=[10])

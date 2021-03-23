@@ -113,7 +113,9 @@ class WeightedDistance(Distance):
     """
 
     def __init__(self, theta0=1., fix_theta=False, theta_bounds=(1e-5, 1e5)):
-        self.theta = [theta0]
+        self.theta0 = theta0
+        self.theta = None
+        self.fix_theta0 = fix_theta
         self.fix_theta = fix_theta
         self.theta_bounds = theta_bounds
         super(WeightedDistance, self).__init__()
@@ -121,10 +123,8 @@ class WeightedDistance(Distance):
     def set_samples(self, *args, **kwargs):
         super(WeightedDistance, self).set_samples(*args, **kwargs)
 
-        if len(self.theta) == 1:
-            self.theta = np.ones((self.xt.shape[1],)) * self.theta[0]
-            if self.xt.shape[1] == 0:
-                self.fix_theta = True
+        self.theta = np.ones((self.xt.shape[1],)) * self.theta0
+        self.fix_theta = True if self.xt.shape[1] == 0 else self.fix_theta0
 
     def hyperparameters(self) -> Optional[List[Hyperparameter]]:
         if self.fix_theta:
@@ -173,9 +173,6 @@ class MixedIntKernel(KernelOperator, DiscreteHierarchicalKernelBase):
     Implementation inspired by the Product KernelOperator.
     """
 
-    _n_dims_cache = {}
-    _hp_cache = {}
-
     def __init__(self, cont_kernel: Kernel, discrete_kernel: Kernel, is_discrete_mask=None):
         super(MixedIntKernel, self).__init__(cont_kernel, discrete_kernel)
 
@@ -199,20 +196,6 @@ class MixedIntKernel(KernelOperator, DiscreteHierarchicalKernelBase):
     def predict_set_is_active(self, is_active: np.ndarray):
         if isinstance(self.k2, DiscreteHierarchicalKernelBase):
             self.k2.predict_set_is_active(is_active[:, self._is_discrete_mask])
-
-    @property
-    def n_dims(self):
-        key = (self.__class__.__name__, self.k1.__class__, self.k2.__class__)
-        if key not in self._n_dims_cache:
-            self._n_dims_cache[key] = super(MixedIntKernel, self).n_dims
-        return self._n_dims_cache[key]
-
-    @property
-    def hyperparameters(self):
-        key = (self.__class__.__name__, self.k1.__class__, self.k2.__class__)
-        if key not in self._hp_cache:
-            self._hp_cache[key] = super(MixedIntKernel, self).hyperparameters
-        return self._hp_cache[key]
 
     def get_params(self, deep=True):
         params = {
@@ -283,7 +266,35 @@ class MixedIntKernel(KernelOperator, DiscreteHierarchicalKernelBase):
     @staticmethod
     def get_cont_kernel(fix_theta=False) -> Kernel:
         kwargs = {'length_scale_bounds': 'fixed'} if fix_theta else {}
-        return FastProductKernel(ConstantKernel(1.), Matern(1., nu=1.5, **kwargs))
+        return FastProductKernel(FastConstantKernel(1.), FastMaternKernel(1., nu=1.5, **kwargs))
+
+
+class FastConstantKernel(ConstantKernel):
+
+    _param_cache = {}
+
+    def get_params(self, deep=True):
+        key = (self.__class__, deep)
+        if key not in self._param_cache:
+            params = super(FastConstantKernel, self).get_params(deep=deep)
+            self._param_cache[key] = set(params.keys())
+        else:
+            params = {pk: getattr(self, pk) for pk in self._param_cache[key]}
+        return params
+
+
+class FastMaternKernel(Matern):
+
+    _param_cache = {}
+
+    def get_params(self, deep=True):
+        key = (self.__class__, deep, self.nu)
+        if key not in self._param_cache:
+            params = super(FastMaternKernel, self).get_params(deep=deep)
+            self._param_cache[key] = set(params.keys())
+        else:
+            params = {pk: getattr(self, pk) for pk in self._param_cache[key]}
+        return params
 
 
 class FastProductKernel(Product):
@@ -343,10 +354,9 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
     """
 
     _param_keys_cache = {}
-    _hp_cache = {}
 
     def __init__(self, metric: Union[str, Distance] = None, length_scale=1.0, length_scale_bounds=(1e-5, 1e5), nu=.5,
-                 _is_discrete_mask=None, _train_is_active=None, _predict_is_active=None, **metric_hp):
+                 _is_discrete_mask=None, _train_is_active=None, _predict_is_active=None, _hp=None, **metric_hp):
         super(CustomDistanceKernel, self).__init__(
             length_scale=length_scale, length_scale_bounds=length_scale_bounds, nu=nu)
         self.metric = metric if metric is not None else 'euclidean'
@@ -355,6 +365,8 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
         self._is_cont_mask: Optional[IsDiscreteMask] = ~_is_discrete_mask if _is_discrete_mask is not None else None
 
         self._train_is_active = _train_is_active
+        self._tia_key = tuple(_train_is_active.ravel()) if _train_is_active is not None else None
+        self._nx = -1
         self._predict_is_active = _predict_is_active
 
         self.__metric_hp = None
@@ -362,6 +374,8 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
             for key, value in metric_hp.items():
                 setattr(self, key, value)
             self._set_metric_hp_from_attr()
+
+        self._hp = _hp
 
     def set_discrete_mask(self, is_discrete_mask: IsDiscreteMask):
         self._is_discrete_mask = MixedIntKernel.get_discrete_mask(is_discrete_mask)
@@ -372,6 +386,9 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
         if isinstance(self.metric, Distance):
             self.metric.set_samples(x, y, is_int_mask, is_cat_mask, is_active=is_active)
 
+        self._param_keys_cache = {}
+        self._hp = None
+
     def predict_set_is_active(self, is_active: np.ndarray):
         self._predict_is_active = is_active
         if isinstance(self.metric, Distance):
@@ -379,13 +396,11 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
 
     @property
     def hyperparameters(self):
-        key = (self.__class__, self.metric.__class__)
-        if key not in self._hp_cache:
+        if self._hp is None:
             hyperparameters = super(CustomDistanceKernel, self).hyperparameters
             hyperparameters += self._get_metric_hyperparameters()
-            self._hp_cache[key] = hyperparameters
-            return hyperparameters
-        return self._hp_cache[key]
+            self._hp = hyperparameters
+        return self._hp
 
     def _get_metric_hyperparameters(self) -> List[Hyperparameter]:
         if self.__metric_hp is not None:
@@ -401,15 +416,17 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
         return self.__metric_hp
 
     def get_params(self, deep=True):
-        if self.__class__ not in self._param_keys_cache:
+        key = (self.__class__, self._tia_key)
+        if key not in self._param_keys_cache:
             params = super(CustomDistanceKernel, self).get_params(deep=deep)
-            self._param_keys_cache[self.__class__] = set(params.keys())
+            self._param_keys_cache[key] = set(params.keys())
         else:
-            params = {key: getattr(self, key) for key in self._param_keys_cache[self.__class__]}
+            params = {key: getattr(self, key) for key in self._param_keys_cache[key]}
 
         params['_is_discrete_mask'] = self._is_discrete_mask
         params['_train_is_active'] = self._train_is_active
         params['_predict_is_active'] = self._predict_is_active
+        params['_hp'] = self._hp
 
         if isinstance(self.metric, Distance):
             metric_hp = self._get_metric_hyperparameters()
@@ -424,7 +441,7 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
 
     def _set_metric_hp_from_attr(self):
         if isinstance(self.metric, Distance):
-            values = [getattr(self, hp.name) for hp in self._get_metric_hyperparameters()]
+            values = [np.atleast_1d(getattr(self, hp.name)) for hp in self._get_metric_hyperparameters()]
             self.metric.set_hyperparameter_values(values)
 
     def __call__(self, x, y=None, eval_gradient=False):

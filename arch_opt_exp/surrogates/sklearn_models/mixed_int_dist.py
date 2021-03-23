@@ -261,12 +261,19 @@ class CompoundSymmetryKernel(Distance):
     has_gradient = True
 
     def __init__(self, v0=1., fix_v=False, cf0=.5, fix_cf=False):
-        self.v = [v0]
+        self.v0 = v0
+        self.v = None
+        self.fix_v0 = fix_v
         self.fix_v = fix_v
-        self.cf = [10**cf0]
+
+        self.cf0 = 10**cf0
+        self.cf = None
+        self.fix_cf0 = fix_cf
         self.fix_cf = fix_cf
+
         super(CompoundSymmetryKernel, self).__init__()
 
+        self._cv_l = None
         self.cf_x = None
         self.cf_l = None
         self.c = None
@@ -279,14 +286,14 @@ class CompoundSymmetryKernel(Distance):
         self._n_dis_values = n_dis_values = np.max(x, axis=0)+1
         self._cv_l = -1/(n_dis_values-1)
 
-        if len(self.v) == 1:
-            self.v = np.ones((self.xt.shape[1],))*self.v[0]
-        if len(self.cf) == 1:
-            self.cf = np.ones((self.xt.shape[1],))*self.cf[0]
-            self._set_cf_x()
+        self.v = np.ones((self.xt.shape[1],))*self.v0
+        self.cf = np.ones((self.xt.shape[1],))*self.cf0
+        self._set_cf_x()
 
         if self.xt.shape[1] == 0:
             self.fix_v = self.fix_cf = True
+        else:
+            self.fix_v, self.fix_cf = self.fix_v0, self.fix_cf0
 
     def _set_cf_x(self):
         self.cf_x = np.log10(self.cf)
@@ -404,7 +411,9 @@ class LatentVariablesDistance(Distance):
     has_gradient = True
 
     def __init__(self, theta0=0., fix_theta=False):
-        self.theta = [10**theta0]
+        self.theta0 = 10**theta0
+        self.theta = None
+        self.fix_theta0 = fix_theta
         self.fix_theta = fix_theta
         super(LatentVariablesDistance, self).__init__()
 
@@ -416,16 +425,16 @@ class LatentVariablesDistance(Distance):
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
         self._n_dis_values = n_dis_values = [int(n) for n in np.max(x, axis=0)+1]
 
-        if len(self.theta) == 1:
-            if self.xt.shape[1] == 0:
-                self.fix_theta = True
-                self.theta = []
-            else:
-                theta = []
-                for i in range(self.xt.shape[1]):
-                    theta += [self.theta[0]]*(n_dis_values[i]*2-3)
-                self.theta = 10**np.array(theta)
-            self._set_theta_x()
+        if self.xt.shape[1] == 0:
+            self.fix_theta = True
+            self.theta = []
+        else:
+            self.fix_theta = self.fix_theta0
+            theta = []
+            for i in range(self.xt.shape[1]):
+                theta += [self.theta0]*(n_dis_values[i]*2-3)
+            self.theta = 10**np.array(theta)
+        self._set_theta_x()
 
     def _set_theta_x(self):
         theta_values = np.log10(self.theta)
@@ -535,8 +544,8 @@ if __name__ == '__main__':
     # kernel = None
     # kernel = GowerDistance().kernel()
     # kernel = SymbolicCovarianceDistance(int_as_discrete=True).kernel()
-    kernel = HammingDistance().kernel()
-    # kernel = CompoundSymmetryKernel().kernel()
+    # kernel = HammingDistance().kernel()
+    kernel = CompoundSymmetryKernel().kernel()
     # kernel = LatentVariablesDistance().kernel()
 
     sm = SKLearnGPSurrogateModel(kernel=kernel, alpha=1e-6, int_as_discrete=True)
