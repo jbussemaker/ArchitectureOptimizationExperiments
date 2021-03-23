@@ -97,7 +97,7 @@ def get_problem():
     return problem, metrics, plot_metric_values
 
 
-def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=12, do_run=True):
+def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=16, do_run=True):
     runner.set_results_folder(results_key)
     exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=500, algorithm_names=algorithm_names)
 
