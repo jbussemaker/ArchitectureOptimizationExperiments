@@ -17,6 +17,16 @@ well an algorithm is able to find a Pareto front (e.g. how close it is to some p
 spread it is along this front). Efficiency represents the trade-off between effectiveness and number of function
 evaluations (i.e. system simulations) needed to get to a certain result quality.
 
+## Installing
+
+```
+conda create --name opt python=3.7
+conda activate opt
+conda install numpy
+conda install -c conda-forge smt==0.7.1
+pip install -r requirements.txt
+```
+
 ## Experimenter
 
 The `Experimenter` class handles running of experiments against a combination of a problem and an algorithm. It can run
