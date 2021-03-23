@@ -106,6 +106,7 @@ class LOOCrossValidation:
         is_active_lo = is_active[[i_leave_out], :] if is_active is not None else None
         xt = np.delete(xt, i_leave_out, axis=0)
         yt = np.delete(yt, i_leave_out, axis=0)
+        is_active = np.delete(is_active, i_leave_out, axis=0)
 
         surrogate_model_copy = cls._copy_surrogate_model(surrogate_model)
         surrogate_model_copy.set_samples(xt, yt, is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, is_active=is_active)
