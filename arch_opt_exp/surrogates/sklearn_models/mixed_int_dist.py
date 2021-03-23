@@ -21,7 +21,7 @@ from typing import *
 from arch_opt_exp.surrogates.sklearn_models.distance_base import *
 
 __all__ = ['GowerDistance', 'SymbolicCovarianceDistance', 'HammingDistance', 'CompoundSymmetryKernel',
-           'LatentVariablesDistance']
+           'LatentVariablesDistance', 'hamming_scalar', 'hamming_grad']
 
 
 class GowerDistance(WeightedDistance):
@@ -208,8 +208,7 @@ class HammingDistance(WeightedDistance):
                  v_is_active: np.ndarray = None, eval_gradient=False, **kwargs):
         d = hamming_scalar(u, v, self.theta)
         if eval_gradient:
-            grad = self.approx_theta_grad(d, self.theta, lambda theta_: hamming_scalar(u, v, theta_))
-            return d, grad
+            return d, hamming_grad(u, v, self.theta, self.theta)
         return d
 
     def _call(self, *args, **kwargs) -> float:
@@ -229,6 +228,27 @@ def hamming_scalar(u, v, w):  # Based on scipy.spatial.distance.hamming
     d = np.zeros((u.size,))
     d[u_ne_v] = w_ne/np.sum(w)
     return np.sum(d)
+
+
+@numba.jit(nopython=True, cache=True)
+def hamming_grad(u, v, w, w_grad):
+    u_ne_v = u != v
+
+    w_ne = np.zeros((u.size,))
+    w_ne[u_ne_v] = w[u_ne_v]
+    w_ne_grad = np.zeros((u.size,))
+    w_ne_grad[u_ne_v] = w_grad[u_ne_v]
+    w_sum = np.sum(w)
+
+    d = np.diag((w_ne_grad/w_sum) - ((w_ne*w_grad)/w_sum**2))
+
+    w_col = np.empty((w.size, 1))
+    w_col[:, 0] = w_grad
+    d_off = (w_ne*w_col)/w_sum**2
+    np.fill_diagonal(d_off, 0.)
+    d -= d_off
+
+    return np.sum(d, axis=1)
 
 
 class CompoundSymmetryKernel(Distance):

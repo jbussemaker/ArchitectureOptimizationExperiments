@@ -53,7 +53,7 @@ class LOOCrossValidation:
                 print('LOOCV set for %d pts (%d/%d)' % (n_pts, i+1, len(n_pts_test)))
 
             xt_test = init_sampling.do(problem, n_pts).get('X')
-            yt_test = problem.evaluate(xt_test)
+            yt_test = problem.evaluate(xt_test, return_values_of='F')
 
             is_active, xt_test = MixedIntProblemHelper.is_active(problem, xt_test)
             xt_test = MixedIntProblemHelper.normalize(problem, xt_test)
