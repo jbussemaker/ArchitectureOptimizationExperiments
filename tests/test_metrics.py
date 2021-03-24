@@ -178,15 +178,15 @@ def test_distance_metrics(problem, algorithm):
         assert values[-1] > values[0]
         # result.metrics[metric.name].plot(show=False)
 
-    gd_termination = GDTermination(limit=1e-4)
-    eff_res = exp.run_efficiency(gd_termination, repeat_idx=0)
-    assert len(eff_res.history) < 50
-    # eff_res.termination.plot(show=False)
+    # gd_termination = GDTermination(limit=1e-4)
+    # eff_res = exp.run_efficiency(gd_termination, repeat_idx=0)
+    # assert len(eff_res.history) < 50
+    # # eff_res.termination.plot(show=False)
 
-    igd_termination = IGDTermination(limit=1e-4)
-    eff_res = exp.run_efficiency(igd_termination, repeat_idx=0)
-    assert len(eff_res.history) < 50
-    # eff_res.termination.plot(show=False)
+    # igd_termination = IGDTermination(limit=1e-4)
+    # eff_res = exp.run_efficiency(igd_termination, repeat_idx=0)
+    # assert len(eff_res.history) < 50
+    # # eff_res.termination.plot(show=False)
 
 
 def test_crowding_distance_metric(problem, algorithm):

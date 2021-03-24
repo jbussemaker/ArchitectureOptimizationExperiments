@@ -20,8 +20,8 @@ import numpy as np
 from pymoo.model.problem import Problem
 from pymoo.factory import get_problem, get_reference_directions
 
-from smt.surrogate_models.rbf import RBF
-from smt.surrogate_models.kpls import KPLS
+from arch_opt_exp.surrogates.smt_models.smt_krg import *
+from arch_opt_exp.surrogates.smt_models.smt_rbf import *
 
 from arch_opt_exp.experimenter import *
 from arch_opt_exp.metrics.performance import *
@@ -37,13 +37,13 @@ def problem() -> Problem:
 
 
 @pytest.fixture
-def kriging_model() -> KPLS:
-    return KPLS(n_comp=5, theta0=[1e-2]*5)
+def kriging_model() -> SMTKPLSSurrogateModel:
+    return SMTKPLSSurrogateModel(theta0=1e-2, n_comp=5)
 
 
 def test_surrogate_infill(problem):
     sbo = SurrogateBasedInfill(
-        surrogate_model=RBF(d0=1., poly_degree=-1, reg=1e-10),
+        surrogate_model=SMTRBFSurrogateModel(d0=1., deg=-1, reg=1e-10),
         infill=FunctionEstimateInfill(),
         termination=5,
     )
@@ -60,7 +60,7 @@ def test_surrogate_infill(problem):
 
 def test_surrogate_infill_parallel(problem):
     sbo = SurrogateBasedInfill(
-        surrogate_model=RBF(d0=1., poly_degree=-1, reg=1e-10),
+        surrogate_model=SMTRBFSurrogateModel(d0=1., deg=-1, reg=1e-10),
         infill=FunctionEstimateInfill(),
         termination=5,
     )
@@ -78,7 +78,7 @@ def test_surrogate_infill_constrained():
     ref_dirs = get_reference_directions('das-dennis', 3, n_partitions=12)
 
     sbo = SurrogateBasedInfill(
-        surrogate_model=RBF(d0=1., poly_degree=-1, reg=1e-10),
+        surrogate_model=SMTRBFSurrogateModel(d0=1., deg=-1, reg=1e-10),
         infill=FunctionEstimateInfill(),
     )
     algorithm = sbo.algorithm(infill_size=10, init_size=20)
@@ -98,7 +98,7 @@ def test_surrogate_infill_constrained():
 
 def test_dist(problem):
     sbo = SurrogateBasedInfill(
-        surrogate_model=RBF(d0=1., poly_degree=-1, reg=1e-10),
+        surrogate_model=SMTRBFSurrogateModel(d0=1., deg=-1, reg=1e-10),
         infill=FunctionEstimateDistanceInfill(),
         termination=5,
     )

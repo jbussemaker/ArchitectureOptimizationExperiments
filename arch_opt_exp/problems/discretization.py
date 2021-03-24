@@ -249,7 +249,7 @@ class MixedIntProblem(MixedIntBaseProblem):
         n_vars_real = self.problem.n_var-self.n_vars_mixed_int
         self.mask = ['int' for _ in range(self.n_vars_mixed_int)]+['real' for _ in range(n_vars_real)]
         is_int_mask = [self.mask[i] == 'int' for i in range(len(self.mask))]
-        is_cat_mask = np.zeros((len(self.is_int_mask),), dtype=bool)
+        is_cat_mask = np.zeros((len(self.mask),), dtype=bool)
 
         super(MixedIntProblem, self).__init__(
             is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, impute=impute,

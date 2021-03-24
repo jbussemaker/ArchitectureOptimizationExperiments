@@ -40,13 +40,13 @@ def algorithm() -> Algorithm:
 def test_mixed_int_problem(problem, algorithm):
     mixed_int_problem = MixedIntProblem(problem, n_choices=11, n_vars_mixed_int=15)
 
-    hv_metric = DeltaHVMetric(mixed_int_problem.pareto_front())
-    exp = Experimenter(mixed_int_problem, algorithm, n_eval_max=2000, metrics=[hv_metric])
+    metric = IGDMetric(mixed_int_problem.pareto_front())
+    exp = Experimenter(mixed_int_problem, algorithm, n_eval_max=2000, metrics=[metric])
     result = exp.run_effectiveness(repeat_idx=0, seed=0)
 
-    hv_values = result.metrics[hv_metric.name].results()['delta_hv']
-    assert hv_values[-1] < hv_values[0]
-    # result.metrics[hv_metric.name].plot()
+    values = result.metrics[metric.name].results()['indicator']
+    assert values[-1] < values[0]
+    # result.metrics[metric.name].plot()
 
 
 def test_mixed_int_problem_repair(problem):
@@ -57,13 +57,13 @@ def test_mixed_int_problem_repair(problem):
         repair=mixed_int_problem.get_repair(),
     )
 
-    hv_metric = DeltaHVMetric(mixed_int_problem.pareto_front())
-    exp = Experimenter(mixed_int_problem, algorithm, n_eval_max=2000, metrics=[hv_metric])
+    metric = IGDMetric(mixed_int_problem.pareto_front())
+    exp = Experimenter(mixed_int_problem, algorithm, n_eval_max=2000, metrics=[metric])
     result = exp.run_effectiveness(repeat_idx=0, seed=0)
 
-    hv_values = result.metrics[hv_metric.name].results()['delta_hv']
-    assert hv_values[-1] < hv_values[0]
-    # result.metrics[hv_metric.name].plot()
+    values = result.metrics[metric.name].results()['indicator']
+    assert values[-1] < values[0]
+    # result.metrics[metric.name].plot()
 
 
 def test_mixed_int_problem_masked(problem):
@@ -92,10 +92,10 @@ def test_mixed_int_problem_masked(problem):
         repair=mixed_int_problem.get_repair(),
     )
 
-    hv_metric = DeltaHVMetric(mixed_int_problem.pareto_front())
-    exp = Experimenter(mixed_int_problem, algorithm, n_eval_max=2000, metrics=[hv_metric])
+    metric = IGDMetric(mixed_int_problem.pareto_front())
+    exp = Experimenter(mixed_int_problem, algorithm, n_eval_max=2000, metrics=[metric])
     result = exp.run_effectiveness(repeat_idx=0, seed=0)
 
-    hv_values = result.metrics[hv_metric.name].results()['delta_hv']
-    assert hv_values[-1] < hv_values[0]
-    # result.metrics[hv_metric.name].plot()
+    values = result.metrics[metric.name].results()['indicator']
+    assert values[-1] < values[0]
+    # result.metrics[metric.name].plot()
