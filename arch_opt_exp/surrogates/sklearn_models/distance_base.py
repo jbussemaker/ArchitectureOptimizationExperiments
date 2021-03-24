@@ -487,6 +487,9 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
             K = squareform(K)
             np.fill_diagonal(K, 1)
 
+        K[np.isnan(K)] = 0.
+        K[np.isinf(K)] = 0.
+
         if eval_gradient:
             if dists_grad is None:
                 def f(theta):  # helper function
@@ -516,6 +519,9 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
             #     return self.clone_with_theta(theta)(x, y)
             # K_grad_check = _approx_fprime(self.theta, f, 1e-10)
             # print(np.max(np.abs(K_grad_check-K_grad)))  # Validate analytical gradient
+
+            K_grad[np.isnan(K_grad)] = 0.
+            K_grad[np.isinf(K_grad)] = 0.
 
             return K, K_grad
         else:
@@ -569,7 +575,6 @@ class CustomDistanceKernel(Matern, DiscreteHierarchicalKernelBase):
             for j in range(y.shape[0]):
                 dm[i, j] = self.metric(x[i], y[j], u_is_active=predict_is_active[i], v_is_active=train_is_active[j])
         return dm
-
 
     def __repr__(self):
         return '%s(metric=%s, nu=%r)' % (self.__class__.__name__, self.metric, self.nu)
