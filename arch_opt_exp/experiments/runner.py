@@ -64,7 +64,7 @@ def get_experimenters(problem: Problem, algorithms: List[Algorithm], metrics: Li
             for i, algorithm in enumerate(algorithms)]
 
 
-def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, reset=True):
+def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, reset=False):
     """Runs the effectiveness experiment using multiple algorithms, repeated a number of time for each algorithm."""
     Experimenter.capture_log()
     log.info('Running effectiveness experiments: %d algorithms @ %d repetitions (%d total runs)' %
