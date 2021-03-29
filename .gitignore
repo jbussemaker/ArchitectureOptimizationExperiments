@@ -131,3 +131,4 @@ dmypy.json
 dump.pkl
 pf_cache
 results
+.idea
