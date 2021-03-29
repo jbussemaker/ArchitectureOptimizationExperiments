@@ -432,7 +432,7 @@ class LatentVariablesDistance(Distance):
             self.fix_theta = self.fix_theta0
             theta = []
             for i in range(self.xt.shape[1]):
-                theta += [self.theta0]*(n_dis_values[i]*2-3)
+                theta += [self.theta0]*max(0, n_dis_values[i]*2-3)
             self.theta = 10**np.array(theta)
         self._set_theta_x()
 
@@ -451,7 +451,9 @@ class LatentVariablesDistance(Distance):
         for i in range(len(n_dis_values)):
             n = n_dis_values[i]
             theta_x_i = np.zeros((n*2,))
-            n_theta_x = len(theta_x_i)-3
+            n_theta_x = max(0, len(theta_x_i)-3)
+            if n_theta_x == 0:
+                continue
             theta_x_i[3:] = theta_values[:n_theta_x]
             theta_x[:n, :, i] = theta_x_i.reshape((n, 2))
 
