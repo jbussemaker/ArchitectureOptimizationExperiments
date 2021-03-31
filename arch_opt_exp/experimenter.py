@@ -278,6 +278,11 @@ class Experimenter:
 
     def get_aggregate_effectiveness_results(self) -> ExperimenterResult:
         """Returns results aggregated for all individual runs, using mean and std."""
+        agg_results_path = self._get_agg_effectiveness_result_path()
+        if os.path.exists(agg_results_path):
+            with open(agg_results_path, 'rb') as fp:
+                return pickle.load(fp)
+
         results = []
         i = 0
         while True:
@@ -288,10 +293,16 @@ class Experimenter:
             results.append(result)
             i += 1
 
-        return ExperimenterResult.aggregate_results(results)
+        res = ExperimenterResult.aggregate_results(results)
+        with open(agg_results_path, 'wb') as fp:
+            pickle.dump(res, fp)
+        return res
 
     def _get_effectiveness_result_path(self, repeat_idx: int) -> str:
         return self._get_problem_algo_results_path('result_%d.pkl' % repeat_idx)
+
+    def _get_agg_effectiveness_result_path(self) -> str:
+        return self._get_problem_algo_results_path('result_agg.pkl')
 
     ### EFFICIENCY EXPERIMENTATION ###
 
@@ -378,6 +389,11 @@ class Experimenter:
 
     def get_aggregate_efficiency_results(self, metric_termination: MetricTermination) -> ExperimenterResult:
         """Get efficiency results aggregated for all efficiency experiment runs."""
+        agg_results_path = self._get_agg_efficiency_result_path(metric_termination)
+        if os.path.exists(agg_results_path):
+            with open(agg_results_path, 'rb') as fp:
+                return pickle.load(fp)
+
         results = []
         i = 0
         while True:
@@ -388,11 +404,18 @@ class Experimenter:
             results.append(result)
             i += 1
 
-        return ExperimenterResult.aggregate_results(results)
+        res = ExperimenterResult.aggregate_results(results)
+        with open(agg_results_path, 'wb') as fp:
+            pickle.dump(res, fp)
+        return res
 
     def _get_efficiency_result_path(self, metric_termination: MetricTermination, repeat_idx: int) -> str:
         return self._get_problem_algo_results_path(
             '%s/result_%d.pkl' % (secure_filename(metric_termination.metric_name), repeat_idx))
+
+    def _get_agg_efficiency_result_path(self, metric_termination: MetricTermination) -> str:
+        return self._get_problem_algo_results_path(
+            '%s/result_agg.pkl' % (secure_filename(metric_termination.metric_name),))
 
     ### HELPER FUNCTIONS ###
 

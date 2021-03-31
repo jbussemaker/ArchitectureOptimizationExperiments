@@ -74,6 +74,7 @@ def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, rese
         reset_results()
     for exp in experimenters:
         exp.run_effectiveness_parallel(n_repeat=n_repeat)
+        exp.get_aggregate_effectiveness_results()
 
 
 def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_values: Dict[str, List[str]] = None,
