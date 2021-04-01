@@ -69,8 +69,9 @@ class Metric:
         if plot_value_names is None:
             plot_value_names = metrics[0].value_names
 
+        style = ['-', '-.', ':']
         for value_name in plot_value_names:
-            plt.figure()
+            plt.figure(figsize=(16, 12))
 
             x_max = None
             err_title = ''
@@ -92,10 +93,14 @@ class Metric:
                 elif colors is not None:
                     kwargs['color'] = colors[i]
 
+                line_style = '-'
+                if colors is None:
+                    line_style = style[i // 10]
+
                 if titles is not None:
                     kwargs['label'] = titles[i]
 
-                l, = plt.plot(x, y, '-', **kwargs)
+                l, = plt.plot(x, y, line_style, **kwargs)
                 color = l.get_color()
                 kwargs['color'] = color
 
