@@ -80,6 +80,7 @@ def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, rese
 def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_values: Dict[str, List[str]] = None,
                                save=False, show=True):
     """Plot metrics results generated using run_effectiveness_multi."""
+    Experimenter.capture_log()
     results = [exp.get_aggregate_effectiveness_results() for exp in experimenters]
     metrics = sorted(results[0].metrics.values(), key=lambda m: m.name)
     if plot_metric_values is None:
