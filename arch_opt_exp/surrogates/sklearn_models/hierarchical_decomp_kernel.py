@@ -158,7 +158,7 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
                 ker.set_samples(x[i_samples_2d], y[i_samples, :], is_int_mask[mask], is_cat_mask[mask],
                                 is_active=is_active[i_samples_2d])
 
-        if self._add_shared_kernel:
+        if self._add_shared_kernel and self._shared_kernel_mask is not None:
             i_kernel, mask = self._shared_kernel_mask
             ker = self._mi_kernels[i_kernel]
             if isinstance(ker, DiscreteHierarchicalKernelBase):
@@ -179,7 +179,7 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
             if isinstance(ker, DiscreteHierarchicalKernelBase):
                 ker.predict_set_is_active(is_active[np.ix_(i_samples, mask)])
 
-        if self._add_shared_kernel:
+        if self._add_shared_kernel and self._shared_kernel_mask is not None:
             i_kernel, mask = self._shared_kernel_mask
             ker = self._mi_kernels[i_kernel]
             if isinstance(ker, DiscreteHierarchicalKernelBase):
@@ -238,6 +238,8 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
             for j in range(x.shape[1]):
                 if len(np.unique(values_tracker[j])) > 1:
                     is_x_sub_problem_map[j] = True
+            if np.all(~is_x_sub_problem_map):
+                continue
 
             is_active_i = np.array(is_active_i)
             sub_problem_dimensional_vars_map = is_active_i & ~is_x_sub_problem_map
@@ -268,8 +270,9 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
                 else:
                     is_shared &= is_active_i
 
-            self._shared_kernel_mask = (len(mi_kernels), is_shared)
-            mi_kernels.append(_create_kernel(is_shared))
+            if is_shared is not None and np.any(is_shared):
+                self._shared_kernel_mask = (len(mi_kernels), is_shared)
+                mi_kernels.append(_create_kernel(is_shared))
 
         self._mi_kernels_n = [ker.n_dims for ker in self._mi_kernels]
 
@@ -368,7 +371,7 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
 
             K_gradients = np.dstack(K_gradients)
 
-        if self._add_shared_kernel:  # Evaluate the shared-variables kernel
+        if self._add_shared_kernel and self._shared_kernel_mask is not None:  # Evaluate the shared-variables kernel
             i_kernel, mask = self._shared_kernel_mask
             ker = self._mi_kernels[i_kernel]
             X_ker = X[:, mask]

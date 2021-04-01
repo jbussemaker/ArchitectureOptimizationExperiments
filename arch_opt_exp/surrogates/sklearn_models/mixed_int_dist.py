@@ -120,7 +120,7 @@ class SymbolicCovarianceDistance(WeightedDistance):
         # For discrete variables use the symbolic covariance
         x_means_dis = np.empty(x_dis.shape)
         for i in range(x_dis.shape[1]):
-            n_x_levels_i = np.max(x_dis[:, i])+1
+            n_x_levels_i = (np.max(x_dis[:, i])+1) if x_dis.shape[0] > 0 else 2
             x_means_dis[:, i] = self._symbolic_covariance_x_means(x_dis[:, i], n_x_levels_i)
         x_means[:, self.use_sc_mask] = x_means_dis
 
@@ -283,7 +283,11 @@ class CompoundSymmetryKernel(Distance):
         self._n_dis_values = None
 
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
-        self._n_dis_values = n_dis_values = np.max(x, axis=0)+1
+        if x.shape[0] == 0:
+            n_dis_values = np.ones((x.shape[1],))
+        else:
+            n_dis_values = np.max(x, axis=0)
+        self._n_dis_values = n_dis_values+1
         self._cv_l = -1/(n_dis_values-1)
 
         self.v = np.ones((self.xt.shape[1],))*self.v0
@@ -423,7 +427,11 @@ class LatentVariablesDistance(Distance):
         self._n_dis_values = None
 
     def _process_samples(self, x: np.ndarray, y: np.ndarray):
-        self._n_dis_values = n_dis_values = [int(n) for n in np.max(x, axis=0)+1]
+        if x.shape[0] == 0:
+            n_dis_values = np.ones((x.shape[1],))
+        else:
+            n_dis_values = np.max(x, axis=0)
+        self._n_dis_values = n_dis_values = [int(n) for n in n_dis_values+1]
 
         if self.xt.shape[1] == 0:
             self.fix_theta = True
