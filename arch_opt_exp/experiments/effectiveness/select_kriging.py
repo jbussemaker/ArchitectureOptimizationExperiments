@@ -29,6 +29,27 @@ from arch_opt_exp.surrogates.sklearn_models.hierarchical_dist import *
 from arch_opt_exp.surrogates.sklearn_models.hierarchical_decomp_kernel import *
 
 
+def select_kriging_doe_size(do_run=True):
+    problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
+
+    results_key = 'eff_select_kriging_doe_size'
+    n_infill = 10
+
+    def _get_algo(n_init):
+        return SurrogateBasedInfill(infill=ModMinimumPOIInfill(), surrogate_model=sm, termination=100, verbose=True)\
+            .algorithm(infill_size=n_infill, init_size=n_init)
+
+    sm = SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, theta0=1.)
+    sm = SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), alpha=1e-6, int_as_discrete=True)
+
+    n_init_test = [25, 50, 100, 150]
+    algorithms = [_get_algo(n) for n in n_init_test]
+    algorithm_names = [('SBO(%d)' % n) for n in n_init_test]
+
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=200,
+        do_run=do_run)
+
+
 def select_kriging_surrogate(do_run=True):
     problem, metrics, plot_metric_values = get_problem()
 
@@ -72,7 +93,7 @@ def select_kriging_surrogate(do_run=True):
     run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, do_run=do_run)
 
 
-def get_problem():
+def get_problem(include_loo_cv=True):
     problem = MOHierarchicalTestProblem()
 
     pf = problem.pareto_front()
@@ -81,7 +102,7 @@ def get_problem():
         IGDMetric(pf),
         SpreadMetric(),
         MaxConstraintViolationMetric(),
-        SurrogateQualityMetric(include_loo_cv=True, n_loo_cv=4),
+        SurrogateQualityMetric(include_loo_cv=include_loo_cv, n_loo_cv=4),
         TrainingMetric(),
         InfillMetric(),
     ]
@@ -90,16 +111,17 @@ def get_problem():
         'IGD': None,
         'spread': ['delta'],
         'max_cv': ['max_cv'],
-        'sm_quality': ['rmse', 'loo_cv'],
+        'sm_quality': ['rmse', 'loo_cv'] if include_loo_cv else ['rmse'],
         'training': ['n_train', 'n_samples', 'time_train'],
         'infill': ['time_infill'],
     }
     return problem, metrics, plot_metric_values
 
 
-def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=16, do_run=True):
+def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=16, n_eval_max=500,
+        do_run=True):
     runner.set_results_folder(results_key)
-    exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=500, algorithm_names=algorithm_names)
+    exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=n_eval_max, algorithm_names=algorithm_names)
 
     if do_run:
         runner.run_effectiveness_multi(exp, n_repeat=n_repeat)
@@ -112,6 +134,9 @@ if __name__ == '__main__':
     optimization problems? This is done by comparing different Kriging surrogates on the analytical test problem, using
     the Minimum Probability of Improvement (MPoI) infill criterion.
     """
-    select_kriging_surrogate(
+    select_kriging_doe_size(
         # do_run=False,
     )
+    # select_kriging_surrogate(
+    #     # do_run=False,
+    # )
