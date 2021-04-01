@@ -283,6 +283,7 @@ class Experimenter:
             with open(agg_results_path, 'rb') as fp:
                 return pickle.load(fp)
 
+        log.info('Aggregating effectiveness results: %s / %s' % (self.problem.name(), self.algorithm_name))
         results = []
         i = 0
         while True:
@@ -394,6 +395,8 @@ class Experimenter:
             with open(agg_results_path, 'rb') as fp:
                 return pickle.load(fp)
 
+        log.info('Aggregating efficiency results: %s / %s / %s' %
+                 (self.problem.name(), self.algorithm_name, metric_termination.metric_name))
         results = []
         i = 0
         while True:

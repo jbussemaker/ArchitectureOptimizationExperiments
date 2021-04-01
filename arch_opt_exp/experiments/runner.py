@@ -88,6 +88,7 @@ def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_va
     for ii, metric in enumerate(metrics):
         if metric.name not in plot_metric_values:
             continue
+        log.info('Plotting metric: %s -> %r' % (metric.name, plot_metric_values.get(metric.name)))
         save_filename = os.path.join(experimenters[0].results_folder, secure_filename('results_%s' % metric.name))
         ExperimenterResult.plot_compare_metrics(
             results, metric.name, plot_value_names=plot_metric_values.get(metric.name), plot_evaluations=True,
