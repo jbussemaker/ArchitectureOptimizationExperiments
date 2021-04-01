@@ -40,7 +40,7 @@ def select_kriging_doe_size(do_run=True):
             .algorithm(infill_size=n_infill, init_size=n_init)
 
     sm, suf = SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, theta0=1.), 'cont_relax'
-    # sm, suf = SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), alpha=1e-6, int_as_discrete=True), 'gow
+    # sm, suf = SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), alpha=1e-6, int_as_discrete=True), 'gow'
 
     results_key = 'eff_select_kriging_doe_size_'+suf
     n_init_test = [25, 50, 100, 150]
