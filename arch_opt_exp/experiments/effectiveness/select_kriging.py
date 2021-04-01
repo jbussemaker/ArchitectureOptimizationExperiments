@@ -24,6 +24,7 @@ from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
 
 from arch_opt_exp.surrogates.smt_models.smt_krg import *
 from arch_opt_exp.surrogates.sklearn_models.gp import *
+from arch_opt_exp.surrogates.sklearn_models.distance_base import *
 from arch_opt_exp.surrogates.sklearn_models.mixed_int_dist import *
 from arch_opt_exp.surrogates.sklearn_models.hierarchical_dist import *
 from arch_opt_exp.surrogates.sklearn_models.hierarchical_decomp_kernel import *
@@ -32,16 +33,16 @@ from arch_opt_exp.surrogates.sklearn_models.hierarchical_decomp_kernel import *
 def select_kriging_doe_size(do_run=True):
     problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
 
-    results_key = 'eff_select_kriging_doe_size'
     n_infill = 10
 
     def _get_algo(n_init):
         return SurrogateBasedInfill(infill=ModMinimumPOIInfill(), surrogate_model=sm, termination=100, verbose=True)\
             .algorithm(infill_size=n_infill, init_size=n_init)
 
-    sm = SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, theta0=1.)
-    sm = SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), alpha=1e-6, int_as_discrete=True)
+    sm, suf = SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, theta0=1.), 'cont_relax'
+    # sm, suf = SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), alpha=1e-6, int_as_discrete=True), 'gow
 
+    results_key = 'eff_select_kriging_doe_size_'+suf
     n_init_test = [25, 50, 100, 150]
     algorithms = [_get_algo(n) for n in n_init_test]
     algorithm_names = [('SBO(%d)' % n) for n in n_init_test]
@@ -51,7 +52,7 @@ def select_kriging_doe_size(do_run=True):
 
 
 def select_kriging_surrogate(do_run=True):
-    problem, metrics, plot_metric_values = get_problem()
+    problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
 
     results_key = 'eff_select_kriging'
     n_init, n_infill = 25, 10
@@ -85,6 +86,13 @@ def select_kriging_surrogate(do_run=True):
                                  **sklearn_kwargs), 'MI+H: DVW+CS'),
         (SKLearnGPSurrogateModel(kernel=DVWDecompositionKernel(LatentVariablesDistance().kernel()),
                                  **sklearn_kwargs), 'MI+H: DVW+LV'),
+
+        (SKLearnGPSurrogateModel(kernel=DVWDecompositionKernel(MixedIntKernel.get_cont_kernel()),
+                                 **sklearn_kwargs), 'MI+H: DVW+cr'),
+        (SKLearnGPSurrogateModel(kernel=DVWDecompositionKernel(HammingDistance().kernel()),
+                                 **sklearn_kwargs), 'MI+H: DVW+Ham'),
+        (SKLearnGPSurrogateModel(kernel=DVWDecompositionKernel(SymbolicCovarianceDistance().kernel()),
+                                 **sklearn_kwargs), 'MI+H: DVW+SC'),
     ]
 
     algorithms = [_get_algo(sm) for sm, _ in sms]
