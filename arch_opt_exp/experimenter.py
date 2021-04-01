@@ -16,6 +16,7 @@ Contact: jasper.bussemaker@dlr.de
 """
 
 import os
+import bz2
 import copy
 import pickle
 import logging
@@ -263,7 +264,7 @@ class Experimenter:
         # Store results and return
         result_path = self._get_effectiveness_result_path(repeat_idx=repeat_idx)
         with open(result_path, 'wb') as fp:
-            pickle.dump(result, fp)
+            fp.write(bz2.compress(pickle.dumps(result)))
 
         # log.info('Effectiveness experiment finished: %s / %s / %d' %
         #          (self.problem.name(), self.algorithm_name, repeat_idx))
@@ -274,7 +275,7 @@ class Experimenter:
         if not os.path.exists(result_path):
             return
         with open(result_path, 'rb') as fp:
-            return pickle.load(fp)
+            return pickle.loads(bz2.decompress(fp.read()))
 
     def get_aggregate_effectiveness_results(self) -> ExperimenterResult:
         """Returns results aggregated for all individual runs, using mean and std."""
@@ -374,7 +375,7 @@ class Experimenter:
         # Store results and return
         result_path = self._get_efficiency_result_path(metric_termination, repeat_idx=repeat_idx)
         with open(result_path, 'wb') as fp:
-            pickle.dump(result, fp)
+            fp.write(bz2.compress(pickle.dumps(result)))
 
         log.info('Efficiency experiment finished (converged: %r): %s / %s / %d' %
                  (result.metric_converged, self.problem.name(), self.algorithm_name, repeat_idx))
@@ -386,7 +387,7 @@ class Experimenter:
         if not os.path.exists(result_path):
             return
         with open(result_path, 'rb') as fp:
-            return pickle.load(fp)
+            return pickle.loads(bz2.decompress(fp.read()))
 
     def get_aggregate_efficiency_results(self, metric_termination: MetricTermination) -> ExperimenterResult:
         """Get efficiency results aggregated for all efficiency experiment runs."""

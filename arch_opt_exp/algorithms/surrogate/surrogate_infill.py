@@ -173,7 +173,7 @@ class SurrogateInfill:
 class SurrogateBasedInfill(ModelBasedInfillCriterion):
     """Infill criterion that searches a surrogate model to generate new infill points."""
 
-    _exclude = ['_surrogate_model']
+    _exclude = ['_surrogate_model', 'opt_results']
 
     def __init__(self, surrogate_model: Union[SurrogateModel, SurrogateModelFactory], infill: SurrogateInfill,
                  pop_size=None, termination: Union[Termination, int] = None, verbose=False, **kwargs):
@@ -198,7 +198,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self.termination = termination
         self.verbose = verbose
 
-        self.opt_results: List[Result] = []
+        self.opt_results: List[Result] = None
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -316,6 +316,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
             callback=SurrogateInfillCallback(n_gen_report=n_callback, verbose=self.verbose,
                                              n_points_outer=len(self.total_pop), n_eval_outer=n_eval_outer),
         )
+        if self.opt_results is None:
+            self.opt_results = []
         self.opt_results.append(result)
 
         # Select infill points and denormalize the design vectors
@@ -339,7 +341,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
     def plot_infill_selection(self, show=True):
         has_warned = False
-        for i, result in enumerate(self.opt_results):
+        for i, result in enumerate(self.opt_results or []):
             obj = result.pop.get('F')
             obj_selected = result.opt.get('F')
 
