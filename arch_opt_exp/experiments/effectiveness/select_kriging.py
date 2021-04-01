@@ -55,7 +55,7 @@ def select_kriging_surrogate(do_run=True):
     problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
 
     results_key = 'eff_select_kriging'
-    n_init, n_infill = 25, 10
+    n_init, n_infill = 5*problem.n_var, 10
 
     def _get_algo(sm):
         return SurrogateBasedInfill(infill=ModMinimumPOIInfill(), surrogate_model=sm, termination=100, verbose=True)\
@@ -126,7 +126,7 @@ def get_problem(include_loo_cv=True):
     return problem, metrics, plot_metric_values
 
 
-def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=16, n_eval_max=500,
+def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=300,
         do_run=True):
     runner.set_results_folder(results_key)
     exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=n_eval_max, algorithm_names=algorithm_names)
