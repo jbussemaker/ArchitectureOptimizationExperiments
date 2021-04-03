@@ -104,7 +104,7 @@ class Metric:
                 color = l.get_color()
                 kwargs['color'] = color
 
-                if y_err is not None:
+                if y_err is not None and std_sigma != 0.:
                     if 'label' in kwargs:
                         del kwargs['label']
 

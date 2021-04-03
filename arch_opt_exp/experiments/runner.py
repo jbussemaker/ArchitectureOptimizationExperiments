@@ -91,9 +91,15 @@ def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_va
             continue
         log.info('Plotting metric: %s -> %r' % (metric.name, plot_metric_values.get(metric.name)))
         save_filename = os.path.join(experimenters[0].results_folder, secure_filename('results_%s' % metric.name))
+
         ExperimenterResult.plot_compare_metrics(
             results, metric.name, plot_value_names=plot_metric_values.get(metric.name), plot_evaluations=True,
             save_filename=save_filename, show=False)
+
+        ExperimenterResult.plot_compare_metrics(
+            results, metric.name, plot_value_names=plot_metric_values.get(metric.name), plot_evaluations=True,
+            save_filename=os.path.join(experimenters[0].results_folder, secure_filename('ns_results_%s' % metric.name)),
+            std_sigma=0., show=False)
 
     if show:
         plt.show()
