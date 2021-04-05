@@ -266,9 +266,9 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
             is_shared = None
             for is_active_i, _, _ in mi_kernel_mask:
                 if is_shared is None:
-                    is_shared = is_active_i
+                    is_shared = np.copy(is_active_i)
                 else:
-                    is_shared &= is_active_i
+                    is_shared &= np.copy(is_active_i)
 
             if is_shared is not None and np.any(is_shared):
                 self._shared_kernel_mask = (len(mi_kernels), is_shared)
