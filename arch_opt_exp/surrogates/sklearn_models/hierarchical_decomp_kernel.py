@@ -259,7 +259,9 @@ class SPWDecompositionKernel(Kernel, NormalizedKernelMixin, DiscreteHierarchical
                 cross_mi_kernel_mask.append((i_kernel, is_active_i, is_active_j, cross_dim_vars))
 
                 # Use constant covariance per sub-problem
-                mi_kernels.append(ConstantKernel(constant_value=.5, constant_value_bounds=(1e-5, 1.)))
+                # Note: setting a too-high constant_value leads to a failure to compute the Cholesky decomposition of
+                # the K matrix (can check with np.linalg.eigvalsh --> should all be positive)
+                mi_kernels.append(ConstantKernel(constant_value=.1, constant_value_bounds=(1e-5, 1.)))
 
         # Create a kernel for relating shared variables
         if self._add_shared_kernel:
