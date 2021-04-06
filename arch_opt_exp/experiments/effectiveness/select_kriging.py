@@ -54,8 +54,9 @@ def select_kriging_doe_size(do_run=True):
 def select_kriging_surrogate(do_run=True):
     problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
 
-    results_key = 'eff_select_kriging'
-    n_init, n_infill = 5*problem.n_var, 10
+    results_key = 'eff_select_kriging_2'
+    # n_init, n_infill = 5*problem.n_var, 10
+    n_init, n_infill = 200, 10
 
     def _get_algo(sm):
         return SurrogateBasedInfill(infill=ModMinimumPOIInfill(), surrogate_model=sm, termination=100, verbose=True)\
@@ -71,11 +72,11 @@ def select_kriging_surrogate(do_run=True):
         (SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), **sklearn_kwargs), 'MI: Gow'),
         (SKLearnGPSurrogateModel(kernel=SymbolicCovarianceDistance().kernel(), **sklearn_kwargs), 'MI: SC'),
         (SKLearnGPSurrogateModel(kernel=CompoundSymmetryKernel().kernel(), **sklearn_kwargs), 'MI: CS'),
-        (SKLearnGPSurrogateModel(kernel=LatentVariablesDistance().kernel(), **sklearn_kwargs), 'MI: LV'),
+        # (SKLearnGPSurrogateModel(kernel=LatentVariablesDistance().kernel(), **sklearn_kwargs), 'MI: LV'),
 
-        (SKLearnGPSurrogateModel(kernel=ArcDistance().kernel(), **sklearn_kwargs), 'MI+H: Arc'),
+        # (SKLearnGPSurrogateModel(kernel=ArcDistance().kernel(), **sklearn_kwargs), 'MI+H: Arc'),
         (SKLearnGPSurrogateModel(kernel=IndefiniteConditionalDistance().kernel(), **sklearn_kwargs), 'MI+H: Ico'),
-        (SKLearnGPSurrogateModel(kernel=ImputationDistance().kernel(), **sklearn_kwargs), 'MI+H: Imp'),
+        # (SKLearnGPSurrogateModel(kernel=ImputationDistance().kernel(), **sklearn_kwargs), 'MI+H: Imp'),
         (SKLearnGPSurrogateModel(kernel=WedgeDistance().kernel(), **sklearn_kwargs), 'MI+H: Wed'),
 
         (SKLearnGPSurrogateModel(kernel=SPWDecompositionKernel(CompoundSymmetryKernel().kernel()),
@@ -97,6 +98,30 @@ def select_kriging_surrogate(do_run=True):
 
     algorithms = [_get_algo(sm) for sm, _ in sms]
     algorithm_names = [('SBO(%s)' % name) for _, name in sms]
+
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, do_run=do_run)
+
+
+def select_infill_size(do_run=True):
+    problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
+
+    results_key = 'eff_select_kriging_infill'
+    n_init = 200
+
+    def _get_algo(sm, n_infill_):
+        infill = ModMinimumPOIInfill() if n_infill_ > 1 else MinimumPOIInfill()
+        return SurrogateBasedInfill(infill=infill, surrogate_model=sm, termination=100, verbose=True)\
+            .algorithm(infill_size=n_infill_, init_size=n_init)
+
+    smt_kwargs = {'theta0': 1.}
+    sms = [
+        (SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, **smt_kwargs), 'cont_relax'),
+        (SMTKrigingSurrogateModel(auto_wrap_mixed_int=True, **smt_kwargs), 'dummy_coding'),
+    ]
+    n_infills = [1, 5, 10, 20]
+
+    algorithms = [_get_algo(sm, n_infill) for sm, _ in sms for n_infill in n_infills]
+    algorithm_names = [('SBO(%s, %d)' % (name, n_infill)) for _, name in sms for n_infill in n_infills]
 
     run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, do_run=do_run)
 
@@ -126,7 +151,7 @@ def get_problem(include_loo_cv=True):
     return problem, metrics, plot_metric_values
 
 
-def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=300,
+def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=4, n_eval_max=500,
         do_run=True):
     runner.set_results_folder(results_key)
     exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=n_eval_max, algorithm_names=algorithm_names)
@@ -142,9 +167,12 @@ if __name__ == '__main__':
     optimization problems? This is done by comparing different Kriging surrogates on the analytical test problem, using
     the Minimum Probability of Improvement (MPoI) infill criterion.
     """
-    select_kriging_doe_size(
-        # do_run=False,
-    )
+    # select_kriging_doe_size(
+    #     # do_run=False,
+    # )
     # select_kriging_surrogate(
     #     # do_run=False,
     # )
+    select_infill_size(
+        # do_run=False,
+    )
