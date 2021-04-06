@@ -33,21 +33,22 @@ from arch_opt_exp.surrogates.sklearn_models.hierarchical_decomp_kernel import *
 def select_kriging_doe_size(do_run=True):
     problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
 
-    n_infill = 10
+    n_infill = 1
 
     def _get_algo(n_init):
-        return SurrogateBasedInfill(infill=ModMinimumPOIInfill(), surrogate_model=sm, termination=100, verbose=True)\
+        infill = ModMinimumPOIInfill() if n_infill > 1 else MinimumPOIInfill()
+        return SurrogateBasedInfill(infill=infill, surrogate_model=sm, termination=100, verbose=True)\
             .algorithm(infill_size=n_infill, init_size=n_init)
 
     sm, suf = SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, theta0=1.), 'cont_relax'
     # sm, suf = SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), alpha=1e-6, int_as_discrete=True), 'gow'
 
-    results_key = 'eff_select_kriging_doe_size_'+suf
-    n_init_test = [25, 50, 100, 150]
+    results_key = 'eff_select_kriging_doe_size_%s_%d' % (suf, n_infill)
+    n_init_test = [25, 50, 100, 150, 200]
     algorithms = [_get_algo(n) for n in n_init_test]
     algorithm_names = [('SBO(%d)' % n) for n in n_init_test]
 
-    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=200,
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=300,
         do_run=do_run)
 
 
@@ -167,12 +168,12 @@ if __name__ == '__main__':
     optimization problems? This is done by comparing different Kriging surrogates on the analytical test problem, using
     the Minimum Probability of Improvement (MPoI) infill criterion.
     """
-    # select_kriging_doe_size(
-    #     # do_run=False,
-    # )
+    select_kriging_doe_size(
+        # do_run=False,
+    )
     # select_kriging_surrogate(
     #     # do_run=False,
     # )
-    select_infill_size(
-        # do_run=False,
-    )
+    # select_infill_size(
+    #     # do_run=False,
+    # )
