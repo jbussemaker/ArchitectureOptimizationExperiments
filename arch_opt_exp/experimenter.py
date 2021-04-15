@@ -23,6 +23,7 @@ import logging
 import tempfile
 import contextlib
 import numpy as np
+import pandas as pd
 from typing import *
 import logging.config
 import concurrent.futures
@@ -209,6 +210,26 @@ class ExperimenterResult(Result):
         if show:
             plt.show()
 
+    def export_pandas(self) -> pd.DataFrame:
+        has_std = self.n_eval_std is not None
+        data = {
+            'n_eval': self.n_eval,
+        }
+        if has_std:
+            data['n_eval_std'] = self.n_eval_std
+
+        for name, metric in self.metrics.items():
+            data.update({'%s_%s' % (name, key): value for key, value in metric.results().items()})
+            if has_std:
+                data.update({'%s_%s_std' % (name, key): value for key, value in metric.results_std().items()})
+
+        return pd.DataFrame(index=np.array(range(len(self.n_eval)), dtype=int)+1, data=data)
+
+    def save_csv(self, path):
+        res = self.export_pandas().to_csv(index_label='#').replace('\r', '')
+        with open(path, 'w') as fp:
+            fp.write(res)
+
 
 class Experimenter:
     """Main class that handles the experiment for a given problem and algorithm."""
@@ -301,10 +322,10 @@ class Experimenter:
         return res
 
     def _get_effectiveness_result_path(self, repeat_idx: int) -> str:
-        return self._get_problem_algo_results_path('result_%d.pkl' % repeat_idx)
+        return self.get_problem_algo_results_path('result_%d.pkl' % repeat_idx)
 
     def _get_agg_effectiveness_result_path(self) -> str:
-        return self._get_problem_algo_results_path('result_agg.pkl')
+        return self.get_problem_algo_results_path('result_agg.pkl')
 
     ### EFFICIENCY EXPERIMENTATION ###
 
@@ -414,11 +435,11 @@ class Experimenter:
         return res
 
     def _get_efficiency_result_path(self, metric_termination: MetricTermination, repeat_idx: int) -> str:
-        return self._get_problem_algo_results_path(
+        return self.get_problem_algo_results_path(
             '%s/result_%d.pkl' % (secure_filename(metric_termination.metric_name), repeat_idx))
 
     def _get_agg_efficiency_result_path(self, metric_termination: MetricTermination) -> str:
-        return self._get_problem_algo_results_path(
+        return self.get_problem_algo_results_path(
             '%s/result_agg.pkl' % (secure_filename(metric_termination.metric_name),))
 
     ### HELPER FUNCTIONS ###
@@ -442,7 +463,7 @@ class Experimenter:
 
         Experimenter.results_folder = orig_res_folder
 
-    def _get_problem_algo_results_path(self, sub_path: str = None) -> str:
+    def get_problem_algo_results_path(self, sub_path: str = None) -> str:
         problem_algo_path = '%s/%s' % (secure_filename(self.problem.name()), secure_filename(self.algorithm_name))
         if sub_path is not None:
             problem_algo_path += '/'+sub_path

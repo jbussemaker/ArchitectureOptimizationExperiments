@@ -1,4 +1,5 @@
 numba
+pandas==1.2.4
 pymoo==0.4.2.1
 pytest
 werkzeug==1.0.1

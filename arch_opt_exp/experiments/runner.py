@@ -74,7 +74,10 @@ def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, rese
         reset_results()
     for exp in experimenters:
         exp.run_effectiveness_parallel(n_repeat=n_repeat)
-        exp.get_aggregate_effectiveness_results()
+        agg_res = exp.get_aggregate_effectiveness_results()
+
+        agg_res.export_pandas().to_pickle(exp.get_problem_algo_results_path('result_agg_df.pkl'))
+        agg_res.save_csv(exp.get_problem_algo_results_path('result_agg.csv'))
 
 
 def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_values: Dict[str, List[str]] = None,

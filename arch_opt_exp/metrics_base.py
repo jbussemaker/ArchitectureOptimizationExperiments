@@ -47,6 +47,11 @@ class Metric:
     def results(self) -> Dict[str, np.ndarray]:
         return {key: np.array(value) for key, value in self.values.items()}
 
+    def results_std(self) -> Dict[str, np.ndarray]:
+        if self.values_std is None:
+            return {}
+        return {key: np.array(value) for key, value in self.values_std.items()}
+
     def plot(self, std_sigma=1., show=True, **kwargs):
         self.plot_multiple([self], std_sigma=std_sigma, show=show, **kwargs)
 
