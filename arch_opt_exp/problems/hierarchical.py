@@ -28,7 +28,7 @@ __all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'Zae
            'HierarchicalMetaProblem', 'MOHierarchicalTestProblem']
 
 
-class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
+class HierarchicalGoldsteinProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
     """
     Variable-size design space Goldstein function from:
     Pelamatti 2020: "Bayesian Optimization of Variable-Size Design Space Problems", section 5.2 and Appendix B
@@ -201,7 +201,7 @@ class HierarchicalGoldsteinProblem(MixedIntBaseProblem):
         return '%s()' % self.__class__.__name__
 
 
-class MOHierarchicalGoldsteinProblem(CachedParetoFrontMixin, HierarchicalGoldsteinProblem):
+class MOHierarchicalGoldsteinProblem(HierarchicalGoldsteinProblem):
     """
     Multi-objective adaptation of the hierarchical Goldstein problem. The Pareto front consists of a mix of SP6 and SP8,
     however it is difficult to get a consistent result with NSGA2.
@@ -222,7 +222,7 @@ class MOHierarchicalGoldsteinProblem(CachedParetoFrontMixin, HierarchicalGoldste
         Scatter().add(res.F, c=w_idx, cmap='tab10', vmin=0, vmax=10, color=None).show()
 
 
-class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
+class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
     """
     Variable-size design space Rosenbrock function from:
     Pelamatti 2020: "Bayesian Optimization of Variable-Size Design Space Problems", section 5.3 and Appendix C
@@ -362,7 +362,7 @@ class HierarchicalRosenbrockProblem(MixedIntBaseProblem):
         return '%s()' % self.__class__.__name__
 
 
-class MOHierarchicalRosenbrockProblem(CachedParetoFrontMixin, HierarchicalRosenbrockProblem):
+class MOHierarchicalRosenbrockProblem(HierarchicalRosenbrockProblem):
     """
     Multi-objective adaptation of the hierarchical Rosenbrock problem.
 

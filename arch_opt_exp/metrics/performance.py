@@ -170,5 +170,5 @@ class BestObjMetric(Metric):
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         if algorithm.opt is not None:
-            return [algorithm.opt.get('F')[self.i_f]]
+            return [algorithm.opt.get('F')[self.i_f, 0]]
         return [np.nan]
