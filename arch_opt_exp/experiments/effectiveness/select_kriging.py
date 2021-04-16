@@ -23,6 +23,7 @@ from arch_opt_exp.algorithms.surrogate.mo.min_var_pf import *
 from arch_opt_exp.algorithms.surrogate.mo.enhanced_poi import *
 from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
 from arch_opt_exp.algorithms.surrogate.so_probabilities import *
+from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
 
 from arch_opt_exp.surrogates.smt_models.smt_krg import *
 from arch_opt_exp.surrogates.sklearn_models.gp import *
@@ -165,6 +166,7 @@ def select_infill_size(do_run=True):
         'mpoi': (MinimumPOIInfill, ModMinimumPOIInfill),
         'mvfp': (MinVariancePFInfill, MinVariancePFInfill),
         'ei': (ExpectedImprovementInfill, ExpectedImprovementInfill),
+        'y': (FunctionEstimatePoFInfill, FunctionEstimatePoFInfill),
     }
 
     def _get_algo(sm, n_infill_, infill_key):
@@ -234,9 +236,9 @@ if __name__ == '__main__':
     # select_kriging_surrogate_mi_h_pre(
     #     # do_run=False,
     # )
-    select_kriging_surrogate(
-        # do_run=False,
-    )
-    # select_infill_size(
+    # select_kriging_surrogate(
     #     # do_run=False,
     # )
+    select_infill_size(
+        # do_run=False,
+    )
