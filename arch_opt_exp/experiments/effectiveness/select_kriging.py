@@ -179,7 +179,7 @@ def select_infill_size(do_run=True):
         (SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, **smt_kwargs), 'cont_relax'),
         # (SMTKrigingSurrogateModel(auto_wrap_mixed_int=True, **smt_kwargs), 'dummy_coding'),
     ]
-    n_infills = [1, 5, 10, 20, 50]
+    n_infills = [1, 2, 5, 10, 20, 50]
     infill_keys = ['ei', 'mvfp', 'mpoi']
 
     algorithms = [_get_algo(sm, n_infill, key) for sm, _ in sms for key in infill_keys for n_infill in n_infills]
