@@ -27,9 +27,9 @@ __all__ = ['get_algo', 'get_evolutionary_ops']
 def get_algo(problem: Problem, add_ops=True):
     kwargs = get_evolutionary_ops(problem) if add_ops else {}
     repair = MixedIntProblemHelper.get_repair(problem)
-    return NSGA2(pop_size=100, n_offsprings=25, repair=repair, **kwargs)
+    return NSGA2(pop_size=5*problem.n_var, n_offsprings=10, repair=repair, **kwargs)
 
-def get_evolutionary_ops(problem: Problem, crs_rp=.8, crs_ip=.8, crs_re=3, mut_re=3, mut_ie=3):
+def get_evolutionary_ops(problem: Problem, crs_rp=.6, crs_ip=.6, crs_re=3, mut_re=3, mut_ie=3):
     is_discrete_mask = MixedIntProblemHelper.get_is_discrete_mask(problem)
     return {
         'sampling': MixedVariableSampling(is_discrete_mask, {

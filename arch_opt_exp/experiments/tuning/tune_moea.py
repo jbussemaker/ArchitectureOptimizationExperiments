@@ -26,7 +26,8 @@ def tune_pop_offspring_size(do_run=True):
     problem, metrics, plot_metric_values = get_problem()
 
     # results_key, pop_sizes, n_offsprings = 'tune_moea', [50, 100, 200], [25, 50, 100]
-    results_key, pop_sizes, n_offsprings = 'tune_moea2', [50, 100], [10, 25, 50, 100]
+    # results_key, pop_sizes, n_offsprings = 'tune_moea2', [50, 100], [10, 25, 50, 100]
+    results_key, pop_sizes, n_offsprings = 'tune_moea_offspring', [5*problem.n_var], [1, 5, 10, 25, 50]
 
     algorithms = [NSGA2(pop_size=pop_size, n_offsprings=n_off)
                   for pop_size in pop_sizes for n_off in n_offsprings if n_off <= pop_size]
@@ -87,7 +88,7 @@ def get_problem():
 
 def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=16, do_run=True):
     runner.set_results_folder(results_key)
-    exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=5000, algorithm_names=algorithm_names)
+    exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=300, algorithm_names=algorithm_names)
 
     if do_run:
         runner.run_effectiveness_multi(exp, n_repeat=n_repeat)
@@ -103,5 +104,5 @@ if __name__ == '__main__':
     #     # run=False,
     # )
     tune_evolutionary_ops(
-        do_run=False,
+        # do_run=False,
     )
