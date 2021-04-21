@@ -24,10 +24,10 @@ from pymoo.operators.mixed_variable_operator import MixedVariableSampling, Mixed
 __all__ = ['get_algo', 'get_evolutionary_ops']
 
 
-def get_algo(problem: Problem, add_ops=True):
+def get_algo(problem: Problem, add_ops=True, n_init=None, n_offspring=None):
     kwargs = get_evolutionary_ops(problem) if add_ops else {}
     repair = MixedIntProblemHelper.get_repair(problem)
-    return NSGA2(pop_size=5*problem.n_var, n_offsprings=10, repair=repair, **kwargs)
+    return NSGA2(pop_size=n_init or 5*problem.n_var, n_offsprings=n_offspring or 10, repair=repair, **kwargs)
 
 def get_evolutionary_ops(problem: Problem, crs_rp=.6, crs_ip=.6, crs_re=3, mut_re=3, mut_ie=3):
     is_discrete_mask = MixedIntProblemHelper.get_is_discrete_mask(problem)
