@@ -27,6 +27,7 @@ from arch_opt_exp.algorithms.surrogate.so_probabilities import *
 from arch_opt_exp.surrogates.smt_models.smt_krg import *
 from arch_opt_exp.surrogates.sklearn_models.gp import *
 from arch_opt_exp.surrogates.sklearn_models.mixed_int_dist import *
+from arch_opt_exp.surrogates.sklearn_models.hierarchical_dist import *
 from arch_opt_exp.surrogates.sklearn_models.hierarchical_decomp_kernel import *
 
 
@@ -40,6 +41,10 @@ def run_rosenbrock(do_run=True):
 
 def run_munoz_zuniga(do_run=True):
     run_mi_h_algo(MunozZunigaToyProblem(), 'munoz_zuniga', 5, 20, do_run=do_run)
+
+
+def run_halstrup_4(do_run=True):
+    run_mi_h_algo(Halstrup04(), 'halstrup_04', 80, 120, do_run=do_run)
 
 
 def run_mi_h_algo(problem: Problem, name: str, n_init: int, n_max: int, do_run=True):
@@ -57,6 +62,14 @@ def run_mi_h_algo(problem: Problem, name: str, n_init: int, n_max: int, do_run=T
     sms = [
         (SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, **smt_kwargs), 'cont_relax'),
         (SMTKrigingSurrogateModel(auto_wrap_mixed_int=True, **smt_kwargs), 'dummy_coding'),
+
+        (SKLearnGPSurrogateModel(kernel=HammingDistance().kernel(), **sklearn_kwargs), 'MI: Ham'),
+        # (SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), **sklearn_kwargs), 'MI: Gow'),
+
+        # (SKLearnGPSurrogateModel(kernel=ArcDistance().kernel(), **sklearn_kwargs), 'MI+H: Arc'),
+        (SKLearnGPSurrogateModel(kernel=IndefiniteConditionalDistance().kernel(), **sklearn_kwargs), 'MI+H: Ico'),
+        # (SKLearnGPSurrogateModel(kernel=ImputationDistance().kernel(), **sklearn_kwargs), 'MI+H: Imp'),
+        (SKLearnGPSurrogateModel(kernel=WedgeDistance().kernel(), **sklearn_kwargs), 'MI+H: Wed'),
 
         (SKLearnGPSurrogateModel(kernel=CompoundSymmetryKernel().kernel(), **sklearn_kwargs), 'MI: CS'),
         (SKLearnGPSurrogateModel(kernel=LatentVariablesDistance().kernel(), **sklearn_kwargs), 'MI: LV'),
@@ -113,5 +126,8 @@ if __name__ == '__main__':
         # do_run=False,
     )
     run_munoz_zuniga(
+        # do_run=False,
+    )
+    run_halstrup_4(
         # do_run=False,
     )

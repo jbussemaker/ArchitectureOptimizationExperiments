@@ -21,7 +21,7 @@ from pymoo.model.population import Population
 from arch_opt_exp.problems.discretization import *
 
 __all__ = ['MixedIntBraninProblem', 'AugmentedMixedIntBraninProblem', 'MixedIntGoldsteinProblem',
-           'MunozZunigaToyProblem']
+           'MunozZunigaToyProblem', 'Halstrup04']
 
 
 class MixedIntBraninProblem(MixedIntBaseProblem):
@@ -187,6 +187,8 @@ class MunozZunigaToyProblem(MixedIntBaseProblem):
     Toy problem from:
     Munoz Zuniga 2020: "Global optimization for mixed categorical-continuous variables based on Gaussian process models
     with a randomized categorical space exploration step", 10.1080/03155986.2020.1730677
+
+    Minimum: -2.329605
     """
 
     def __init__(self):
@@ -241,7 +243,64 @@ class MunozZunigaToyProblem(MixedIntBaseProblem):
             plt.show()
 
 
+class Halstrup04(MixedIntBaseProblem):
+    """
+    Fourth mixed-integer test problem from:
+    Halstrup 2016, "Black-Box Optimization of Mixed Discrete-Continuous Optimization Problems"
+
+    Minimum: 1.7025 (https://mixed-optimization-benchmark.github.io/cases/hal04/)
+    Original report contains an error
+    """
+
+    f_aux_mod = [
+        [  # a
+            [(1., .0), (1., .2)],  # d
+            [(.9, .0), (1., .25)],  # e
+        ],
+        [  # b
+            [(1., .5), (.8, .0)],  # d
+            [(.5, .0), (1., .8)],  # e
+        ],
+        [  # c
+            [(1., .9), (.5, .0)],  # d
+            [(1., 1.), (1., 1.25)],  # e
+        ],
+    ]
+
+    def __init__(self):
+        xl, xu = np.zeros((8,)), np.array([1., 1., 1., 1., 1., 2, 1, 1])
+        is_int_mask = np.zeros((8,), dtype=bool)
+        is_cat_mask = np.array([False]*5+[True]*3, dtype=bool)
+        super(Halstrup04, self).__init__(
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=8, n_obj=1, xl=xl, xu=xu)
+
+    def _evaluate(self, x, out, *args, **kwargs):
+        x = self.correct_x(x)
+
+        x_ = x[:, :5]
+        z_ = x[:, 5:].astype(np.int)
+
+        d = 8
+        x2_term = 2**(np.arange(5)/(d-1))
+        f_aux = np.sum((5*x_+(1-x_))**2*x2_term, axis=1)-2.75
+
+        f = np.empty((x.shape[0], 1))
+        for i in range(z_.shape[0]):
+            f_aux_mul, f_aux_add = self.f_aux_mod[z_[i, 0]][z_[i, 1]][z_[i, 2]]
+            f[i, 0] = f_aux[i]*f_aux_mul + f_aux_add
+
+        out['F'] = f
+
+    # def validate(self):
+    #     x = np.array([[.5, .5, .5, .5, .5, 0, 0, 0]])
+    #     out = Population.new(X=x)
+    #     out = self.evaluate(out.get('X'), out)
+    #     print(out[0])
+    #     assert out[0] == -2.75
+
+
 if __name__ == '__main__':
     # MixedIntBraninProblem().plot(z1=0, z2=0)
     # MixedIntGoldsteinProblem().plot(z1=0, z2=0)
-    MunozZunigaToyProblem().plot()
+    # MunozZunigaToyProblem().plot()
+    Halstrup04().so_run()
