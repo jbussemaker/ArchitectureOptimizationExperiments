@@ -71,7 +71,7 @@ class SMTSurrogateModel(SurrogateModel):
                     if n == 1:
                         n = 2
                     x_types += [(ENUM, n)]
-                    x_limits += [[0, n-1]]
+                    x_limits += [list(range(n))]
 
                 else:
                     x_types += [FLOAT]
