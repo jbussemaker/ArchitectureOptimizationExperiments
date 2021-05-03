@@ -164,7 +164,7 @@ def select_infill_size(do_run=True):
 
     infills = {
         'mpoi': (MinimumPOIInfill, ModMinimumPOIInfill),
-        'mvfp': (MinVariancePFInfill, MinVariancePFInfill),
+        'mvpf': (MinVariancePFInfill, MinVariancePFInfill),
         'ei': (ExpectedImprovementInfill, ExpectedImprovementInfill),
         'y': (FunctionEstimatePoFInfill, FunctionEstimatePoFInfill),
     }
@@ -180,7 +180,7 @@ def select_infill_size(do_run=True):
         # (SMTKrigingSurrogateModel(auto_wrap_mixed_int=True, **smt_kwargs), 'dummy_coding'),
     ]
     n_infills = [1, 2, 5, 10, 20, 50]
-    infill_keys = ['ei', 'mvfp', 'mpoi']
+    infill_keys = ['ei', 'mvpf', 'mpoi']
 
     algorithms = [_get_algo(sm, n_infill, key) for sm, _ in sms for key in infill_keys for n_infill in n_infills]
     algorithm_names = [('SBO(%s, %s, %d)' % (name, key.upper(), n_infill))
