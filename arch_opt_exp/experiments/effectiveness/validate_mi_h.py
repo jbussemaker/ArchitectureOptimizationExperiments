@@ -51,6 +51,17 @@ def run_halstrup_4_fc(do_run=True):
     run_mi_h_infill_force_cont(Halstrup04(), 'halstrup_04', 80, 120, do_run=do_run)
 
 
+def run_zaefferer(do_run=True):
+    for problem, name in [
+        (ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.A_OPT_INACT_IMP_PROF_UNI), 'zaef_a'),
+        (ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.B_OPT_INACT_IMP_UNPR_UNI), 'zaef_b'),
+        (ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.C_OPT_ACT_IMP_PROF_BI), 'zaef_c'),
+        (ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.D_OPT_ACT_IMP_UNPR_BI), 'zaef_d'),
+        (ZaeffererHierarchicalProblem.from_mode(ZaeffererProblemMode.E_OPT_DIS_IMP_UNPR_BI), 'zaef_e'),
+    ]:
+        run_mi_h_algo(problem, name, 3, 10, do_run=do_run)
+
+
 def run_mi_h_infill_force_cont(problem: Problem, name: str, n_init: int, n_max: int, do_run=True):
     metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
 
@@ -158,5 +169,8 @@ if __name__ == '__main__':
         # do_run=False,
     )
     run_halstrup_4_fc(
+        # do_run=False,
+    )
+    run_zaefferer(
         # do_run=False,
     )
