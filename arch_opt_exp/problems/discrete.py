@@ -20,7 +20,8 @@ import matplotlib.pyplot as plt
 from pymoo.model.population import Population
 from arch_opt_exp.problems.discretization import *
 
-__all__ = ['MixedIntBraninProblem', 'AugmentedMixedIntBraninProblem', 'MixedIntGoldsteinProblem']
+__all__ = ['MixedIntBraninProblem', 'AugmentedMixedIntBraninProblem', 'MixedIntGoldsteinProblem',
+           'MunozZunigaToyProblem']
 
 
 class MixedIntBraninProblem(MixedIntBaseProblem):
@@ -181,6 +182,66 @@ class MixedIntGoldsteinProblem(MixedIntBaseProblem):
             plt.show()
 
 
+class MunozZunigaToyProblem(MixedIntBaseProblem):
+    """
+    Toy problem from:
+    Munoz Zuniga 2020: "Global optimization for mixed categorical-continuous variables based on Gaussian process models
+    with a randomized categorical space exploration step", 10.1080/03155986.2020.1730677
+    """
+
+    def __init__(self):
+        xl, xu = np.zeros((2,)), np.array([1., 9])
+        is_int_mask = np.array([False, True], dtype=bool)
+        is_cat_mask = np.zeros((2,), dtype=bool)
+        super(MunozZunigaToyProblem, self).__init__(is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=2, n_obj=1,
+                                                    xl=xl, xu=xu)
+
+    def _evaluate(self, x, out, *args, **kwargs):
+        x = self.correct_x(x)
+
+        f = [
+            lambda x_: np.cos(3.6 * np.pi * (x_ - 2)) + x_ - 1,
+            lambda x_: 2 * np.cos(1.1 * np.pi * np.exp(x_)) - .5 * x_ + 2,
+            lambda x_: np.cos(2 * np.pi * x_) + .5 * x_,
+            lambda x_: x_ * (np.cos(3.4 * np.pi * (x_ - 1)) - .5 * (x_ - 1)),
+            lambda x_: -.5 * x_ ** 2,
+            lambda x_: 2 * np.cos(.25 * np.pi * np.exp(-x_ ** 4)) ** 2 - .5 * x_ + 1,
+            lambda x_: x_ * np.cos(3.4 * np.pi * x_) - .5 * x_ + 1,
+            lambda x_: x_ * (-np.cos(7 * .5 * np.pi * x_) - .5 * x_) + 2,
+            lambda x_: -.5 * x_ ** 5 + 1,
+            lambda x_: -np.cos(5 * .5 * np.pi * x_) ** 2 * np.sqrt(x_) - .5 * np.log(x_ + .5) - 1.3,
+        ]
+
+        y = np.empty((x.shape[0], 1))
+        for i in range(10):
+            i_x = x[:, 1] == i
+            if len(np.where(i_x)[0] > 0):
+                y[i_x, 0] = f[i](x[i_x, 0])
+
+        out['F'] = y
+
+    def plot(self, show=True):
+        x = np.linspace(0, 1, 100)
+        z = np.array(list(range(10)))
+        xx, zz = np.meshgrid(x, z)
+        xx = xx.ravel()
+        zz = zz.ravel()
+
+        out = Population.new(X=np.column_stack([xx, zz]))
+        out = self.evaluate(out.get('X'), out)
+        f = out[:]
+
+        plt.figure(), plt.title('Munoz-Zuniga Toy Problem')
+        for i in z:
+            i_x = zz == i
+            plt.plot(x, f[i_x], linewidth=1, label='$z = %d$' % (i+1,))
+        plt.xlim([0, 1]), plt.xlabel('$x$'), plt.ylabel('$f$'), plt.legend()
+
+        if show:
+            plt.show()
+
+
 if __name__ == '__main__':
-    MixedIntBraninProblem().plot(z1=0, z2=0)
+    # MixedIntBraninProblem().plot(z1=0, z2=0)
     # MixedIntGoldsteinProblem().plot(z1=0, z2=0)
+    MunozZunigaToyProblem().plot()

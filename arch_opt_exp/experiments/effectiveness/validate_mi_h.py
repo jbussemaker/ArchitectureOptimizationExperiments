@@ -17,6 +17,7 @@ Contact: jasper.bussemaker@dlr.de
 
 from pymoo.model.problem import Problem
 from arch_opt_exp.experiments import runner
+from arch_opt_exp.problems.discrete import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.problems.hierarchical import *
 from arch_opt_exp.algorithms.surrogate.validation import *
@@ -30,19 +31,21 @@ from arch_opt_exp.surrogates.sklearn_models.hierarchical_decomp_kernel import *
 
 
 def run_goldstein(do_run=True):
-    run_mi_h_algo(HierarchicalGoldsteinProblem(), 'goldstein', do_run=do_run)
+    run_mi_h_algo(HierarchicalGoldsteinProblem(), 'goldstein', 104, 208, do_run=do_run)
 
 
 def run_rosenbrock(do_run=True):
-    run_mi_h_algo(HierarchicalRosenbrockProblem(), 'rosenbrock', do_run=do_run)
+    run_mi_h_algo(HierarchicalRosenbrockProblem(), 'rosenbrock', 104, 208, do_run=do_run)
 
 
-def run_mi_h_algo(problem: Problem, name: str, do_run=True):
+def run_munoz_zuniga(do_run=True):
+    run_mi_h_algo(MunozZunigaToyProblem(), 'munoz_zuniga', 5, 20, do_run=do_run)
+
+
+def run_mi_h_algo(problem: Problem, name: str, n_init: int, n_max: int, do_run=True):
     metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
 
-    results_key = 'eff_validate_vsdsp_%s' % name
-    n_init = 104
-    n = n_init*2
+    results_key = 'eff_validate_mi_h_%s' % name
 
     def _get_algo(sm):
         infill = ExpectedImprovementInfill()
@@ -71,7 +74,7 @@ def run_mi_h_algo(problem: Problem, name: str, do_run=True):
     algorithms = [_get_algo(sm) for sm, _ in sms ]
     algorithm_names = [('SBO(%s)' % name) for _, name in sms]
 
-    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_eval_max=n, do_run=do_run)
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_eval_max=n_max, do_run=do_run)
 
 
 def get_metrics(_: Problem, include_loo_cv=True):
@@ -92,7 +95,7 @@ def get_metrics(_: Problem, include_loo_cv=True):
     return metrics, plot_metric_values
 
 
-def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=12, n_eval_max=500,
+def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=16, n_eval_max=500,
         do_run=True):
     runner.set_results_folder(results_key)
     exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=n_eval_max, algorithm_names=algorithm_names)
@@ -103,14 +106,12 @@ def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_
 
 
 if __name__ == '__main__':
-    """
-    The goal of this script is to answer the question: which Kriging kernel performs best for system architecture
-    optimization problems? This is done by comparing different Kriging surrogates on the analytical test problem, using
-    the Minimum Probability of Improvement (MPoI) infill criterion.
-    """
     run_goldstein(
         # do_run=False,
     )
-    # run_rosenbrock(
-    #     # do_run=False,
-    # )
+    run_rosenbrock(
+        # do_run=False,
+    )
+    run_munoz_zuniga(
+        # do_run=False,
+    )
