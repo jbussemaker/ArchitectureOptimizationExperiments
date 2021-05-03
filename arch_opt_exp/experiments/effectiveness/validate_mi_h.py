@@ -47,6 +47,32 @@ def run_halstrup_4(do_run=True):
     run_mi_h_algo(Halstrup04(), 'halstrup_04', 80, 120, do_run=do_run)
 
 
+def run_halstrup_4_fc(do_run=True):
+    run_mi_h_infill_force_cont(Halstrup04(), 'halstrup_04', 80, 120, do_run=do_run)
+
+
+def run_mi_h_infill_force_cont(problem: Problem, name: str, n_init: int, n_max: int, do_run=True):
+    metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
+
+    results_key = 'eff_validate_mi_h_fc_%s' % name
+
+    def _get_algo(sm, force_cont):
+        infill = ExpectedImprovementInfill()
+        return SurrogateBasedInfill(infill=infill, surrogate_model=sm, termination=100, verbose=True,
+                                    infill_force_cont=force_cont).algorithm(infill_size=1, init_size=n_init)
+
+    smt_kwargs = {'theta0': 1.}
+    sms = [
+        (SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, **smt_kwargs), 'cont_relax'),
+        (SMTKrigingSurrogateModel(auto_wrap_mixed_int=True, **smt_kwargs), 'dummy_coding'),
+    ]
+
+    algorithms = [_get_algo(sm, fc) for sm, _ in sms for fc in [False, True]]
+    algorithm_names = [('SBO(%s, force_cont=%r)' % (name, fc)) for _, name in sms for fc in [False, True]]
+
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_eval_max=n_max, do_run=do_run)
+
+
 def run_mi_h_algo(problem: Problem, name: str, n_init: int, n_max: int, do_run=True):
     metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
 
@@ -108,7 +134,7 @@ def get_metrics(_: Problem, include_loo_cv=True):
     return metrics, plot_metric_values
 
 
-def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=16, n_eval_max=500,
+def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=500,
         do_run=True):
     runner.set_results_folder(results_key)
     exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=n_eval_max, algorithm_names=algorithm_names)
@@ -129,5 +155,8 @@ if __name__ == '__main__':
         # do_run=False,
     )
     run_halstrup_4(
+        # do_run=False,
+    )
+    run_halstrup_4_fc(
         # do_run=False,
     )

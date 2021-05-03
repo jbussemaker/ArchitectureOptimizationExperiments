@@ -176,7 +176,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
     _exclude = ['_surrogate_model', 'opt_results']
 
     def __init__(self, surrogate_model: Union[SurrogateModel, SurrogateModelFactory], infill: SurrogateInfill,
-                 pop_size=None, termination: Union[Termination, int] = None, verbose=False, **kwargs):
+                 pop_size=None, termination: Union[Termination, int] = None, verbose=False, infill_force_cont=False,
+                 **kwargs):
         super(SurrogateBasedInfill, self).__init__(**kwargs)
 
         if isinstance(surrogate_model, SurrogateModel):
@@ -184,6 +185,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self.surrogate_model_factory = surrogate_model
         self._surrogate_model = None
         self.infill = infill
+        self._infill_force_cont = infill_force_cont
 
         self.x_train = None
         self.y_train = None
@@ -328,7 +330,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         return Population.new(X=x)
 
     def _get_infill_problem(self):
-        return SurrogateInfillOptimizationProblem(self.infill, self.problem)
+        return SurrogateInfillOptimizationProblem(self.infill, self.problem, force_continuous=self._infill_force_cont)
 
     def _get_termination(self):
         termination = self.termination
@@ -497,12 +499,15 @@ class SurrogateInfillCallback(Callback):
 class SurrogateInfillOptimizationProblem(MixedIntBaseProblem):
     """Problem class representing a surrogate infill problem given a SurrogateInfill instance."""
 
-    def __init__(self, infill: SurrogateInfill, problem: Problem, impute=True):
+    def __init__(self, infill: SurrogateInfill, problem: Problem, impute=True, force_continuous=False):
         n_var = problem.n_var
         xl, xu = np.zeros(n_var), np.ones(n_var)
 
         is_int_mask = MixedIntProblemHelper.get_is_int_mask(problem)
         is_cat_mask = MixedIntProblemHelper.get_is_cat_mask(problem)
+        if force_continuous:
+            is_int_mask[:] = False
+            is_cat_mask[:] = False
 
         is_discrete_mask = MixedIntProblemHelper.get_is_discrete_mask(problem)
         if np.any(is_discrete_mask):
