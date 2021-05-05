@@ -102,7 +102,7 @@ def run_mi_h_algo(problem: Problem, name: str, n_init: int, n_max: int, do_run=T
 
         (SKLearnGPSurrogateModel(kernel=HammingDistance().kernel(), **sklearn_kwargs), 'MI: Ham'),
         # (SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), **sklearn_kwargs), 'MI: Gow'),  # Slow
-        (SKLearnGPSurrogateModel(kernel=SymbolicCovarianceDistance().kernel(), **sklearn_kwargs), 'MI: SC'),
+        # (SKLearnGPSurrogateModel(kernel=SymbolicCovarianceDistance().kernel(), **sklearn_kwargs), 'MI: SC'),  # Unstab
 
         # (SKLearnGPSurrogateModel(kernel=ArcDistance().kernel(), **sklearn_kwargs), 'MI+H: Arc'),  # Slow
         (SKLearnGPSurrogateModel(kernel=IndefiniteConditionalDistance().kernel(), **sklearn_kwargs), 'MI+H: Ico'),
