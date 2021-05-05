@@ -101,24 +101,25 @@ def run_mi_h_algo(problem: Problem, name: str, n_init: int, n_max: int, do_run=T
         (SMTKrigingSurrogateModel(auto_wrap_mixed_int=True, **smt_kwargs), 'dummy_coding'),
 
         (SKLearnGPSurrogateModel(kernel=HammingDistance().kernel(), **sklearn_kwargs), 'MI: Ham'),
-        # (SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), **sklearn_kwargs), 'MI: Gow'),
+        # (SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), **sklearn_kwargs), 'MI: Gow'),  # Slow
+        (SKLearnGPSurrogateModel(kernel=SymbolicCovarianceDistance().kernel(), **sklearn_kwargs), 'MI: SC'),
 
-        # (SKLearnGPSurrogateModel(kernel=ArcDistance().kernel(), **sklearn_kwargs), 'MI+H: Arc'),
+        # (SKLearnGPSurrogateModel(kernel=ArcDistance().kernel(), **sklearn_kwargs), 'MI+H: Arc'),  # Slow
         (SKLearnGPSurrogateModel(kernel=IndefiniteConditionalDistance().kernel(), **sklearn_kwargs), 'MI+H: Ico'),
-        # (SKLearnGPSurrogateModel(kernel=ImputationDistance().kernel(), **sklearn_kwargs), 'MI+H: Imp'),
+        # (SKLearnGPSurrogateModel(kernel=ImputationDistance().kernel(), **sklearn_kwargs), 'MI+H: Imp'),  # Slow
         (SKLearnGPSurrogateModel(kernel=WedgeDistance().kernel(), **sklearn_kwargs), 'MI+H: Wed'),
 
-        # (SKLearnGPSurrogateModel(kernel=CompoundSymmetryKernel().kernel(), **sklearn_kwargs), 'MI: CS'),
-        (SKLearnGPSurrogateModel(kernel=LatentVariablesDistance().kernel(), **sklearn_kwargs), 'MI: LV'),
+        (SKLearnGPSurrogateModel(kernel=CompoundSymmetryKernel().kernel(), **sklearn_kwargs), 'MI: CS'),
+        # (SKLearnGPSurrogateModel(kernel=LatentVariablesDistance().kernel(), **sklearn_kwargs), 'MI: LV'),  # Slow
 
-        # (SKLearnGPSurrogateModel(kernel=SPWDecompositionKernel(CompoundSymmetryKernel().kernel()),
-        #                          **sklearn_kwargs), 'MI+H: SPW+CS'),
-        (SKLearnGPSurrogateModel(kernel=SPWDecompositionKernel(LatentVariablesDistance().kernel()),
-                                 **sklearn_kwargs), 'MI+H: SPW+LV'),
-        # (SKLearnGPSurrogateModel(kernel=DVWDecompositionKernel(CompoundSymmetryKernel().kernel()),
-        #                          **sklearn_kwargs), 'MI+H: DVW+CS'),
-        (SKLearnGPSurrogateModel(kernel=DVWDecompositionKernel(LatentVariablesDistance().kernel()),
-                                 **sklearn_kwargs), 'MI+H: DVW+LV'),
+        (SKLearnGPSurrogateModel(kernel=SPWDecompositionKernel(CompoundSymmetryKernel().kernel()),
+                                 **sklearn_kwargs), 'MI+H: SPW+CS'),
+        # (SKLearnGPSurrogateModel(kernel=SPWDecompositionKernel(LatentVariablesDistance().kernel()),
+        #                          **sklearn_kwargs), 'MI+H: SPW+LV'),
+        (SKLearnGPSurrogateModel(kernel=DVWDecompositionKernel(CompoundSymmetryKernel().kernel()),
+                                 **sklearn_kwargs), 'MI+H: DVW+CS'),
+        # (SKLearnGPSurrogateModel(kernel=DVWDecompositionKernel(LatentVariablesDistance().kernel()),
+        #                          **sklearn_kwargs), 'MI+H: DVW+LV'),
     ]
 
     algorithms = [_get_algo(sm) for sm, _ in sms ]
