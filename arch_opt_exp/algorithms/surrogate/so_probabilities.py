@@ -80,7 +80,7 @@ class ProbabilityOfImprovementInfill(ProbabilityOfFeasibilityInfill):
     @staticmethod
     def _normalize_f_var(f: np.ndarray, f_var: np.ndarray, nadir_point, ideal_point):
         f_norm = normalize(f, x_max=nadir_point, x_min=ideal_point)
-        f_var_norm = f_var/((nadir_point-ideal_point)**2)
+        f_var_norm = f_var/((nadir_point-ideal_point+1e-30)**2)
         return f_norm, f_var_norm
 
     @staticmethod
