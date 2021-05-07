@@ -20,8 +20,10 @@ from pymoo.factory import get_problem
 from pymoo.model.problem import Problem
 from pymoo.problems.single.himmelblau import Himmelblau
 from pymoo.problems.single.rosenbrock import Rosenbrock
+from arch_opt_exp.problems.discretization import *
 
-__all__ = ['MOHimmelblau', 'MOGoldstein', 'MORosenbrock', 'MORosenbrockInv']
+__all__ = ['MOHimmelblau', 'MOGoldstein', 'MORosenbrock', 'MORosenbrockInv', 'MIMOHimmelblau', 'MIMOGoldstein',
+           'MIMORosenbrock']
 
 
 class MOHimmelblau(Problem):
@@ -37,6 +39,12 @@ class MOHimmelblau(Problem):
         out['F'] = f_mo
 
 
+class MIMOHimmelblau(MixedIntProblem):
+
+    def __init__(self):
+        super(MIMOHimmelblau, self).__init__(MOHimmelblau())
+
+
 class MOGoldstein(Problem):
 
     def __init__(self):
@@ -48,6 +56,12 @@ class MOGoldstein(Problem):
         f_mo[:, 0] = self._problem.evaluate(x)[:, 0]
         f_mo[:, 1] = self._problem.evaluate(x+.15)[:, 0]
         out['F'] = f_mo
+
+
+class MIMOGoldstein(MixedIntProblem):
+
+    def __init__(self):
+        super(MIMOGoldstein, self).__init__(MOGoldstein())
 
 
 class MORosenbrock(Problem):
@@ -63,6 +77,12 @@ class MORosenbrock(Problem):
         # f_mo[:, 1] = self._problem.evaluate(x*self._f2_x_mul)[:, 0]
         f_mo[:, 1] = self._problem.evaluate(x)[:, 0]+x[:, 0]
         out['F'] = f_mo
+
+
+class MIMORosenbrock(MixedIntProblem):
+
+    def __init__(self):
+        super(MIMORosenbrock, self).__init__(MORosenbrock())
 
 
 class MORosenbrockInv(Problem):

@@ -57,6 +57,30 @@ def select_kriging_doe_size(do_run=True):
         do_run=do_run)
 
 
+def select_kriging_n_terminate(do_run=True):
+    problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
+
+    n_init, n_infill = 5*problem.n_var, 1
+
+    def _get_algo(n_terminate):
+        infill = ModMinimumPOIInfill() if n_infill > 1 else MinimumPOIInfill()
+        return SurrogateBasedInfill(infill=infill, surrogate_model=sm, termination=n_terminate, verbose=True)\
+            .algorithm(infill_size=n_infill, init_size=n_init)
+
+    sm, suf = SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, theta0=1.), 'cont_relax'
+    # sm, suf = SMTKrigingSurrogateModel(auto_wrap_mixed_int=True, theta0=1.), 'dummy'
+    # sm, suf = SKLearnGPSurrogateModel(kernel=HammingDistance().kernel(), alpha=1e-6, int_as_discrete=True), 'ham'
+    # sm, suf = SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), alpha=1e-6, int_as_discrete=True), 'gow'
+
+    results_key = 'eff_select_kriging_n_term_%s_%d' % (suf, n_infill)
+    n_terminate_test = [5, 10, 25, 50, 100]
+    algorithms = [_get_algo(n) for n in n_terminate_test]
+    algorithm_names = [('SBO(%d)' % n) for n in n_terminate_test]
+
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=300,
+        do_run=do_run)
+
+
 def select_kriging_surrogate_mi_h_pre(do_run=True):
     problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
 
@@ -78,7 +102,7 @@ def select_kriging_surrogate_mi_h_pre(do_run=True):
     sms = [
         (SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, **smt_kwargs), 'cont_relax'),
         (SMTKrigingSurrogateModel(auto_wrap_mixed_int=True, **smt_kwargs), 'dummy_coding'),
-        # (SKLearnGPSurrogateModel(kernel=HammingDistance().kernel(), **sklearn_kwargs), 'MI: Ham'),
+        (SKLearnGPSurrogateModel(kernel=HammingDistance().kernel(), **sklearn_kwargs), 'MI: Ham'),
         # (SKLearnGPSurrogateModel(kernel=GowerDistance().kernel(), **sklearn_kwargs), 'MI: Gow'),
         (SKLearnGPSurrogateModel(kernel=IndefiniteConditionalDistance().kernel(), **sklearn_kwargs), 'MI+H: Ico'),
         (SKLearnGPSurrogateModel(kernel=SPWDecompositionKernel(CompoundSymmetryKernel().kernel()),
@@ -225,20 +249,18 @@ def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_
 
 
 if __name__ == '__main__':
-    """
-    The goal of this script is to answer the question: which Kriging kernel performs best for system architecture
-    optimization problems? This is done by comparing different Kriging surrogates on the analytical test problem, using
-    the Minimum Probability of Improvement (MPoI) infill criterion.
-    """
     # select_kriging_doe_size(
     #     # do_run=False,
     # )
-    # select_kriging_surrogate_mi_h_pre(
-    #     # do_run=False,
-    # )
+    select_kriging_n_terminate(
+        # do_run=False,
+    )
+    select_kriging_surrogate_mi_h_pre(
+        # do_run=False,
+    )
     # select_kriging_surrogate(
     #     # do_run=False,
     # )
-    select_infill_size(
-        # do_run=False,
-    )
+    # select_infill_size(
+    #     # do_run=False,
+    # )

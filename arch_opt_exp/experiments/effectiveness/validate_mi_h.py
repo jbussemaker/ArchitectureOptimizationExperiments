@@ -16,6 +16,7 @@ Contact: jasper.bussemaker@dlr.de
 """
 
 from pymoo.model.problem import Problem
+from arch_opt_exp.problems.so_mo import *
 from arch_opt_exp.experiments import runner
 from arch_opt_exp.problems.discrete import *
 from arch_opt_exp.metrics.performance import *
@@ -49,6 +50,10 @@ def run_halstrup_4(do_run=True):
 
 def run_halstrup_4_fc(do_run=True):
     run_mi_h_infill_force_cont(Halstrup04(), 'halstrup_04', 80, 120, do_run=do_run)
+
+
+def run_mimo_himmelblau(do_run=True):
+    run_mi_h_algo(MIMOHimmelblau(), 'mimo_himm', 10, 25, do_run=do_run)
 
 
 def run_zaefferer(do_run=True):
@@ -173,5 +178,8 @@ if __name__ == '__main__':
         # do_run=False,
     )
     run_zaefferer(
+        # do_run=False,
+    )
+    run_mimo_himmelblau(
         # do_run=False,
     )

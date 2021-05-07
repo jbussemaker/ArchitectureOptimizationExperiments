@@ -275,7 +275,7 @@ class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem)
             x_fg = x_i[x_idx[idx]]
             f[i, 0] = f1 = self.f(x_fg, z_i[0], z_i[1], z_i[2], a1[idx], a2[idx], add_z3[idx])
             if self._mo:
-                f2 = f1+(x_fg[0]+1)**2*100
+                f2 = (f1/100-10)**2+(x_fg[0]+1)**2*100
                 if idx < 2:
                     f2 += 25
                 f[i, 1] = f2
@@ -605,7 +605,7 @@ class MOHierarchicalTestProblem(HierarchicalMetaProblem):
 
     def __init__(self):
         super(MOHierarchicalTestProblem, self).__init__(
-            MOHierarchicalRosenbrockProblem(), n_rep=2, n_maps=2, f_par_range=[10, 50])
+            MOHierarchicalRosenbrockProblem(), n_rep=2, n_maps=2, f_par_range=[250, 100])
 
     def __repr__(self):
         return '%s()' % self.__class__.__name__
@@ -619,10 +619,13 @@ if __name__ == '__main__':
     # HierarchicalRosenbrockProblem.validate_ranges(show=False)
     # HierarchicalRosenbrockProblem().so_run(n_repeat=8, n_eval_max=2000, pop_size=30)
 
-    # MOHierarchicalRosenbrockProblem.run_test(show=False)
-    # MOHierarchicalTestProblem().run_test()
+    # MOHierarchicalRosenbrockProblem.run_test()
+    # MOHierarchicalRosenbrockProblem().reset_pf_cache()
+    # MOHierarchicalRosenbrockProblem().plot_pf(show_approx_f_range=True)
 
-    MOHierarchicalTestProblem().plot_pf()
+    MOHierarchicalTestProblem().run_test()
+    # MOHierarchicalTestProblem().reset_pf_cache()
+    # MOHierarchicalTestProblem().plot_pf(show_approx_f_range=True)
 
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
     # ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1).plot()  # Zaefferer 2018, Fig. 1

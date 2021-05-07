@@ -20,14 +20,18 @@ import re
 import pickle
 import hashlib
 import numpy as np
+from typing import *
 import concurrent.futures
 from pymoo.optimize import minimize
 from pymoo.model.problem import Problem
 from pymoo.algorithms.nsga2 import NSGA2
 from pymoo.problems.multi.zdt import ZDT1
+from pymoo.model.evaluator import Evaluator
 from pymoo.visualization.scatter import Scatter
+from pymoo.model.initialization import Initialization
 from pymoo.algorithms.nsga2 import calc_crowding_distance
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
+from pymoo.operators.sampling.latin_hypercube_sampling import LatinHypercubeSampling
 
 __all__ = ['CachedParetoFrontMixin']
 
@@ -77,8 +81,20 @@ class CachedParetoFrontMixin:
         print('Running PF discovery %d/%d (%d pop, %d gen)' % (i+1, n, pop_size, n_gen))
         return minimize(self, NSGA2(pop_size=pop_size), termination=('n_gen', n_gen))
 
-    def plot_pf(self: Problem):
-        Scatter().add(self.pareto_front()).show()
+    def plot_pf(self: Union[Problem, 'CachedParetoFrontMixin'], show_approx_f_range=False, **kwargs):
+        scatter = Scatter()
+        if show_approx_f_range:
+            scatter.add(self.get_approx_f_range(), s=.1, color='white')
+        scatter.add(self.pareto_front(**kwargs))
+        scatter.show()
+
+    def get_approx_f_range(self, n_sample=1000):
+        pop = Initialization(LatinHypercubeSampling()).do(self, n_sample)
+        Evaluator().eval(self, pop)
+        f = pop.get('F')
+        f_max = np.max(f, axis=0)
+        f_min = np.min(f, axis=0)
+        return np.array([f_min, f_max])
 
     def _pf_cache_path(self):
         class_str = repr(self)
