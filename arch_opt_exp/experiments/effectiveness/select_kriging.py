@@ -77,7 +77,7 @@ def select_kriging_n_terminate(do_run=True):
     algorithms = [_get_algo(n) for n in n_terminate_test]
     algorithm_names = [('SBO(%d)' % n) for n in n_terminate_test]
 
-    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=300,
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=200,
         do_run=do_run)
 
 
