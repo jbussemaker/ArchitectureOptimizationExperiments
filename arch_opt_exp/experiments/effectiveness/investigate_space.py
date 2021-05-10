@@ -162,6 +162,40 @@ def get_pop(problem: Problem, n=100):
     return init_sampling.do(problem, n)
 
 
+def investigate_metrics(problem: Problem, pop, title, show=False):
+    from pymoo.algorithms.nsga2 import NSGA2
+    from arch_opt_exp.metrics.performance import DeltaHVMetric, IGDMetric
+
+    pf = problem.pareto_front()
+    hv_metric = DeltaHVMetric(pf)
+    igd_metric = IGDMetric(pf)
+
+    algo = NSGA2()
+    algo.pop = pop
+    f_pop = pop.get('F')
+    pf_pop = hv_metric.get_pareto_front(f_pop)
+    algo.opt = Population.new(F=pf_pop)
+
+    hv_metric.calculate_step(algo)
+    _, ax = plt.subplots(2, 2)
+    ax[0, 0].title.set_text(title+'\n$\\Delta$HV = %.4f' % hv_metric.values['delta_hv'][-1])
+    ax[0, 0].scatter(f_pop[:, 0], f_pop[:, 1], 5, label='Pop F')
+    ax[0, 0].scatter(pf_pop[:, 0], pf_pop[:, 1], 8, label='Pop PF')
+    ax[0, 0].scatter(pf[:, 0], pf[:, 1], 8, label='Real PF')
+    ax[0, 0].scatter([hv_metric._hv.ideal_point[0]], [hv_metric._hv.ideal_point[1]], 8, label='Ideal')
+    ax[0, 0].scatter([hv_metric._hv.nadir_point[0]], [hv_metric._hv.nadir_point[1]], 8, label='Nadir')
+    ax[0, 0].legend(), ax[0, 0].set_xlabel('$f_1$'), ax[0, 0].set_ylabel('$f_2$')
+
+    igd_metric.calculate_step(algo)
+    ax[0, 1].title.set_text('IGD = %.4f' % igd_metric.values['indicator'][-1])
+    ax[0, 1].scatter(pf_pop[:, 0], pf_pop[:, 1], 8, label='Pop PF')
+    ax[0, 1].scatter(pf[:, 0], pf[:, 1], 8, label='Real PF')
+    ax[0, 1].legend(), ax[0, 1].set_xlabel('$f_1$'), ax[0, 1].set_ylabel('$f_2$')
+
+    if show:
+        plt.show()
+
+
 if __name__ == '__main__':
     from pymoo.factory import get_problem
     from arch_opt_exp.problems.so_mo import *
