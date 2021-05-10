@@ -59,6 +59,7 @@ def investigate(problem: Problem, sm: SurrogateModel, infill: SurrogateInfill, s
     pop = get_pop(problem, n_sm)
     sbi = SurrogateBasedInfill(sm, infill, pop_size=n_sm)
     infill.initialize(problem, sbi.surrogate_model)
+    pf_real = pf = problem.pareto_front()
 
     Evaluator().eval(problem, pop)
     sbi.problem = problem
@@ -81,6 +82,8 @@ def investigate(problem: Problem, sm: SurrogateModel, infill: SurrogateInfill, s
     n_g = 0 if g_real[0] is None else g_real.shape[1]
 
     f_init, _, _ = sbi._normalize_y(pop.get('F'), y_min=sbi.y_train_min[:n_f], y_max=sbi.y_train_max[:n_f])
+    if pf is not None:
+        pf, _, _ = sbi._normalize_y(pf, y_min=sbi.y_train_min[:n_f], y_max=sbi.y_train_max[:n_f])
 
     if n_f == 1:
         _, ax = plt.subplots(2+n_g, 2)
@@ -88,6 +91,8 @@ def investigate(problem: Problem, sm: SurrogateModel, infill: SurrogateInfill, s
             '%s - %s - %s' % (problem.name(), sm_name or sm.__class__.__name__, infill.__class__.__name__))
         ax[0, 0].scatter(f_init[:, 0]*0, f_init[:, 0], 8, 'r', label='Samples')
         ax[0, 0].scatter(f[:, 0]*0+1, f[:, 0], 8, 'b', label='Infill')
+        if pf is not None:
+            ax[0, 0].scatter([0, 1], [pf[0, 0], pf[0, 0]], 'g', label='Optimum')
         ax[0, 0].legend()
 
         ax[0, 1].scatter(f[:, 0], np.sqrt(f_var[:, 0]), 8, c='k')
@@ -116,6 +121,8 @@ def investigate(problem: Problem, sm: SurrogateModel, infill: SurrogateInfill, s
             '%s - %s - %s' % (problem.name(), sm_name or sm.__class__.__name__, infill.__class__.__name__))
         ax[0, 0].scatter(f_init[:, 0], f_init[:, 1], 8, 'r', label='Samples')
         ax[0, 0].scatter(f[:, 0], f[:, 1], 8, 'b', label='Infill')
+        if pf is not None:
+            ax[0, 0].scatter(pf[:, 0], pf[:, 1], 8, 'g', label='PF')
         ax[0, 0].legend()
 
         for i in range(n_f):
@@ -125,11 +132,15 @@ def investigate(problem: Problem, sm: SurrogateModel, infill: SurrogateInfill, s
         for i in range(n_f_infill):
             c = ax[1, i].scatter(f[:, 0], f[:, 1], 8, c=f_infill[:, i], cmap='viridis')
             plt.colorbar(c, ax=ax[1, i]).set_label('Infill $f_%d$' % i)
+            if pf is not None:
+                ax[1, i].scatter(pf[:, 0], pf[:, 1], 8, 'g', label='PF')
 
         ii = [(1, 2)] if n_f_infill == 1 else [(2, 0), (2, 1)]
         for i in range(n_f_infill):
             c = ax[ii[i]].scatter(f_real[:, 0], f_real[:, 1], 8, c=f_infill[:, i], cmap='viridis')
             plt.colorbar(c, ax=ax[ii[i]]).set_label('Infill $f_%d$ (f real)' % i)
+            if pf is not None:
+                ax[ii[i]].scatter(pf_real[:, 0], pf_real[:, 1], 8, 'g', label='PF')
 
         i_rg = 2 if n_f_infill < 2 else 3
         for i in range(n_g):

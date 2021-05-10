@@ -275,9 +275,7 @@ class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem)
             x_fg = x_i[x_idx[idx]]
             f[i, 0] = f1 = self.f(x_fg, z_i[0], z_i[1], z_i[2], a1[idx], a2[idx], add_z3[idx])
             if self._mo:
-                f2 = (f1/100-10)**2+(x_fg[0]+1)**2*100
-                if idx < 2:
-                    f2 += 25
+                f2 = abs((400-f1)/40)**2 + np.sum((x_fg[:4]+1)**2*200)
                 f[i, 1] = f2
 
             g[i, 0] = self.g1(x_fg)
@@ -605,7 +603,7 @@ class MOHierarchicalTestProblem(HierarchicalMetaProblem):
 
     def __init__(self):
         super(MOHierarchicalTestProblem, self).__init__(
-            MOHierarchicalRosenbrockProblem(), n_rep=2, n_maps=2, f_par_range=[250, 100])
+            MOHierarchicalRosenbrockProblem(), n_rep=2, n_maps=2, f_par_range=[100, 100])
 
     def __repr__(self):
         return '%s()' % self.__class__.__name__

@@ -210,7 +210,7 @@ def select_infill_size(do_run=True):
     algorithm_names = [('SBO(%s, %s, %d)' % (name, key.upper(), n_infill))
                        for _, name in sms for key in infill_keys for n_infill in n_infills]
 
-    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, do_run=do_run)
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, do_run=do_run)
 
 
 def get_problem(include_loo_cv=True):
@@ -252,9 +252,9 @@ if __name__ == '__main__':
     # select_kriging_doe_size(
     #     # do_run=False,
     # )
-    select_kriging_n_terminate(
-        # do_run=False,
-    )
+    # select_kriging_n_terminate(
+    #     # do_run=False,
+    # )
     select_kriging_surrogate_mi_h_pre(
         # do_run=False,
     )

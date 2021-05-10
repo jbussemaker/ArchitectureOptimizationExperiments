@@ -85,6 +85,11 @@ class CachedParetoFrontMixin:
         scatter = Scatter()
         if show_approx_f_range:
             scatter.add(self.get_approx_f_range(), s=.1, color='white')
+
+            pop = Initialization(LatinHypercubeSampling()).do(self, 100)
+            Evaluator().eval(self, pop)
+            scatter.add(pop.get('F'), s=5)
+
         scatter.add(self.pareto_front(**kwargs))
         scatter.show()
 

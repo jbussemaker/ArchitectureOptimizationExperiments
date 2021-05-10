@@ -21,12 +21,13 @@ from pymoo.model.problem import Problem
 from pymoo.problems.single.himmelblau import Himmelblau
 from pymoo.problems.single.rosenbrock import Rosenbrock
 from arch_opt_exp.problems.discretization import *
+from arch_opt_exp.problems.pareto_front import CachedParetoFrontMixin
 
 __all__ = ['MOHimmelblau', 'MOGoldstein', 'MORosenbrock', 'MORosenbrockInv', 'MIMOHimmelblau', 'MIMOGoldstein',
            'MIMORosenbrock']
 
 
-class MOHimmelblau(Problem):
+class MOHimmelblau(CachedParetoFrontMixin, Problem):
 
     def __init__(self):
         self._problem = p = Himmelblau()
@@ -39,13 +40,13 @@ class MOHimmelblau(Problem):
         out['F'] = f_mo
 
 
-class MIMOHimmelblau(MixedIntProblem):
+class MIMOHimmelblau(CachedParetoFrontMixin, MixedIntProblem):
 
     def __init__(self):
         super(MIMOHimmelblau, self).__init__(MOHimmelblau())
 
 
-class MOGoldstein(Problem):
+class MOGoldstein(CachedParetoFrontMixin, Problem):
 
     def __init__(self):
         self._problem = p = get_problem('go-goldsteinprice')
@@ -58,13 +59,13 @@ class MOGoldstein(Problem):
         out['F'] = f_mo
 
 
-class MIMOGoldstein(MixedIntProblem):
+class MIMOGoldstein(CachedParetoFrontMixin, MixedIntProblem):
 
     def __init__(self):
         super(MIMOGoldstein, self).__init__(MOGoldstein())
 
 
-class MORosenbrock(Problem):
+class MORosenbrock(CachedParetoFrontMixin, Problem):
 
     def __init__(self):
         self._problem = p = Rosenbrock(n_var=2)
@@ -79,13 +80,13 @@ class MORosenbrock(Problem):
         out['F'] = f_mo
 
 
-class MIMORosenbrock(MixedIntProblem):
+class MIMORosenbrock(CachedParetoFrontMixin, MixedIntProblem):
 
     def __init__(self):
         super(MIMORosenbrock, self).__init__(MORosenbrock())
 
 
-class MORosenbrockInv(Problem):
+class MORosenbrockInv(CachedParetoFrontMixin, Problem):
 
     def __init__(self):
         self._problem = p = Rosenbrock(n_var=2)
