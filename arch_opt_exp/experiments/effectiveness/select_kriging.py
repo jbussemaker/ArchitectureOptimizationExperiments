@@ -113,7 +113,8 @@ def select_kriging_surrogate_mi_h_pre(do_run=True):
     algorithms = [_get_algo(sm, key) for key in infill_keys for sm, _ in sms]
     algorithm_names = [('SBO(%s, %s)' % (name, key.upper())) for key in infill_keys for _, name in sms]
 
-    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=4, do_run=do_run)
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=4, n_eval_max=220,
+        do_run=do_run)
 
 
 def select_kriging_surrogate(do_run=True):
