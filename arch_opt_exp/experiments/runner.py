@@ -54,14 +54,17 @@ def reset_results():
         shutil.rmtree(folder)
 
 
-def get_experimenters(problem: Problem, algorithms: List[Algorithm], metrics: List[Metric], n_eval_max=500,
-                      algorithm_names: List[str] = None) -> List[Experimenter]:
+def get_experimenters(problem: Problem, algorithms: List[Algorithm], metrics: List[Metric],
+                      n_eval_max: Union[int, List[int]]=500, algorithm_names: List[str] = None) -> List[Experimenter]:
     """Result Experimenter instances corresponding to the algorithms."""
     if algorithm_names is None:
         algorithm_names = [None for _ in range(len(algorithms))]
 
-    return [Experimenter(problem, algorithm, n_eval_max=n_eval_max, metrics=metrics, algorithm_name=algorithm_names[i])
-            for i, algorithm in enumerate(algorithms)]
+    if not isinstance(n_eval_max, list):
+        n_eval_max = [n_eval_max]*len(algorithms)
+
+    return [Experimenter(problem, algorithm, n_eval_max=n_eval_max[i], metrics=metrics,
+                         algorithm_name=algorithm_names[i]) for i, algorithm in enumerate(algorithms)]
 
 
 def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, reset=False):
