@@ -615,18 +615,20 @@ class TrainingMetric(Metric):
 
     @property
     def value_names(self) -> List[str]:
-        return ['n_train', 'n_samples', 'time_train']
+        return ['n_train', 'n_samples', 'time_train', 'n_pop']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
+        n_pop = len(algorithm.pop)
+
         surrogate_infill = self._get_surrogate_infill(algorithm)
         if surrogate_infill is None:
-            return [np.nan]*3
+            return [np.nan]*3+[n_pop]
 
         n_train = surrogate_infill.n_train
         n_samples = surrogate_infill.x_train.shape[0] if surrogate_infill.x_train is not None else np.nan
         time_train = surrogate_infill.time_train or np.nan
 
-        return [n_train, n_samples, time_train]
+        return [n_train, n_samples, time_train, n_pop]
 
     @staticmethod
     def _get_surrogate_infill(algorithm: Algorithm) -> Optional[SurrogateBasedInfill]:

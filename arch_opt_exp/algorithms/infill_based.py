@@ -58,8 +58,8 @@ class RepairedLatinHypercubeSampling(LatinHypercubeSampling):
 
 
 class InfillBasedAlgorithm(Algorithm):
-    """Algorithm that uses some infill criterion to generate new points. The population is kept at the same size
-    throughout the optimization, and updated by rank and crowding survival (like NSGA2)."""
+    """Algorithm that uses some infill criterion to generate new points. The population is extended by each optimization
+    iteration and therefore grows throughout the optimization run."""
 
     def __init__(self, infill_criterion: InfillCriterion, infill_size=None, init_sampling: Sampling = None,
                  init_size=100, survival: Survival = None, **kwargs):
@@ -76,7 +76,7 @@ class InfillBasedAlgorithm(Algorithm):
         self.initialization = Initialization(init_sampling, repair=infill_criterion.repair,
                                              eliminate_duplicates=infill_criterion.eliminate_duplicates)
 
-        self.survival = survival or RankAndCrowdingSurvival()
+        self.survival = survival
 
     def setup(self, *args, **kwargs):
         super(InfillBasedAlgorithm, self).setup(*args, **kwargs)
@@ -88,9 +88,10 @@ class InfillBasedAlgorithm(Algorithm):
             self.initialization.repair = repair
 
     def _initialize(self):
-        pop = self.initialization.do(self.problem, self.init_size, algorithm=self)
+        self.pop = pop = self.initialization.do(self.problem, self.init_size, algorithm=self)
         self.evaluator.eval(self.problem, pop, algorithm=self)
-        self.pop = self.survival.do(self.problem, pop, len(pop), algorithm=self)
+        if self.survival is not None:
+            self.pop = self.survival.do(self.problem, pop, len(pop), algorithm=self)
 
     def _next(self):
         total_off = Population.new()
@@ -110,8 +111,9 @@ class InfillBasedAlgorithm(Algorithm):
             self.evaluator.eval(self.problem, off, algorithm=self)
 
             total_off = Population.merge(total_off, off)
-            pop = Population.merge(self.pop, total_off)
-            self.pop = self.survival.do(self.problem, pop, self.init_size, algorithm=self)
+            self.pop = Population.merge(self.pop, total_off)
+            if self.survival is not None:
+                self.pop = self.survival.do(self.problem, self.pop, self.init_size, algorithm=self)
 
 
 class ModelBasedInfillCriterion(InfillCriterion):
