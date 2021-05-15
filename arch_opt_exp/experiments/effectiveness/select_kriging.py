@@ -187,7 +187,7 @@ def select_infill_size(do_run=True):
     results_key = 'eff_select_kriging_infill'
     n_init = 5*problem.n_var
     n_iter = 50
-    n_infill_min = 100
+    n_infill_min, n_infill_max = 100, 1000
 
     infills = {
         'mpoi': (MinimumPOIInfill, ModMinimumPOIInfill),
@@ -212,7 +212,7 @@ def select_infill_size(do_run=True):
     algorithms = [_get_algo(sm, n_infill, key) for sm, _ in sms for key in infill_keys for n_infill in n_infills]
     algorithm_names = [('SBO(%s, %s, %d)' % (name, key.upper(), n_infill))
                        for _, name in sms for key in infill_keys for n_infill in n_infills]
-    n_eval_max = [n_init+max(n_infill_min, n_iter*n_infill)
+    n_eval_max = [n_init+max(n_infill_min, min(n_iter*n_infill, n_infill_max))
                   for _ in sms for _ in infill_keys for n_infill in n_infills]
 
     run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8,
@@ -261,12 +261,12 @@ if __name__ == '__main__':
     # select_kriging_n_terminate(
     #     # do_run=False,
     # )
-    select_kriging_surrogate_mi_h_pre(
-        # do_run=False,
-    )
+    # select_kriging_surrogate_mi_h_pre(
+    #     # do_run=False,
+    # )
     # select_kriging_surrogate(
     #     # do_run=False,
     # )
-    # select_infill_size(
-    #     # do_run=False,
-    # )
+    select_infill_size(
+        # do_run=False,
+    )
