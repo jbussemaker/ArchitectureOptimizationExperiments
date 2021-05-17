@@ -42,7 +42,7 @@ def run_effectiveness_analytical(do_run=True):
 
 def run_effectiveness_analytical_mo(do_run=True):
     problem = get_analytical_problem()
-    run_effectiveness(problem, 'eff_an_10', n_infill=10, do_run=do_run)
+    run_effectiveness(problem, 'eff_an_5', n_infill=5, do_run=do_run)
 
 
 def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True):
