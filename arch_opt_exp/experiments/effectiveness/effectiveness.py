@@ -37,16 +37,23 @@ from arch_opt_exp.surrogates.smt_models.smt_rbf import *
 
 def run_effectiveness_analytical(do_run=True):
     problem = get_analytical_problem()
-    run_effectiveness(problem, do_run=do_run)
+    run_effectiveness(problem, 'eff_an_1', do_run=do_run)
 
 
-def run_effectiveness(problem: Problem, do_run=True):
+def run_effectiveness_analytical_mo(do_run=True):
+    problem = get_analytical_problem()
+    run_effectiveness(problem, 'eff_an_10', n_infill=10, do_run=do_run)
+
+
+def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True):
     metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
 
-    results_key = 'eff_an'
-    n_init, n_infill = 5*problem.n_var, 1
+    n_init = 5*problem.n_var
     n_rep = 16
     n_term = 100
+
+    n_iter = 300-n_init
+    n_eval_max = n_init+min(n_iter*n_infill, 1000)
 
     nsga2 = get_algo(problem, n_init=n_init)
     nsga2_name = 'NSGA2'
@@ -92,7 +99,8 @@ def run_effectiveness(problem: Problem, do_run=True):
 
     algorithms = [nsga2]+rbf_algorithms+kr_algos
     algorithm_names = [nsga2_name]+rbf_algo_names+kr_algo_names
-    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=n_rep, do_run=do_run)
+    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=n_rep, do_run=do_run,
+        n_eval_max=n_eval_max)
 
 
 def get_analytical_problem():
