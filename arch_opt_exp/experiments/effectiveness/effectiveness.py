@@ -49,7 +49,7 @@ def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True):
     metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
 
     n_init = 5*problem.n_var
-    n_rep = 16
+    n_rep = 8
     n_term = 100
 
     n_iter = 400-n_init
