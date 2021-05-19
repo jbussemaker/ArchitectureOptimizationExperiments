@@ -52,7 +52,7 @@ def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True):
     n_rep = 16
     n_term = 100
 
-    n_iter = 300-n_init
+    n_iter = 400-n_init
     n_eval_max = n_init+min(n_iter*n_infill, 1000)
 
     nsga2 = get_algo(problem, n_init=n_init)
@@ -130,7 +130,7 @@ def get_metrics(problem: Problem, include_loo_cv=True):
     return metrics, plot_metric_values
 
 
-def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=16, n_eval_max=300,
+def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=300,
         do_run=True):
     runner.set_results_folder(results_key)
     exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=n_eval_max, algorithm_names=algorithm_names)
