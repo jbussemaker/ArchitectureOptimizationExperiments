@@ -209,8 +209,8 @@ class ExperimenterResult(Result):
             plt.legend()
 
         if save_filename is not None:
-            save_value_filename = secure_filename(
-                '_'.join([save_filename, metric1_name_value[0], metric1_name_value[1], metric2_name_value[0],
+            save_value_filename = save_filename+'_'+secure_filename(
+                '_'.join([metric1_name_value[0], metric1_name_value[1], metric2_name_value[0],
                           metric2_name_value[1]]))
             plt.savefig(save_value_filename+'.png')
             plt.savefig(save_value_filename+'.svg')
