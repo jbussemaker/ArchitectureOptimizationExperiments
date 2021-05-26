@@ -135,7 +135,8 @@ def plot_efficiency_results(experimenters: List[Experimenter], metric_terminatio
     if plot_metric_values is None:
         plot_metric_values = {met.name: None for met in metrics}
 
-    mt_names = [mt.metric_name for mt in metric_terminations]
+    mt_names = [mt.metric_name.replace('exp_moving_average', 'ema').replace('steady_performance', 'spi')
+                for mt in metric_terminations]
 
     for j, exp in enumerate(experimenters):
         folder = os.path.join(exp.results_folder, 'eff_'+secure_filename(exp.algorithm_name))

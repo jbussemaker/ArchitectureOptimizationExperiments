@@ -206,7 +206,8 @@ class ExperimenterResult(Result):
         plt.xlabel('%s.%s' % (metric1_name_value[0], metric1_name_value[1]))
         plt.ylabel('%s.%s' % (metric2_name_value[0], metric2_name_value[1]))
         if names is not None:
-            plt.legend()
+            plt.legend(bbox_to_anchor=(1., 1.), loc='upper left')
+        plt.tight_layout()
 
         if save_filename is not None:
             save_value_filename = save_filename+'_'+secure_filename(
