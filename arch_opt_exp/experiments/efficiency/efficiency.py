@@ -37,7 +37,7 @@ def run_efficiency_analytical(do_run=True):
 
 def get_metric_terminations():
     return [
-        MetricTermination(NrEvaluationsMetric(), value_name='Budget', upper_limit=400),
+        MetricTermination(NrEvaluationsMetric(), value_name='n_eval', upper_limit=400),
         MDRTermination(limit=.1, smooth_n=2),
         MGBMTermination(limit=.1, r=.1, q=.1),
         FHITermination(limit=1e-4, smooth_n=2),
