@@ -135,6 +135,8 @@ def plot_efficiency_results(experimenters: List[Experimenter], metric_terminatio
     if plot_metric_values is None:
         plot_metric_values = {met.name: None for met in metrics}
 
+    mt_names = [mt.metric_name for mt in metric_terminations]
+
     for j, exp in enumerate(experimenters):
         folder = os.path.join(exp.results_folder, 'eff_'+secure_filename(exp.algorithm_name))
         os.makedirs(folder, exist_ok=True)
@@ -155,6 +157,7 @@ def plot_efficiency_results(experimenters: List[Experimenter], metric_terminatio
             for value_name in plot_value_names:
                 ExperimenterResult.plot_metrics_pareto(
                     [results[j]]+eff_results,
+                    names=['eff']+mt_names,
                     metric1_name_value=('n_eval', ''),
                     metric2_name_value=(metric.name, value_name),
                     save_filename=save_filename, show=False,

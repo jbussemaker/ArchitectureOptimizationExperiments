@@ -198,10 +198,10 @@ class ExperimenterResult(Result):
             val2, std2 = _get_end_value_std(res, *metric2_name_value)
 
             if std1 is not None and std2 is not None:
-                plt.errorbar([val1], [val2], xerr=[std1], yerr=[std2], fmt='.k', markersize=1, elinewidth=1, capsize=5,
+                plt.errorbar([val1], [val2], xerr=[std1], yerr=[std2], fmt='.', markersize=1, elinewidth=1, capsize=5,
                              **kwargs)
             else:
-                plt.scatter([val1], [val2], s=1, c='k', marker='.', **kwargs)
+                plt.scatter([val1], [val2], s=1, marker='.', **kwargs)
 
         plt.xlabel('%s.%s' % (metric1_name_value[0], metric1_name_value[1]))
         plt.ylabel('%s.%s' % (metric2_name_value[0], metric2_name_value[1]))
