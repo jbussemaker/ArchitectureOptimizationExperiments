@@ -148,16 +148,21 @@ def plot_efficiency_results(experimenters: List[Experimenter], metric_terminatio
         folder = os.path.join(exp.results_folder, 'eff_'+secure_filename(exp.algorithm_name))
         os.makedirs(folder, exist_ok=True)
 
-        eff_results = [exp.get_aggregate_efficiency_results(mt) for mt in metric_terminations]
+        for mt in metric_terminations:
+            results = exp.get_list_efficiency_results(mt)
+            save_filename = os.path.join(folder, secure_filename('term_%s' % secure_filename(mt.metric_name)))
+            ExperimenterResult.plot_compare_metrics(
+                results, mt.metric_name, plot_value_names=[mt.value_name], plot_evaluations=True,
+                save_filename=save_filename, show=False)
 
+        eff_results = [exp.get_aggregate_efficiency_results(mt) for mt in metric_terminations]
         for ii, metric in enumerate(metrics):
             if metric.name not in plot_metric_values:
                 continue
             log.info('Plotting metrics: %s, %s -> %r' %
                      (exp.algorithm_name, metric.name, plot_metric_values.get(metric.name)))
 
-            save_filename = os.path.join(folder, secure_filename('plot_%s' % metric.name))
-
+            save_filename = os.path.join(folder, secure_filename('pareto_%s' % metric.name))
             plot_value_names = plot_metric_values.get(metric.name)
             if plot_value_names is None:
                 plot_value_names = metric.value_names

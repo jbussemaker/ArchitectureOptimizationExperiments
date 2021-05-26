@@ -427,6 +427,15 @@ class Experimenter:
 
         log.info('Aggregating efficiency results: %s / %s / %s' %
                  (self.problem.name(), self.algorithm_name, metric_termination.metric_name))
+        results = self.get_list_efficiency_results(metric_termination)
+
+        res = ExperimenterResult.aggregate_results(results)
+        with open(agg_results_path, 'wb') as fp:
+            pickle.dump(res, fp)
+        return res
+
+    def get_list_efficiency_results(self, metric_termination: MetricTermination) -> List[ExperimenterResult]:
+        """Get efficiency results aggregated for all efficiency experiment runs."""
         results = []
         i = 0
         while True:
@@ -436,11 +445,7 @@ class Experimenter:
 
             results.append(result)
             i += 1
-
-        res = ExperimenterResult.aggregate_results(results)
-        with open(agg_results_path, 'wb') as fp:
-            pickle.dump(res, fp)
-        return res
+        return results
 
     def _get_efficiency_result_path(self, metric_termination: MetricTermination, repeat_idx: int) -> str:
         return self.get_problem_algo_metric_results_path(metric_termination, 'result_%d.pkl' % (repeat_idx,))
