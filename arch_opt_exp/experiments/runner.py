@@ -117,8 +117,8 @@ def run_efficiency_multi(experimenters: List[Experimenter], metric_terminations:
     Experimenter.capture_log()
     log.info('Running efficiency experiments: %d algorithms' % (len(experimenters),))
 
-    for mt in metric_terminations:
-        for exp in experimenters:
+    for exp in experimenters:
+        for mt in metric_terminations:
             exp.run_efficiency_repeated(mt)
             agg_res = exp.get_aggregate_efficiency_results(mt)
 
