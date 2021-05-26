@@ -21,6 +21,7 @@ import logging
 import warnings
 import arch_opt_exp
 from typing import *
+import concurrent.futures
 import matplotlib.pyplot as plt
 from arch_opt_exp.experimenter import *
 from arch_opt_exp.metrics_base import *
@@ -117,13 +118,17 @@ def run_efficiency_multi(experimenters: List[Experimenter], metric_terminations:
     Experimenter.capture_log()
     log.info('Running efficiency experiments: %d algorithms' % (len(experimenters),))
 
-    for exp in experimenters:
-        for mt in metric_terminations:
-            exp.run_efficiency_repeated(mt)
-            agg_res = exp.get_aggregate_efficiency_results(mt)
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        fut = [executor.submit(_run, exp, mt) for exp in experimenters for mt in metric_terminations]
+        concurrent.futures.wait(fut)
 
-            agg_res.export_pandas().to_pickle(exp.get_problem_algo_metric_results_path(mt, 'result_agg_df.pkl'))
-            agg_res.save_csv(exp.get_problem_algo_metric_results_path(mt, 'result_agg.csv'))
+
+def _run(exp, mt):
+    exp.run_efficiency_repeated(mt)
+    agg_res = exp.get_aggregate_efficiency_results(mt)
+
+    agg_res.export_pandas().to_pickle(exp.get_problem_algo_metric_results_path(mt, 'result_agg_df.pkl'))
+    agg_res.save_csv(exp.get_problem_algo_metric_results_path(mt, 'result_agg.csv'))
 
 
 def plot_efficiency_results(experimenters: List[Experimenter], metric_terminations: List[MetricTermination],
