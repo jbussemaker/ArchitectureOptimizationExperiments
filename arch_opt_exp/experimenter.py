@@ -170,7 +170,8 @@ class ExperimenterResult(Result):
 
     @staticmethod
     def plot_metrics_pareto(results: List['ExperimenterResult'], metric1_name_value: Tuple[str, str],
-                            metric2_name_value: Tuple[str, str], names: List[str] = None, show=True):
+                            metric2_name_value: Tuple[str, str], names: List[str] = None, save_filename=None,
+                            show=True):
 
         def _get_end_value_std(result: ExperimenterResult, metric_name: str, value_name: str) \
                 -> Tuple[float, Optional[float]]:
@@ -207,6 +208,12 @@ class ExperimenterResult(Result):
         if names is not None:
             plt.legend()
 
+        if save_filename is not None:
+            save_value_filename = secure_filename(
+                '_'.join([save_filename, metric1_name_value[0], metric1_name_value[1], metric2_name_value[0],
+                          metric2_name_value[1]]))
+            plt.savefig(save_value_filename+'.png')
+            plt.savefig(save_value_filename+'.svg')
         if show:
             plt.show()
 
@@ -435,12 +442,10 @@ class Experimenter:
         return res
 
     def _get_efficiency_result_path(self, metric_termination: MetricTermination, repeat_idx: int) -> str:
-        return self.get_problem_algo_results_path(
-            '%s/result_%d.pkl' % (secure_filename(metric_termination.metric_name), repeat_idx))
+        return self.get_problem_algo_metric_results_path(metric_termination, 'result_%d.pkl' % (repeat_idx,))
 
     def _get_agg_efficiency_result_path(self, metric_termination: MetricTermination) -> str:
-        return self.get_problem_algo_results_path(
-            '%s/result_agg.pkl' % (secure_filename(metric_termination.metric_name),))
+        return self.get_problem_algo_metric_results_path(metric_termination, 'result_agg.pkl')
 
     ### HELPER FUNCTIONS ###
 
@@ -468,6 +473,12 @@ class Experimenter:
         if sub_path is not None:
             problem_algo_path += '/'+sub_path
         return self._get_results_path(problem_algo_path)
+
+    def get_problem_algo_metric_results_path(self, metric_termination: MetricTermination, sub_path: str = None) -> str:
+        path = secure_filename(metric_termination.metric_name)
+        if sub_path is not None:
+            path = os.path.join(path, sub_path)
+        return self.get_problem_algo_results_path(path)
 
     def _get_results_path(self, sub_path: str = None) -> str:
         if self.results_folder is None:

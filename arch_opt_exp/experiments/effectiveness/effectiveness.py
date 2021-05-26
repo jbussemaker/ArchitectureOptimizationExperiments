@@ -35,17 +35,17 @@ from arch_opt_exp.surrogates.smt_models.smt_krg import *
 from arch_opt_exp.surrogates.smt_models.smt_rbf import *
 
 
-def run_effectiveness_analytical(do_run=True):
+def run_effectiveness_analytical(do_run=True, return_exp=False):
     problem = get_analytical_problem()
-    run_effectiveness(problem, 'eff_an_1', do_run=do_run)
+    return run_effectiveness(problem, 'eff_an_1', do_run=do_run, return_exp=return_exp)
 
 
-def run_effectiveness_analytical_mo(do_run=True):
+def run_effectiveness_analytical_mo(do_run=True, return_exp=False):
     problem = get_analytical_problem()
-    run_effectiveness(problem, 'eff_an_5', n_infill=5, do_run=do_run)
+    return run_effectiveness(problem, 'eff_an_5', n_infill=5, do_run=do_run, return_exp=return_exp)
 
 
-def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True):
+def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True, return_exp=False):
     metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
 
     n_init = 5*problem.n_var
@@ -99,8 +99,8 @@ def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True):
 
     algorithms = [nsga2]+rbf_algorithms+kr_algos
     algorithm_names = [nsga2_name]+rbf_algo_names+kr_algo_names
-    run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=n_rep, do_run=do_run,
-        n_eval_max=n_eval_max)
+    return run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=n_rep,
+               do_run=do_run, n_eval_max=n_eval_max, return_exp=return_exp)
 
 
 def get_analytical_problem():
@@ -131,9 +131,11 @@ def get_metrics(problem: Problem, include_loo_cv=True):
 
 
 def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8, n_eval_max=300,
-        do_run=True):
+        do_run=True, return_exp=False):
     runner.set_results_folder(results_key)
     exp = runner.get_experimenters(problem, algorithms, metrics, n_eval_max=n_eval_max, algorithm_names=algorithm_names)
+    if return_exp:
+        return exp
 
     if do_run:
         runner.run_effectiveness_multi(exp, n_repeat=n_repeat)

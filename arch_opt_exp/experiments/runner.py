@@ -111,3 +111,56 @@ def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_va
         plt.show()
     elif save:
         plt.close('all')
+
+
+def run_efficiency_multi(experimenters: List[Experimenter], metric_terminations: List[MetricTermination]):
+    Experimenter.capture_log()
+    log.info('Running efficiency experiments: %d algorithms' % (len(experimenters),))
+
+    for mt in metric_terminations:
+        for exp in experimenters:
+            exp.run_efficiency_repeated(mt)
+            agg_res = exp.get_aggregate_efficiency_results(mt)
+
+            agg_res.export_pandas().to_pickle(exp.get_problem_algo_metric_results_path(mt, 'result_agg_df.pkl'))
+            agg_res.save_csv(exp.get_problem_algo_metric_results_path(mt, 'result_agg.csv'))
+
+
+def plot_efficiency_results(experimenters: List[Experimenter], metric_terminations: List[MetricTermination],
+                            plot_metric_values: Dict[str, List[str]] = None, save=False, show=True):
+    """Plot metrics results generated using run_effectiveness_multi."""
+    Experimenter.capture_log()
+    results = [exp.get_aggregate_effectiveness_results() for exp in experimenters]
+    metrics = sorted(results[0].metrics.values(), key=lambda m: m.name)
+    if plot_metric_values is None:
+        plot_metric_values = {met.name: None for met in metrics}
+
+    for j, exp in enumerate(experimenters):
+        folder = os.path.join(exp.results_folder, 'eff_'+secure_filename(exp.algorithm_name))
+        os.makedirs(folder, exist_ok=True)
+
+        eff_results = [exp.get_aggregate_efficiency_results(mt) for mt in metric_terminations]
+
+        for ii, metric in enumerate(metrics):
+            if metric.name not in plot_metric_values:
+                continue
+            log.info('Plotting metrics: %s, %s -> %r' %
+                     (exp.algorithm_name, metric.name, plot_metric_values.get(metric.name)))
+
+            save_filename = os.path.join(folder, secure_filename('plot_%s' % metric.name))
+
+            plot_value_names = plot_metric_values.get(metric.name)
+            if plot_value_names is None:
+                plot_value_names = metric.value_names
+            for value_name in plot_value_names:
+                ExperimenterResult.plot_metrics_pareto(
+                    [results[j]]+eff_results,
+                    metric1_name_value=('n_eval', ''),
+                    metric2_name_value=(metric.name, value_name),
+                    save_filename=save_filename, show=False,
+                )
+
+    if show:
+        plt.show()
+    elif save:
+        plt.close('all')
