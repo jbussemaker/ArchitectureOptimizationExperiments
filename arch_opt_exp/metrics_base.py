@@ -313,7 +313,7 @@ class MetricTermination(Termination):
 
         if save_filename is not None:
             plt.savefig(save_filename+'.png')
-            plt.savefig(save_filename+'.svg')
+            # plt.savefig(save_filename+'.svg')
         if show:
             plt.show()
 
