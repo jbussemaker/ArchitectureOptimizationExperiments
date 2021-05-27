@@ -237,13 +237,16 @@ class IndicatorMetric(Metric):
 class MetricTermination(Termination):
     """Termination based on a metric."""
 
-    def __init__(self, metric: Metric, value_name: str = None, lower_limit: float = None, upper_limit: float = None):
+    def __init__(self, metric: Metric, value_name: str = None, lower_limit: float = None, upper_limit: float = None,
+                 n_eval_check: int = None):
         if lower_limit is None and upper_limit is None:
             raise ValueError('Provide at least either a lower or an upper limit!')
         self.metric = metric
+        self.n_eval = []
         self.value_name = value_name or metric.value_names[0]
         self.lower_limit = lower_limit
         self.upper_limit = upper_limit
+        self.n_eval_check = n_eval_check
 
         super(MetricTermination, self).__init__()
 
@@ -253,14 +256,40 @@ class MetricTermination(Termination):
 
     def _do_continue(self, algorithm: Algorithm, **kwargs):
 
-        self.metric.calculate_step(algorithm)
-        value = self.metric.values[self.value_name][-1]
+        values = self._calc_step(algorithm)
+        value = values[-1]
 
         if self.lower_limit is not None and value <= self.lower_limit:
             return False
         if self.upper_limit is not None and value >= self.upper_limit:
             return False
         return True
+
+    def _calc_step(self, algorithm: Algorithm):
+        self.metric.calculate_step(algorithm)
+        self.n_eval.append(algorithm.evaluator.n_eval)
+        return self._get_check_values()
+
+    def _get_check_values(self, return_i_check=False):
+        values = np.array(self.metric.values[self.value_name])
+        if self.n_eval_check is None or len(values) == 0:
+            return values
+
+        n_eval = np.array(self.n_eval)
+        i_check = [0]
+        values_eval = [values[0]]
+        next_n_eval = n_eval[0]+self.n_eval_check
+        for i, value in enumerate(values):
+            if i == 0:
+                continue
+            if n_eval[i] >= next_n_eval:
+                i_check.append(i)
+                values_eval.append(value)
+                next_n_eval = n_eval[i]+self.n_eval_check
+
+        if return_i_check:
+            return np.array(i_check), np.array(values_eval)
+        return np.array(values_eval)
 
     def plot(self, show=True):
         plt.figure()
@@ -270,6 +299,9 @@ class MetricTermination(Termination):
         x = list(range(len(y)))
 
         plt.plot(x, y, '-k', linewidth=1)
+        if self.n_eval_check is not None:
+            x_check, y_check = self._get_check_values(return_i_check=True)
+            plt.plot(x_check, y_check, 'xk', linewidth=1)
         if self.lower_limit is not None:
             plt.plot(x, np.ones((len(x),))*self.lower_limit, '--k', linewidth=1)
         if self.upper_limit is not None:
@@ -286,15 +318,15 @@ class MetricTermination(Termination):
 class MetricDiffTermination(MetricTermination):
     """Termination based on the rate of change of a metric."""
 
-    def __init__(self, metric: Metric, value_name: str = None, limit: float = None):
-        super(MetricDiffTermination, self).__init__(metric, value_name=value_name, lower_limit=limit)
+    def __init__(self, metric: Metric, value_name: str = None, limit: float = None, **kwargs):
+        super(MetricDiffTermination, self).__init__(metric, value_name=value_name, lower_limit=limit, **kwargs)
 
         self.diff_values = []
 
     def _do_continue(self, algorithm: Algorithm, **kwargs):
 
-        self.metric.calculate_step(algorithm)
-        values = np.array(self.metric.values[self.value_name])
+        values = self._calc_step(algorithm)
+        values = np.array(values)
         real_values = values[~np.isnan(values)]
 
         if len(real_values) < 2:

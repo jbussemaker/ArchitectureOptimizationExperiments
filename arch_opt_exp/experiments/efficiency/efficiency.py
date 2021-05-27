@@ -36,18 +36,19 @@ def run_efficiency_analytical(do_run=True):
 
 
 def get_metric_terminations():
+    n_eval_check = 10
     return [
-        MetricTermination(NrEvaluationsMetric(), value_name='n_eval', upper_limit=400),
-        MDRTermination(limit=.1, smooth_n=2),
-        MGBMTermination(limit=.1, r=.1, q=.1),
-        FHITermination(limit=1e-4, smooth_n=2),
-        GDTermination(limit=1e-4, smooth_n=2),
-        IGDTermination(limit=1e-4, smooth_n=2),
-        SpreadTermination(limit=1e-4, smooth_n=5),
-        HVTermination(limit=1e-4, smooth_n=2),
-        CRTermination(limit=.8, n_delta=1, smooth_n=2),
-        MCDTermination(limit=5e-4, smooth_n=2),
-        SPITermination(n=40, limit=.02, smooth_n=2),
+        MetricTermination(NrEvaluationsMetric(), value_name='n_eval', upper_limit=400, n_eval_check=n_eval_check),
+        MDRTermination(limit=.1, smooth_n=2, n_eval_check=n_eval_check),
+        MGBMTermination(limit=.1, r=.1, q=.1, n_eval_check=n_eval_check),
+        FHITermination(limit=1e-4, smooth_n=2, n_eval_check=n_eval_check),
+        GDTermination(limit=1e-4, smooth_n=2, n_eval_check=n_eval_check),
+        IGDTermination(limit=1e-4, smooth_n=2, n_eval_check=n_eval_check),
+        SpreadTermination(limit=1e-4, smooth_n=5, n_eval_check=n_eval_check),
+        HVTermination(limit=1e-4, smooth_n=2, n_eval_check=n_eval_check),
+        CRTermination(limit=.8, n_delta=1, smooth_n=2, n_eval_check=n_eval_check),
+        MCDTermination(limit=5e-4, smooth_n=2, n_eval_check=n_eval_check),
+        SPITermination(n=40, limit=.02, smooth_n=2, n_eval_check=n_eval_check),
     ]
 
 

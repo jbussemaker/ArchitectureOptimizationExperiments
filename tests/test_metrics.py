@@ -63,7 +63,13 @@ def test_spread(problem, problem_3obj, algorithm):
     spread_termination = SpreadTermination(limit=1e-3)
     eff_res = exp.run_efficiency(spread_termination, repeat_idx=0)
     assert len(eff_res.history) < 50
+    assert len(eff_res.termination._get_check_values()) == len(eff_res.history)
     eff_res.termination.plot(show=False)
+
+    spread_termination_n = SpreadTermination(limit=1e-3, n_eval_check=40)
+    eff_res2 = exp.run_efficiency(spread_termination_n, repeat_idx=0)
+    assert len(eff_res2.termination._get_check_values()) < 50
+    eff_res2.termination.plot(show=False)
 
 
 def test_delta_hv(problem, algorithm):
