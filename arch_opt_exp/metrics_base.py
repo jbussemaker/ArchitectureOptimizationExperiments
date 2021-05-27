@@ -266,30 +266,20 @@ class MetricTermination(Termination):
         return True
 
     def _calc_step(self, algorithm: Algorithm):
-        self.metric.calculate_step(algorithm)
-        self.n_eval.append(algorithm.evaluator.n_eval)
+        do_calc = True
+        if len(self.n_eval) > 0 and self.n_eval_check is not None:
+            n_eval_next = self.n_eval[-1]+self.n_eval_check
+            n_eval_algo = algorithm.evaluator.n_eval
+            if n_eval_algo < n_eval_next:
+                do_calc = False
+
+        if do_calc:
+            self.metric.calculate_step(algorithm)
+            self.n_eval.append(algorithm.evaluator.n_eval)
         return self._get_check_values()
 
-    def _get_check_values(self, return_i_check=False):
-        values = np.array(self.metric.values[self.value_name])
-        if self.n_eval_check is None or len(values) == 0:
-            return values
-
-        n_eval = np.array(self.n_eval)
-        i_check = [0]
-        values_eval = [values[0]]
-        next_n_eval = n_eval[0]+self.n_eval_check
-        for i, value in enumerate(values):
-            if i == 0:
-                continue
-            if n_eval[i] >= next_n_eval:
-                i_check.append(i)
-                values_eval.append(value)
-                next_n_eval = n_eval[i]+self.n_eval_check
-
-        if return_i_check:
-            return np.array(i_check), np.array(values_eval)
-        return np.array(values_eval)
+    def _get_check_values(self):
+        return np.array(self.metric.values[self.value_name])
 
     def plot(self, save_filename=None, show=True):
         plt.figure()
@@ -299,9 +289,6 @@ class MetricTermination(Termination):
         x = list(range(len(y)))
 
         plt.plot(x, y, '-k', linewidth=1)
-        if self.n_eval_check is not None:
-            x_check, y_check = self._get_check_values(return_i_check=True)
-            plt.plot(x_check, y_check, 'xk', linewidth=1)
         if self.lower_limit is not None:
             plt.plot(x, np.ones((len(x),))*self.lower_limit, '--k', linewidth=1)
         if self.upper_limit is not None:
