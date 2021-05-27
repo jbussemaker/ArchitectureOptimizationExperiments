@@ -291,7 +291,7 @@ class MetricTermination(Termination):
             return np.array(i_check), np.array(values_eval)
         return np.array(values_eval)
 
-    def plot(self, show=True):
+    def plot(self, save_filename=None, show=True):
         plt.figure()
         plt.title('Metric termination: %s.%s' % (self.metric_name, self.value_name))
 
@@ -311,6 +311,9 @@ class MetricTermination(Termination):
         plt.xlabel('Iteration')
         plt.ylabel(self.value_name)
 
+        if save_filename is not None:
+            plt.savefig(save_filename+'.png')
+            plt.savefig(save_filename+'.svg')
         if show:
             plt.show()
 
@@ -337,10 +340,10 @@ class MetricDiffTermination(MetricTermination):
         self.diff_values.append(diff)
         return diff > self.lower_limit
 
-    def plot(self, show=True):
+    def plot(self, save_filename=None, show=True):
         _ll = self.lower_limit
         self.lower_limit = None
-        super(MetricDiffTermination, self).plot(show=False)
+        super(MetricDiffTermination, self).plot(save_filename=save_filename, show=False)
         self.lower_limit = _ll
 
         plt.figure()
@@ -356,6 +359,9 @@ class MetricDiffTermination(MetricTermination):
         plt.xlabel('Iteration')
         plt.ylabel(self.value_name+' diff')
 
+        if save_filename is not None:
+            plt.savefig(save_filename+'_diff.png')
+            plt.savefig(save_filename+'_diff.svg')
         if show:
             plt.show()
 

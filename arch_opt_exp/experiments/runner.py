@@ -156,6 +156,11 @@ def plot_efficiency_results(experimenters: List[Experimenter], metric_terminatio
                 [res.termination.metric for res in results], n_eval=n_eval, plot_value_names=[mt.value_name],
                 save_filename=save_filename, show=False)
 
+            for ii, res in enumerate(results):
+                save_filename = os.path.join(
+                    folder, secure_filename('details_%s_%d' % (secure_filename(mt.metric_name), ii)))
+                res.termination.plot(save_filename=save_filename, show=False)
+
         eff_results = [exp.get_aggregate_efficiency_results(mt) for mt in metric_terminations]
         for ii, metric in enumerate(metrics):
             if metric.name not in plot_metric_values:
