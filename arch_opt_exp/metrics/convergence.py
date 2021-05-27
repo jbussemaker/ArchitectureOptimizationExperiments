@@ -83,6 +83,7 @@ class DistanceIndicatorConvergenceMetric(Metric):
             ref_pf = self._pf
 
         indicator = self._get_indicator(ref_pf)
+        indicator.normalize = True
 
         current_pf = self.get_pareto_front(self._get_pop_f(algorithm))
         distance = indicator.calc(current_pf)
