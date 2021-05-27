@@ -149,6 +149,8 @@ def plot_efficiency_results(experimenters: List[Experimenter], metric_terminatio
         os.makedirs(folder, exist_ok=True)
 
         for mt in metric_terminations:
+            log.info('Plotting termination: %s / %s' % (exp.algorithm_name, mt.metric_name))
+
             results = exp.get_list_efficiency_results(mt)
             n_eval = [res.termination.n_eval for res in results]
             save_filename = os.path.join(folder, secure_filename('term_%s' % secure_filename(mt.metric_name)))
@@ -165,7 +167,7 @@ def plot_efficiency_results(experimenters: List[Experimenter], metric_terminatio
         for ii, metric in enumerate(metrics):
             if metric.name not in plot_metric_values:
                 continue
-            log.info('Plotting metrics: %s, %s -> %r' %
+            log.info('Plotting metric (Pareto): %s / %s -> %r' %
                      (exp.algorithm_name, metric.name, plot_metric_values.get(metric.name)))
 
             save_filename = os.path.join(folder, secure_filename('pareto_%s' % metric.name))

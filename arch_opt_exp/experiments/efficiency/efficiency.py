@@ -42,13 +42,13 @@ def get_metric_terminations():
         MDRTermination(limit=.1, smooth_n=2, n_eval_check=n_eval_check),
         MGBMTermination(limit=.1, r=.1, q=.1, n_eval_check=n_eval_check),
         FHITermination(limit=1e-4, smooth_n=2, n_eval_check=n_eval_check),
-        GDTermination(limit=1e-4, smooth_n=2, n_eval_check=n_eval_check),
-        IGDTermination(limit=1e-4, smooth_n=2, n_eval_check=n_eval_check),
+        GDTermination(limit=1e-3, smooth_n=2, n_eval_check=n_eval_check),
+        IGDTermination(limit=1e-3, smooth_n=2, n_eval_check=n_eval_check),
         SpreadTermination(limit=1e-4, smooth_n=5, n_eval_check=n_eval_check),
-        HVTermination(limit=1e-4, smooth_n=2, n_eval_check=n_eval_check),
+        HVTermination(limit=1e-3, smooth_n=2, n_eval_check=n_eval_check),
         CRTermination(limit=.8, n_delta=1, smooth_n=2, n_eval_check=n_eval_check),
         MCDTermination(limit=5e-4, smooth_n=2, n_eval_check=n_eval_check),
-        SPITermination(n=40, limit=.02, smooth_n=2, n_eval_check=n_eval_check),
+        SPITermination(n=4, limit=.02, smooth_n=2, n_eval_check=n_eval_check),
     ]
 
 

@@ -348,7 +348,7 @@ class MetricDiffTermination(MetricTermination):
 
         if save_filename is not None:
             plt.savefig(save_filename+'_diff.png')
-            plt.savefig(save_filename+'_diff.svg')
+            # plt.savefig(save_filename+'_diff.svg')
         if show:
             plt.show()
 
