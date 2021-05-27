@@ -78,7 +78,7 @@ def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, rese
         reset_results()
     for exp in experimenters:
         exp.run_effectiveness_parallel(n_repeat=n_repeat)
-        agg_res = exp.get_aggregate_effectiveness_results()
+        agg_res = exp.get_aggregate_effectiveness_results(force=True)
 
         agg_res.export_pandas().to_pickle(exp.get_problem_algo_results_path('result_agg_df.pkl'))
         agg_res.save_csv(exp.get_problem_algo_results_path('result_agg.csv'))
@@ -126,7 +126,7 @@ def run_efficiency_multi(experimenters: List[Experimenter], metric_terminations:
 def _run(exp, mt):
     Experimenter.capture_log()
     exp.run_efficiency_repeated(mt)
-    agg_res = exp.get_aggregate_efficiency_results(mt)
+    agg_res = exp.get_aggregate_efficiency_results(mt, force=True)
 
     agg_res.export_pandas().to_pickle(exp.get_problem_algo_metric_results_path(mt, 'result_agg_df.pkl'))
     agg_res.save_csv(exp.get_problem_algo_metric_results_path(mt, 'result_agg.csv'))

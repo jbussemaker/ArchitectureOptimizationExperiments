@@ -306,10 +306,10 @@ class Experimenter:
         with open(result_path, 'rb') as fp:
             return pickle.loads(bz2.decompress(fp.read()))
 
-    def get_aggregate_effectiveness_results(self) -> ExperimenterResult:
+    def get_aggregate_effectiveness_results(self, force=False) -> ExperimenterResult:
         """Returns results aggregated for all individual runs, using mean and std."""
         agg_results_path = self._get_agg_effectiveness_result_path()
-        if os.path.exists(agg_results_path):
+        if not force and os.path.exists(agg_results_path):
             with open(agg_results_path, 'rb') as fp:
                 return pickle.load(fp)
 
@@ -418,10 +418,11 @@ class Experimenter:
         with open(result_path, 'rb') as fp:
             return pickle.loads(bz2.decompress(fp.read()))
 
-    def get_aggregate_efficiency_results(self, metric_termination: MetricTermination) -> ExperimenterResult:
+    def get_aggregate_efficiency_results(self, metric_termination: MetricTermination, force=False) \
+            -> ExperimenterResult:
         """Get efficiency results aggregated for all efficiency experiment runs."""
         agg_results_path = self._get_agg_efficiency_result_path(metric_termination)
-        if os.path.exists(agg_results_path):
+        if not force and os.path.exists(agg_results_path):
             with open(agg_results_path, 'rb') as fp:
                 return pickle.load(fp)
 
