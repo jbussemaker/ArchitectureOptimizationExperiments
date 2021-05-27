@@ -150,7 +150,7 @@ def plot_efficiency_results(experimenters: List[Experimenter], metric_terminatio
 
         for mt in metric_terminations:
             results = exp.get_list_efficiency_results(mt)
-            n_eval = [res.n_eval for res in results]
+            n_eval = [res.termination.n_eval for res in results]
             save_filename = os.path.join(folder, secure_filename('term_%s' % secure_filename(mt.metric_name)))
             Metric.plot_multiple(
                 [res.termination.metric for res in results], n_eval=n_eval, plot_value_names=[mt.value_name],
