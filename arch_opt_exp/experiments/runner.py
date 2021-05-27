@@ -151,14 +151,14 @@ def plot_efficiency_results(experimenters: List[Experimenter], metric_terminatio
         for mt in metric_terminations:
             log.info('Plotting termination: %s / %s' % (exp.algorithm_name, mt.metric_name))
 
-            results = exp.get_list_efficiency_results(mt)
-            n_eval = [res.termination.n_eval for res in results]
+            mt_results = exp.get_list_efficiency_results(mt)
+            n_eval = [res.termination.n_eval for res in mt_results]
             save_filename = os.path.join(folder, secure_filename('term_%s' % secure_filename(mt.metric_name)))
             Metric.plot_multiple(
-                [res.termination.metric for res in results], n_eval=n_eval, plot_value_names=[mt.value_name],
+                [res.termination.metric for res in mt_results], n_eval=n_eval, plot_value_names=[mt.value_name],
                 save_filename=save_filename, show=False)
 
-            for ii, res in enumerate(results):
+            for ii, res in enumerate(mt_results):
                 save_filename = os.path.join(
                     folder, secure_filename('details_%s_%d' % (secure_filename(mt.metric_name), ii)))
                 res.termination.plot(save_filename=save_filename, show=False)
