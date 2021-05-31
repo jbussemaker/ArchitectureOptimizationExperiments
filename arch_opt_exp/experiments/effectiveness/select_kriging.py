@@ -24,8 +24,10 @@ from arch_opt_exp.algorithms.surrogate.mo.enhanced_poi import *
 from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
 from arch_opt_exp.algorithms.surrogate.so_probabilities import *
 from arch_opt_exp.algorithms.surrogate.p_of_feasibility import *
+from arch_opt_exp.algorithms.surrogate.func_estimate import *
 
 from arch_opt_exp.surrogates.smt_models.smt_krg import *
+from arch_opt_exp.surrogates.smt_models.smt_rbf import *
 from arch_opt_exp.surrogates.sklearn_models.gp import *
 from arch_opt_exp.surrogates.sklearn_models.distance_base import *
 from arch_opt_exp.surrogates.sklearn_models.mixed_int_dist import *
@@ -180,7 +182,6 @@ def select_kriging_surrogate(do_run=True):
 
     run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=n_rep, do_run=do_run)
 
-
 def select_infill_size(do_run=True):
     problem, metrics, plot_metric_values = get_problem(include_loo_cv=False)
 
@@ -214,6 +215,15 @@ def select_infill_size(do_run=True):
                        for _, name in sms for key in infill_keys for n_infill in n_infills]
     n_eval_max = [n_init+max(n_infill_min, min(n_iter*n_infill, n_infill_max))
                   for _ in sms for _ in infill_keys for n_infill in n_infills]
+
+    rbf_sm = SMTRBFSurrogateModel(d0=1., deg=-1, reg=1e-10)
+    algorithms += [
+        SurrogateBasedInfill(infill=FunctionEstimateDistanceInfill(), surrogate_model=rbf_sm, termination=100,
+                             verbose=True).algorithm(infill_size=n_infill, init_size=n_init)
+        for n_infill in n_infills
+    ]
+    algorithm_names += ['RBF(y-Dist, %d)' % n_infill for n_infill in n_infills]
+    n_eval_max += [n_init+max(n_infill_min, min(n_iter*n_infill, n_infill_max)) for n_infill in n_infills]
 
     run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=8,
         n_eval_max=n_eval_max, do_run=do_run)
