@@ -21,11 +21,22 @@ from arch_opt_exp.metrics.termination import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.metrics_base import MetricTermination
 
-from arch_opt_exp.experiments.effectiveness.effectiveness import run_effectiveness_analytical
+from arch_opt_exp.experiments.effectiveness.effectiveness import run_effectiveness_analytical, run_effectiveness_real
 
 
 def run_efficiency_analytical(do_run=True):
     exp = run_effectiveness_analytical(return_exp=True)
+    mt = get_metric_terminations()
+    plot_metric_values = {
+        'delta_hv': ['delta_hv'],
+        'IGD': None,
+        'spread': ['delta'],
+    }
+    run(exp, mt, plot_metric_values=plot_metric_values, do_run=do_run)
+
+
+def run_efficiency_real(do_run=True):
+    exp = run_effectiveness_real(return_exp=True)
     mt = get_metric_terminations()
     plot_metric_values = {
         'delta_hv': ['delta_hv'],
@@ -59,6 +70,9 @@ def run(exp, metric_terminations: List[MetricTermination], plot_metric_values=No
 
 
 if __name__ == '__main__':
-    run_efficiency_analytical(
+    # run_efficiency_analytical(
+    #     # do_run=False,
+    # )
+    run_efficiency_real(
         # do_run=False,
     )

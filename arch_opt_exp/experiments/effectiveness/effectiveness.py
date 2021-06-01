@@ -21,6 +21,7 @@ from arch_opt_exp.experiments.moea_helpers import *
 from arch_opt_exp.experiments import runner
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.problems.hierarchical import *
+from arch_opt_exp.problems.turbofan import *
 from arch_opt_exp.algorithms.surrogate.validation import *
 from arch_opt_exp.algorithms.surrogate.mo.min_var_pf import *
 from arch_opt_exp.algorithms.surrogate.func_estimate import *
@@ -43,6 +44,11 @@ def run_effectiveness_analytical(do_run=True, return_exp=False):
 def run_effectiveness_analytical_mo(do_run=True, return_exp=False):
     problem = get_analytical_problem()
     return run_effectiveness(problem, 'eff_an_5', n_infill=5, do_run=do_run, return_exp=return_exp)
+
+
+def run_effectiveness_real(do_run=True, return_exp=False):
+    problem = get_turbofan_problem()
+    return run_effectiveness(problem, 'eff_real', do_run=do_run, return_exp=return_exp)
 
 
 def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True, return_exp=False):
@@ -143,6 +149,9 @@ def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_
 
 
 if __name__ == '__main__':
-    run_effectiveness_analytical(
+    # run_effectiveness_analytical(
+    #     # do_run=False,
+    # )
+    run_effectiveness_real(
         # do_run=False,
     )
