@@ -48,14 +48,14 @@ def run_effectiveness_analytical_mo(do_run=True, return_exp=False):
 
 def run_effectiveness_real(do_run=True, return_exp=False):
     problem = get_turbofan_problem()
-    return run_effectiveness(problem, 'eff_real', do_run=do_run, return_exp=return_exp)
+    return run_effectiveness(problem, 'eff_real', do_run=do_run, reduced=True, return_exp=return_exp)
 
 
-def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True, return_exp=False):
+def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True, reduced=False, return_exp=False):
     metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
 
     n_init = 5*problem.n_var
-    n_rep = 8
+    n_rep = 4 if reduced else 8
     n_term = 100
 
     n_iter = 400-n_init
@@ -99,12 +99,19 @@ def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True, re
         (SMTKrigingSurrogateModel(auto_wrap_mixed_int=False, **smt_kwargs), 'cont_relax'),
     ]
     infill_keys = list(infills.keys())
+    if reduced:
+        infills_reduced = {'y', 'mvpf'}
+        infill_keys = [key for key in infill_keys if key in infills_reduced]
 
     kr_algos = [_get_kriging_algo(sm, key) for key in infill_keys for sm, _ in sms]
     kr_algo_names = [('SBO(%s, %s)' % (name, key.upper())) for key in infill_keys for _, name in sms]
 
-    algorithms = [nsga2]+rbf_algorithms+kr_algos
-    algorithm_names = [nsga2_name]+rbf_algo_names+kr_algo_names
+    if reduced:
+        algorithms = rbf_algorithms[1:]+kr_algos
+        algorithm_names = rbf_algo_names[1:]+kr_algo_names
+    else:
+        algorithms = [nsga2]+rbf_algorithms+kr_algos
+        algorithm_names = [nsga2_name]+rbf_algo_names+kr_algo_names
     return run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_repeat=n_rep,
                do_run=do_run, n_eval_max=n_eval_max, return_exp=return_exp)
 
