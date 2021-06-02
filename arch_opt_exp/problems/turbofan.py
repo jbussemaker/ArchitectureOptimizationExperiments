@@ -25,6 +25,19 @@ def get_turbofan_problem():
 
 
 if __name__ == '__main__':
-    from pymoo.performance_indicator.hv import Hypervolume
-    pf = get_turbofan_problem().pareto_front()
-    print(Hypervolume(pf=pf, normalize=True).calc(pf))
+    # from pymoo.performance_indicator.hv import Hypervolume
+    # pf = get_turbofan_problem().pareto_front()
+    # print(Hypervolume(pf=pf, normalize=True).calc(pf))
+
+    import multiprocessing
+    from pymoo.optimize import minimize
+    from arch_opt_exp.surrogates.smt_models.smt_rbf import *
+    from arch_opt_exp.algorithms.surrogate.func_estimate import *
+    from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
+    with multiprocessing.Pool() as pool:
+        problem = get_turbofan_problem()
+        problem.parallelization = ('starmap', pool.starmap)
+        algo = SurrogateBasedInfill(
+            infill=FunctionEstimateInfill(), surrogate_model=SMTRBFSurrogateModel(d0=1., deg=-1, reg=1e-10),
+            termination=20, verbose=True).algorithm(infill_size=1, init_size=5)
+        minimize(problem, algo, termination=('n_eval', 20))
