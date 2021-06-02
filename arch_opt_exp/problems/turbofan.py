@@ -22,3 +22,9 @@ def get_turbofan_problem():
     from open_turb_arch.architecting.architecting_problem import \
         get_architecting_problem, get_pymoo_architecting_problem
     return get_pymoo_architecting_problem(get_architecting_problem())
+
+
+if __name__ == '__main__':
+    from pymoo.performance_indicator.hv import Hypervolume
+    pf = get_turbofan_problem().pareto_front()
+    print(Hypervolume(pf=pf, normalize=True).calc(pf))
