@@ -47,7 +47,10 @@ class RepairedLatinHypercubeSampling(LatinHypercubeSampling):
         x = super(RepairedLatinHypercubeSampling, self)._sample(n_samples, n_var)
 
         if self._repair is not None:
-            x = self._repair.do(self._problem, x)
+            xl, xu = self._problem.xl, self._problem.xu
+            x_abs = x*(xu-xl)+xl
+            x_abs = self._repair.do(self._problem, x_abs)
+            x = (x_abs-xl)/(xu-xl)
 
         return x
 
