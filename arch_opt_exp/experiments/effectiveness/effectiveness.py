@@ -100,8 +100,7 @@ def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True, re
     ]
     infill_keys = list(infills.keys())
     if reduced:
-        infills_reduced = {'y', 'mvpf'}
-        infill_keys = [key for key in infill_keys if key in infills_reduced]
+        infill_keys = ['y', 'mvpf', 'poi', 'mpoi', 'mepoi']
 
     kr_algos = [_get_kriging_algo(sm, key) for key in infill_keys for sm, _ in sms]
     kr_algo_names = [('SBO(%s, %s)' % (name, key.upper())) for key in infill_keys for _, name in sms]
