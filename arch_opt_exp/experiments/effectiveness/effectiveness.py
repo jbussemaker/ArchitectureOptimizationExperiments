@@ -48,11 +48,13 @@ def run_effectiveness_analytical_mo(do_run=True, return_exp=False):
 
 def run_effectiveness_real(do_run=True, return_exp=False):
     problem = get_turbofan_problem()
-    return run_effectiveness(problem, 'eff_real', do_run=do_run, reduced=True, return_exp=return_exp)
+    return run_effectiveness(
+        problem, 'eff_real', do_run=do_run, reduced=True, include_spread=False, return_exp=return_exp)
 
 
-def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True, reduced=False, return_exp=False):
-    metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
+def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True, reduced=False, include_spread=True,
+                      return_exp=False):
+    metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False, include_spread=include_spread)
 
     n_init = 5*problem.n_var
     n_rep = 6 if reduced else 8
@@ -119,7 +121,7 @@ def get_analytical_problem():
     return MOHierarchicalTestProblem()
 
 
-def get_metrics(problem: Problem, include_loo_cv=True):
+def get_metrics(problem: Problem, include_loo_cv=True, include_spread=True):
     pf = problem.pareto_front()
     metrics = [
         DeltaHVMetric(pf),
@@ -139,6 +141,11 @@ def get_metrics(problem: Problem, include_loo_cv=True):
         'training': ['n_train', 'n_samples', 'time_train'],
         'infill': ['time_infill'],
     }
+
+    if not include_spread:
+        metrics.pop(2)
+        del plot_metric_values['spread']
+
     return metrics, plot_metric_values
 
 

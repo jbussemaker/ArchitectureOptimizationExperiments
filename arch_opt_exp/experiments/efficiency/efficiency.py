@@ -37,18 +37,17 @@ def run_efficiency_analytical(do_run=True):
 
 def run_efficiency_real(do_run=True):
     exp = run_effectiveness_real(return_exp=True)
-    mt = get_metric_terminations()
+    mt = get_metric_terminations(include_spread=False)
     plot_metric_values = {
         'delta_hv': ['delta_hv'],
         'IGD': None,
-        'spread': ['delta'],
     }
     run(exp, mt, plot_metric_values=plot_metric_values, do_run=do_run)
 
 
-def get_metric_terminations():
+def get_metric_terminations(include_spread=True):
     n_eval_check = 10
-    return [
+    term = [
         MetricTermination(NrEvaluationsMetric(), value_name='n_eval', upper_limit=400, n_eval_check=n_eval_check),
         MDRTermination(limit=.1, smooth_n=2, n_eval_check=n_eval_check),
         MGBMTermination(limit=.1, r=.1, q=.1, n_eval_check=n_eval_check),
@@ -61,6 +60,9 @@ def get_metric_terminations():
         MCDTermination(limit=5e-4, smooth_n=2, n_eval_check=n_eval_check),
         SPITermination(n=4, limit=.02, smooth_n=2, n_eval_check=n_eval_check),
     ]
+    if not include_spread:
+        term.pop(6)
+    return term
 
 
 def run(exp, metric_terminations: List[MetricTermination], plot_metric_values=None, do_run=True):
