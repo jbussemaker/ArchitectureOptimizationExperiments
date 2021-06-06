@@ -251,10 +251,13 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
         x_norm = self._normalize(x)
 
-        f, self.y_train_min, self.y_train_max = self._normalize_y(self.total_pop.get('F'))
-        f_is_invalid = np.bitwise_or(np.isnan(f), np.isinf(f))
-        f[f_is_invalid] = 1.
+        f_real = self.total_pop.get('F')
+        f_is_invalid = np.bitwise_or(np.isnan(f_real), np.isinf(f_real))
+        f_real[f_is_invalid] = np.nan
+        f_max = np.nanmax(f_real, axis=0)
+        f_real[np.any(f_is_invalid, axis=1)] = f_max
 
+        f, self.y_train_min, self.y_train_max = self._normalize_y(f_real)
         self.y_train_centered = [False]*f.shape[1]
         y = f
         if self.problem.n_constr > 0:
