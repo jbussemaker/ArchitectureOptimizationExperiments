@@ -132,7 +132,7 @@ class MaxConstraintViolationMetric(Metric):
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         cv = self._get_opt_cv(algorithm)
         if len(cv) == 0:
-            return [0., 0.]
+            return [0., 0., 0., 0.]
         cv[np.isinf(cv)] = np.nan
 
         cv_pop = self._get_pop_cv(algorithm)
