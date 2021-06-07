@@ -136,7 +136,7 @@ def get_metrics(problem: Problem, include_loo_cv=True, include_spread=True):
         'delta_hv': ['delta_hv'],
         'IGD': None,
         'spread': ['delta'],
-        'max_cv': ['max_cv', 'min_cv'],
+        'max_cv': None,
         'sm_quality': ['rmse', 'loo_cv'] if include_loo_cv else ['rmse'],
         'training': ['n_train', 'n_samples', 'time_train'],
         'infill': ['time_infill'],

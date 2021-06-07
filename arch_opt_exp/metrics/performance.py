@@ -119,8 +119,7 @@ class IGDPlusMetric(IndicatorMetric):
 
 
 class MaxConstraintViolationMetric(Metric):
-    """Metric that simply returns the maximum constraint violation of the current optimal set. Note that depending on
-    algorithm behavior, the current optimal set may contain only the least-violated point (e.g. for NSGA2)."""
+    """Metric that simply returns the maximum constraint violation of the current population."""
 
     @property
     def name(self) -> str:
@@ -128,14 +127,18 @@ class MaxConstraintViolationMetric(Metric):
 
     @property
     def value_names(self) -> List[str]:
-        return ['max_cv', 'min_cv']
+        return ['max_cv', 'min_cv', 'pop_max_cv', 'pop_min_cv']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         cv = self._get_opt_cv(algorithm)
         if len(cv) == 0:
             return [0., 0.]
+        cv[np.isinf(cv)] = np.nan
 
-        return [np.nanmax(cv), np.nanmin(cv)]
+        cv_pop = self._get_pop_cv(algorithm)
+        cv_pop[np.isinf(cv_pop)] = np.nan
+
+        return [np.nanmax(cv), np.nanmin(cv), np.nanmax(cv_pop), np.nanmin(cv_pop)]
 
 
 class NrEvaluationsMetric(Metric):
