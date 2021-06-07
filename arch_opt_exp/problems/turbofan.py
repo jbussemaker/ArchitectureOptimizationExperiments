@@ -15,6 +15,9 @@ Copyright: (c) 2021, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 
+import os
+os.environ['OPENMDAO_REQUIRE_MPI'] = 'false'
+
 __all__ = ['get_turbofan_problem']
 
 
