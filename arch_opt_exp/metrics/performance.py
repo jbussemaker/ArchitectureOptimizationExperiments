@@ -128,14 +128,14 @@ class MaxConstraintViolationMetric(Metric):
 
     @property
     def value_names(self) -> List[str]:
-        return ['max_cv']
+        return ['max_cv', 'min_cv']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         cv = self._get_opt_cv(algorithm)
         if len(cv) == 0:
-            return [0.]
+            return [0., 0.]
 
-        return [np.nanmax(cv)]
+        return [np.nanmax(cv), np.nanmin(cv)]
 
 
 class NrEvaluationsMetric(Metric):
