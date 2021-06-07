@@ -95,6 +95,8 @@ class SurrogateQualityMetric(Metric):
 
     @staticmethod
     def _get_r2(y_error: np.ndarray, yt: np.ndarray) -> np.ndarray:
+        mask = np.any(np.bitwise_or(np.isnan(yt), np.isinf(yt)), axis=1)
+        yt = yt[~mask]
         return 1-np.sum(y_error**2, axis=0)/np.sum((yt-np.mean(yt, axis=0))**2, axis=0)
 
     @staticmethod
