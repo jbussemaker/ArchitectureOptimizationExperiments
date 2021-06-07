@@ -57,7 +57,7 @@ def run_effectiveness(problem: Problem, results_key, n_infill=1, do_run=True, re
     metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False, include_spread=include_spread)
 
     n_init = 5*problem.n_var
-    n_rep = 6 if reduced else 8
+    n_rep = 4 if reduced else 8
     n_term = 100
 
     n_iter = 400-n_init
