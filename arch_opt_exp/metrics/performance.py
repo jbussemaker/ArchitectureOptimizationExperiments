@@ -127,18 +127,18 @@ class MaxConstraintViolationMetric(Metric):
 
     @property
     def value_names(self) -> List[str]:
-        return ['max_cv', 'min_cv', 'pop_max_cv', 'pop_min_cv']
+        return ['max_cv', 'min_cv', 'pop_max_cv', 'pop_min_cv', 'frac_nan']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         cv = self._get_opt_cv(algorithm)
         if len(cv) == 0:
-            return [0., 0., 0., 0.]
+            return [0., 0., 0., 0., 0.]
         cv[np.isinf(cv)] = np.nan
 
         cv_pop = self._get_pop_cv(algorithm)
         cv_pop[np.isinf(cv_pop)] = np.nan
-
-        return [np.nanmax(cv), np.nanmin(cv), np.nanmax(cv_pop), np.nanmin(cv_pop)]
+        frac_nan = np.sum(np.isnan(cv_pop))/len(cv_pop)
+        return [np.nanmax(cv), np.nanmin(cv), np.nanmax(cv_pop), np.nanmin(cv_pop), frac_nan]
 
 
 class NrEvaluationsMetric(Metric):
