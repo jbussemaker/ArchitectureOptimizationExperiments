@@ -25,7 +25,7 @@ from pymoo.factory import get_reference_directions
 
 __all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'ZaeffererHierarchicalProblem',
            'ZaeffererProblemMode', 'MOHierarchicalGoldsteinProblem', 'MOHierarchicalRosenbrockProblem',
-           'HierarchicalMetaProblem', 'MOHierarchicalTestProblem']
+           'HierarchicalMetaProblem', 'MOHierarchicalTestProblem', 'MOHierarchicalRosenbrockProblemNum']
 
 
 class HierarchicalGoldsteinProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
@@ -238,6 +238,7 @@ class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem)
     """
 
     _mo = False
+    _cv_nan_limit = None
 
     def __init__(self):
         n_var = 13
@@ -280,6 +281,19 @@ class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem)
 
             g[i, 0] = self.g1(x_fg)
             g[i, 1] = self.g2(x_i[x_idx_g2[idx]]) if idx < 2 else 0.
+            if self._cv_nan_limit is not None:
+                g[i, 0] += 1.
+                if idx < 2:
+                    g[i, 1] += 1.
+
+        if self._cv_nan_limit is not None:
+            cv = self.calc_constraint_violation(g)[:, 0]
+            nan_limit = cv >= self._cv_nan_limit
+            if self._mo:
+                nan_limit |= (f[:, 0] > 100) & (f[:, 1] > 1500)
+
+            f[nan_limit] = np.nan
+            g[nan_limit] = np.nan
 
         out['is_active'], out['X'] = self.is_active(x)
         out['F'] = f
@@ -377,6 +391,15 @@ class MOHierarchicalRosenbrockProblem(HierarchicalRosenbrockProblem):
         res = minimize(cls(), NSGA2(pop_size=200), termination=('n_gen', 200))
         w_idx = res.X[:, 11]*2 + res.X[:, 12]
         HierarchicalMetaProblem.plot_sub_problems(w_idx, res.F, show=show)
+
+
+class MOHierarchicalRosenbrockProblemNum(MOHierarchicalRosenbrockProblem):
+    """
+    Adaptation of the multi-objective hierarchical Rosenbrock problem, that sets points with a large constraint
+    violation to NaN, simulating an unconverged evaluation.
+    """
+
+    _cv_nan_limit = 2.
 
 
 class ZaeffererProblemMode(enum.Enum):
@@ -601,12 +624,14 @@ class HierarchicalMetaProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
 
 class MOHierarchicalTestProblem(HierarchicalMetaProblem):
 
-    def __init__(self):
+    def __init__(self, num_problems=False):
+        underlying = MOHierarchicalRosenbrockProblemNum() if num_problems else MOHierarchicalRosenbrockProblem()
         super(MOHierarchicalTestProblem, self).__init__(
-            MOHierarchicalRosenbrockProblem(), n_rep=2, n_maps=2, f_par_range=[100, 100])
+            underlying, n_rep=2, n_maps=2, f_par_range=[100, 100])
+        self._num_problems = num_problems
 
     def __repr__(self):
-        return '%s()' % self.__class__.__name__
+        return '%s(num_problems=%r)' % (self.__class__.__name__, self._num_problems)
 
 
 if __name__ == '__main__':
@@ -624,6 +649,8 @@ if __name__ == '__main__':
     MOHierarchicalTestProblem().run_test()
     # MOHierarchicalTestProblem().reset_pf_cache()
     # MOHierarchicalTestProblem().plot_pf(show_approx_f_range=True)
+    # MOHierarchicalTestProblem(num_problems=True).reset_pf_cache()
+    # MOHierarchicalTestProblem(num_problems=True).plot_pf(show_approx_f_range=True)
 
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
     # ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1).plot()  # Zaefferer 2018, Fig. 1
