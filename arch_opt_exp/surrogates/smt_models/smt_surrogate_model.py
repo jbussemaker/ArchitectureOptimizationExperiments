@@ -85,7 +85,11 @@ class SMTSurrogateModel(SurrogateModel):
         self._smt.train()
 
     def predict(self, x: np.ndarray, is_active: np.ndarray = None) -> np.ndarray:
-        return self._smt.predict_values(x)
+        try:
+            return self._smt.predict_values(x)
+
+        except FloatingPointError:
+            return np.zeros((x.shape[0], self._smt.ny))*np.nan
 
     def supports_variance(self) -> bool:
         smt = self._smt
@@ -97,10 +101,14 @@ class SMTSurrogateModel(SurrogateModel):
         # There is a bug in SMT preventing a vectorized evaluation:
         # https://github.com/SMTorg/smt/issues/160
 
-        variance = np.zeros((x.shape[0], self._smt.ny))
-        for i in range(x.shape[0]):
-            variance[i, :] = self._smt.predict_variances(x[[i], :])
-        return variance
+        try:
+            variance = np.zeros((x.shape[0], self._smt.ny))
+            for i in range(x.shape[0]):
+                variance[i, :] = self._smt.predict_variances(x[[i], :])
+            return variance
+
+        except FloatingPointError:
+            return np.zeros((x.shape[0], self._smt.ny))*np.nan
 
     def _create_surrogate_model(self) -> SMTSurrogateModelBase:
         raise NotImplementedError
