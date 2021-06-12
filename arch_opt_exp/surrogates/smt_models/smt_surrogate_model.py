@@ -82,7 +82,19 @@ class SMTSurrogateModel(SurrogateModel):
         self._smt.set_training_values(x, y)
 
     def train(self):
-        self._smt.train()
+        try:
+            self._smt.train()
+
+        except FloatingPointError:
+            import pickle
+            rand_nr = str(np.random.randint(1e5, 1e6-1))
+            with open('smt_fp_err_training_dump_%s.pkl' % rand_nr, 'wb') as fp:
+                pickle.dump({
+                    'sm': self._create_surrogate_model(),
+                    'points': self._smt.training_points,
+                }, fp)
+
+            raise
 
     def predict(self, x: np.ndarray, is_active: np.ndarray = None) -> np.ndarray:
         try:
