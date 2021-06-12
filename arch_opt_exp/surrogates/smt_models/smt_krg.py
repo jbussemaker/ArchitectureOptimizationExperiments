@@ -53,7 +53,7 @@ class SMTKrigingSurrogateModel(SMTSurrogateModel):
         if 'theta0' in smt.options:
             smt.options['theta0'] = self.theta0(smt.nx)
 
-        self._smt.train()
+        super(SMTKrigingSurrogateModel, self).train()
 
 
 class SMTKPLSSurrogateModel(SMTKrigingSurrogateModel):
@@ -81,4 +81,4 @@ class SMTKPLSSurrogateModel(SMTKrigingSurrogateModel):
         if 'theta0' in smt.options:
             smt.options['theta0'] = self.theta0(self.n_comp)
 
-        self._smt.train()
+        super(SMTKPLSSurrogateModel, self).train()
