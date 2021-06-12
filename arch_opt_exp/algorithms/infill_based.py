@@ -74,8 +74,8 @@ class InfillBasedAlgorithm(Algorithm):
         self.infill = infill_criterion
 
         if init_sampling is None:
-            init_sampling = LatinHypercubeSampling()
-            # init_sampling = RepairedLatinHypercubeSampling()
+            # init_sampling = LatinHypercubeSampling()
+            init_sampling = RepairedLatinHypercubeSampling()
 
         self.initialization = Initialization(init_sampling, repair=infill_criterion.repair,
                                              eliminate_duplicates=infill_criterion.eliminate_duplicates)
