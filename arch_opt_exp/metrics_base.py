@@ -138,6 +138,29 @@ class Metric:
         if show:
             plt.show()
 
+    @classmethod
+    def calc_doe(cls, problem, n_samples=10000, sampling=None, output=True):
+        from pymoo.model.evaluator import Evaluator
+        if sampling is None:
+            from pymoo.operators.sampling.random_sampling import FloatRandomSampling
+            sampling = FloatRandomSampling()
+
+        pop = sampling.do(problem, n_samples=n_samples)
+        Evaluator().eval(problem, pop)
+
+        dummy_algo = Algorithm()
+        dummy_algo.pop = pop
+        dummy_algo._set_optimum()
+
+        metric = cls()
+        metric.calculate_step(dummy_algo)
+
+        if output:
+            print('%s results for %r' % (cls.__name__, problem))
+            for value_name in metric.value_names:
+                print('%s: %r' % (value_name, metric.values[value_name][-1]))
+        return metric.results()
+
     def plot_fig_callback(self, x, value_name: str, color=None):
         pass
 

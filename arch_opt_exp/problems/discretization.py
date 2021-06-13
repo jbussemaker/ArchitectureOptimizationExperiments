@@ -19,12 +19,20 @@ import numpy as np
 from typing import *
 from pymoo.model.repair import Repair
 from pymoo.model.problem import Problem
+from pymoo.model.sampling import Sampling
 from pymoo.model.population import Population
 
-__all__ = ['MixedIntBaseProblem', 'MixedIntProblemHelper', 'MixedIntProblem', 'MixedIntRepair']
+__all__ = ['MixedIntBaseProblem', 'MixedIntProblemHelper', 'MixedIntProblem', 'MixedIntRepair', 'SparsenessMixin',
+           'print_sparseness']
 
 
-class MixedIntBaseProblem(Problem):
+class SparsenessMixin:
+
+    def print_sparseness(self: Problem, n_samples=10000, sampling: Sampling = None, n_cont=6):
+        print_sparseness(self, n_samples=n_samples, sampling=sampling, n_cont=n_cont)
+
+
+class MixedIntBaseProblem(SparsenessMixin, Problem):
     """
     Base class for defining a mixed-discrete problem.
 
@@ -313,3 +321,36 @@ class MixedIntRepair(Repair):
         x = np.copy(x)
         x[:, is_discrete_mask] = np.round(x[:, is_discrete_mask].astype(np.float64)).astype(np.int)
         return x
+
+
+def print_sparseness(problem: Problem, n_samples=10000, sampling: Sampling = None, n_cont=6):
+    if sampling is None:
+        from pymoo.operators.sampling.random_sampling import FloatRandomSampling
+        sampling = FloatRandomSampling()
+
+    # Create initial samples of the design space, correcting for discrete design variables
+    x = sampling.do(problem, n_samples).get('X')
+    is_discrete_mask = MixedIntProblemHelper.get_is_discrete_mask(problem)
+    x = MixedIntRepair.correct_x(is_discrete_mask, x)
+
+    # Modify continuous design variables to a grid, so we can count unique design vectors
+    is_c = ~is_discrete_mask
+    xl, xu = problem.xl, problem.xu
+    if n_cont <= 1:
+        x[:, is_c] = xl[is_c]
+    else:
+        rounded_x_cont = np.round(((x[:, is_c]-xl[is_c])/(xu[is_c]-xl[is_c]))*(n_cont-1))
+        x[:, is_c] = (rounded_x_cont/(n_cont-1))*(xu[is_c]-xl[is_c])+xl[is_c]
+
+    # Correct samples for activity: impute inactive variables
+    is_active, x_imp = MixedIntProblemHelper.is_active(problem, x)
+
+    n_total = int(np.prod(is_active.shape))
+    n_active = int(np.sum(is_active))
+    n_total_unique = len({tuple(x[i, :]) for i in range(x.shape[0])})
+    n_imp_unique = len({tuple(x_imp[i, :]) for i in range(x_imp.shape[0])})
+
+    print('Sparseness report for: %r' % problem)
+    print('Design vectors: %.2f %% unique imputed (%d samples, %d unique, %d unique imputed)' %
+          (100*n_imp_unique/n_total_unique, n_samples, n_total_unique, n_imp_unique))
+    print('Design vars   : %.2f %% active (%d total, %d active)' % (100*n_active/n_total, n_total, n_active))

@@ -25,7 +25,8 @@ from pymoo.factory import get_reference_directions
 
 __all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'ZaeffererHierarchicalProblem',
            'ZaeffererProblemMode', 'MOHierarchicalGoldsteinProblem', 'MOHierarchicalRosenbrockProblem',
-           'HierarchicalMetaProblem', 'MOHierarchicalTestProblem', 'MOHierarchicalRosenbrockProblemNum']
+           'HierarchicalMetaProblem', 'MOHierarchicalTestProblem', 'MOHierarchicalRosenbrockProblemNum',
+           'NumMOHierarchicalTestProblem']
 
 
 class HierarchicalGoldsteinProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
@@ -623,15 +624,32 @@ class HierarchicalMetaProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
 
 
 class MOHierarchicalTestProblem(HierarchicalMetaProblem):
+    """
+    Multi-objective hierarchical test problem based on the hierarchical rosenbrock problem. Increased number of design
+    variables and increased sparseness (approx. 42% of design variables are active in a DOE).
+    """
 
-    def __init__(self, num_problems=False):
-        underlying = MOHierarchicalRosenbrockProblemNum() if num_problems else MOHierarchicalRosenbrockProblem()
+    def __init__(self):
         super(MOHierarchicalTestProblem, self).__init__(
-            underlying, n_rep=2, n_maps=2, f_par_range=[100, 100])
-        self._num_problems = num_problems
+            MOHierarchicalRosenbrockProblem(), n_rep=2, n_maps=2, f_par_range=[100, 100])
 
     def __repr__(self):
-        return '%s(num_problems=%r)' % (self.__class__.__name__, self._num_problems)
+        return '%s()' % (self.__class__.__name__,)
+
+
+class NumMOHierarchicalTestProblem(HierarchicalMetaProblem):
+    """
+    More difficult multi-objective hierarchical test problem:
+    - Only approximately 28% of design variables are active in a DOE
+    - Approximately 70% of solutions do not converge in a DOE (i.e. return nan)
+    """
+
+    def __init__(self):
+        super(NumMOHierarchicalTestProblem, self).__init__(
+            MOHierarchicalRosenbrockProblemNum(), n_rep=3, n_maps=2, f_par_range=[100, 100])
+
+    def __repr__(self):
+        return '%s()' % (self.__class__.__name__,)
 
 
 if __name__ == '__main__':
@@ -649,8 +667,23 @@ if __name__ == '__main__':
     MOHierarchicalTestProblem().run_test()
     # MOHierarchicalTestProblem().reset_pf_cache()
     # MOHierarchicalTestProblem().plot_pf(show_approx_f_range=True)
-    # MOHierarchicalTestProblem(num_problems=True).reset_pf_cache()
-    # MOHierarchicalTestProblem(num_problems=True).plot_pf(show_approx_f_range=True)
+    # NumMOHierarchicalTestProblem().run_test()
+    # NumMOHierarchicalTestProblem().reset_pf_cache()
+    # NumMOHierarchicalTestProblem().plot_pf(show_approx_f_range=True)
+
+    # from arch_opt_exp.algorithms.infill_based import RepairedLatinHypercubeSampling
+    # MOHierarchicalTestProblem().print_sparseness(n_samples=1000)
+    # MOHierarchicalTestProblem().print_sparseness(n_samples=1000, sampling=RepairedLatinHypercubeSampling())
+    # NumMOHierarchicalTestProblem().print_sparseness(n_samples=1000)
+    # NumMOHierarchicalTestProblem().print_sparseness(n_samples=1000, sampling=RepairedLatinHypercubeSampling())
+    # # MOHierarchicalRosenbrockProblem().print_sparseness()
+    # # MOHierarchicalGoldsteinProblem().print_sparseness()
+
+    # from arch_opt_exp.metrics.performance import MaxConstraintViolationMetric
+    # MaxConstraintViolationMetric.calc_doe(MOHierarchicalTestProblem(), n_samples=1000)
+    # MaxConstraintViolationMetric.calc_doe(NumMOHierarchicalTestProblem(), n_samples=1000)
+    # MaxConstraintViolationMetric.calc_doe(
+    #     NumMOHierarchicalTestProblem(), n_samples=1000, sampling=RepairedLatinHypercubeSampling())
 
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
     # ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1).plot()  # Zaefferer 2018, Fig. 1

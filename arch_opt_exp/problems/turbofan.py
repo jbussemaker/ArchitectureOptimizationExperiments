@@ -32,6 +32,9 @@ if __name__ == '__main__':
     # pf = get_turbofan_problem().pareto_front()
     # print(Hypervolume(pf=pf, normalize=True).calc(pf))
 
+    from arch_opt_exp.problems.discretization import print_sparseness
+    print_sparseness(get_turbofan_problem(), n_samples=10000, n_cont=6), exit()
+
     import multiprocessing
     from pymoo.optimize import minimize
     from arch_opt_exp.surrogates.smt_models.smt_rbf import *

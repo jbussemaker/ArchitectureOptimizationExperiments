@@ -41,6 +41,11 @@ def run_effectiveness_analytical(do_run=True, return_exp=False):
     return run_effectiveness(problem, 'eff_an_1', do_run=do_run, return_exp=return_exp)
 
 
+def run_effectiveness_analytical_num(do_run=True, return_exp=False):
+    problem = NumMOHierarchicalTestProblem()
+    return run_effectiveness(problem, 'eff_an_num_1', do_run=do_run, return_exp=return_exp)
+
+
 def run_effectiveness_analytical_mo(do_run=True, return_exp=False):
     problem = get_analytical_problem()
     return run_effectiveness(problem, 'eff_an_5', n_infill=5, do_run=do_run, return_exp=return_exp)
