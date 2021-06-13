@@ -26,7 +26,7 @@ from pymoo.factory import get_reference_directions
 __all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'ZaeffererHierarchicalProblem',
            'ZaeffererProblemMode', 'MOHierarchicalGoldsteinProblem', 'MOHierarchicalRosenbrockProblem',
            'HierarchicalMetaProblem', 'MOHierarchicalTestProblem', 'MOHierarchicalRosenbrockProblemNum',
-           'NumMOHierarchicalTestProblem']
+           'HCMOHierarchicalTestProblem']
 
 
 class HierarchicalGoldsteinProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
@@ -637,15 +637,15 @@ class MOHierarchicalTestProblem(HierarchicalMetaProblem):
         return '%s()' % (self.__class__.__name__,)
 
 
-class NumMOHierarchicalTestProblem(HierarchicalMetaProblem):
+class HCMOHierarchicalTestProblem(HierarchicalMetaProblem):
     """
-    More difficult multi-objective hierarchical test problem:
+    Multi-objective hierarchical test problem with hidden constraints:
     - Only approximately 28% of design variables are active in a DOE
-    - Approximately 70% of solutions do not converge in a DOE (i.e. return nan)
+    - Approximately 70% of solutions do not converge in a DOE (i.e. return nan --> hidden constraint)
     """
 
     def __init__(self):
-        super(NumMOHierarchicalTestProblem, self).__init__(
+        super(HCMOHierarchicalTestProblem, self).__init__(
             MOHierarchicalRosenbrockProblemNum(), n_rep=3, n_maps=2, f_par_range=[100, 100])
 
     def __repr__(self):

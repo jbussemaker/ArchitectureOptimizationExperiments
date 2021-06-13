@@ -41,9 +41,9 @@ def run_effectiveness_analytical(do_run=True, return_exp=False):
     return run_effectiveness(problem, 'eff_an_1', do_run=do_run, return_exp=return_exp)
 
 
-def run_effectiveness_analytical_num(do_run=True, return_exp=False):
-    problem = NumMOHierarchicalTestProblem()
-    return run_effectiveness(problem, 'eff_an_num_1', do_run=do_run, return_exp=return_exp)
+def run_effectiveness_analytical_hc(do_run=True, return_exp=False):
+    problem = HCMOHierarchicalTestProblem()
+    return run_effectiveness(problem, 'eff_an_hc_1', do_run=do_run, return_exp=return_exp)
 
 
 def run_effectiveness_analytical_mo(do_run=True, return_exp=False):
@@ -170,6 +170,9 @@ if __name__ == '__main__':
     # run_effectiveness_analytical(
     #     # do_run=False,
     # )
-    run_effectiveness_real(
+    run_effectiveness_analytical_hc(
         # do_run=False,
     )
+    # run_effectiveness_real(
+    #     # do_run=False,
+    # )
