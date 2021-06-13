@@ -667,23 +667,23 @@ if __name__ == '__main__':
     MOHierarchicalTestProblem().run_test()
     # MOHierarchicalTestProblem().reset_pf_cache()
     # MOHierarchicalTestProblem().plot_pf(show_approx_f_range=True)
-    # NumMOHierarchicalTestProblem().run_test()
-    # NumMOHierarchicalTestProblem().reset_pf_cache()
-    # NumMOHierarchicalTestProblem().plot_pf(show_approx_f_range=True)
+    # HCMOHierarchicalTestProblem().run_test()
+    # HCMOHierarchicalTestProblem().reset_pf_cache()
+    # HCMOHierarchicalTestProblem().plot_pf(show_approx_f_range=True)
 
     # from arch_opt_exp.algorithms.infill_based import RepairedLatinHypercubeSampling
     # MOHierarchicalTestProblem().print_sparseness(n_samples=1000)
     # MOHierarchicalTestProblem().print_sparseness(n_samples=1000, sampling=RepairedLatinHypercubeSampling())
-    # NumMOHierarchicalTestProblem().print_sparseness(n_samples=1000)
-    # NumMOHierarchicalTestProblem().print_sparseness(n_samples=1000, sampling=RepairedLatinHypercubeSampling())
+    # HCMOHierarchicalTestProblem().print_sparseness(n_samples=1000)
+    # HCMOHierarchicalTestProblem().print_sparseness(n_samples=1000, sampling=RepairedLatinHypercubeSampling())
     # # MOHierarchicalRosenbrockProblem().print_sparseness()
     # # MOHierarchicalGoldsteinProblem().print_sparseness()
 
     # from arch_opt_exp.metrics.performance import MaxConstraintViolationMetric
     # MaxConstraintViolationMetric.calc_doe(MOHierarchicalTestProblem(), n_samples=1000)
-    # MaxConstraintViolationMetric.calc_doe(NumMOHierarchicalTestProblem(), n_samples=1000)
+    # MaxConstraintViolationMetric.calc_doe(HCMOHierarchicalTestProblem(), n_samples=1000)
     # MaxConstraintViolationMetric.calc_doe(
-    #     NumMOHierarchicalTestProblem(), n_samples=1000, sampling=RepairedLatinHypercubeSampling())
+    #     HCMOHierarchicalTestProblem(), n_samples=1000, sampling=RepairedLatinHypercubeSampling())
 
     # ZaeffererHierarchicalProblem(b=.1, c=.4, d=.7).plot(show=False)
     # ZaeffererHierarchicalProblem(b=.0, c=.6, d=.1).plot()  # Zaefferer 2018, Fig. 1
