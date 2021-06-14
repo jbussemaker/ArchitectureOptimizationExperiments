@@ -639,8 +639,8 @@ class MOHierarchicalTestProblem(HierarchicalMetaProblem):
 class HCMOHierarchicalTestProblem(HierarchicalMetaProblem):
     """
     Multi-objective hierarchical test problem with hidden constraints:
-    - Only approximately 28% of design variables are active in a DOE
-    - Approximately 70% of solutions do not converge in a DOE (i.e. return nan --> hidden constraint)
+    - Only approximately 42% of design variables are active in a DOE
+    - Approximately 60% of solutions do not converge in a DOE (i.e. return nan --> hidden constraint)
     """
 
     def __init__(self):
