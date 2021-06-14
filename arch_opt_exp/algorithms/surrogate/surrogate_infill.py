@@ -25,6 +25,7 @@ from arch_opt_exp.surrogates.model import *
 from arch_opt_exp.metrics_base import Metric
 from arch_opt_exp.algorithms.infill_based import *
 from arch_opt_exp.problems.discretization import *
+from arch_opt_exp.algorithms.surrogate.hidden_constraints import *
 
 from pymoo.optimize import minimize
 from pymoo.model.result import Result
@@ -51,6 +52,7 @@ class SurrogateInfill:
     def __init__(self):
         self.problem: Problem = None
         self.surrogate_model: SurrogateModel = None
+        self.n_obj = 0
         self.n_constr = 0
         self.n_f_ic = None
 
@@ -106,11 +108,12 @@ class SurrogateInfill:
 
     def _split_f_g(self, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         if self.n_constr > 0:
-            return y[:, :-self.n_constr], y[:, -self.n_constr:]
-        return y, np.zeros((y.shape[0], 0))
+            return y[:, :self.n_obj], y[:, self.n_obj:self.n_obj+self.n_constr]
+        return y[:, :self.n_obj], np.zeros((y.shape[0], 0))
 
     def initialize(self, problem: Problem, surrogate_model: SurrogateModel):
         self.problem = problem
+        self.n_obj = problem.n_obj
         self.n_constr = problem.n_constr
 
         self.surrogate_model = surrogate_model
@@ -177,7 +180,7 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
 
     def __init__(self, surrogate_model: Union[SurrogateModel, SurrogateModelFactory], infill: SurrogateInfill,
                  pop_size=None, termination: Union[Termination, int] = None, verbose=False, infill_force_cont=False,
-                 infill_avoid_nan=False, d_avoid_nan=.05, **kwargs):
+                 hc_strategy: HCStrategy = None, **kwargs):
         super(SurrogateBasedInfill, self).__init__(**kwargs)
 
         if isinstance(surrogate_model, SurrogateModel):
@@ -186,12 +189,13 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         self._surrogate_model = None
         self.infill = infill
         self._infill_force_cont = infill_force_cont
-        self._infill_avoid_nan = infill_avoid_nan
-        self._d_avoid_nan = d_avoid_nan
+
+        if hc_strategy is None:
+            hc_strategy = MaxValueHCStrategy()
+        self.hc_strategy = hc_strategy
 
         self.x_train = None
         self.y_train = None
-        self.x_is_nan = None
         self.y_train_min = None
         self.y_train_max = None
         self.y_train_centered = None
@@ -257,32 +261,24 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         f_real = self.total_pop.get('F')
         f_is_invalid = np.bitwise_or(np.isnan(f_real), np.isinf(f_real))
         f_real[f_is_invalid] = np.nan
-        f_max = np.nanmax(f_real, axis=0)
-        is_nan = np.any(f_is_invalid, axis=1)
-        f_real[is_nan] = f_max
 
         f, self.y_train_min, self.y_train_max = self._normalize_y(f_real)
         self.y_train_centered = [False]*f.shape[1]
-        y = f
+
+        g = np.zeros((x.shape[0], 0))
         if self.problem.n_constr > 0:
             g_real = self.total_pop.get('G')
             g_is_invalid = np.bitwise_or(np.isnan(g_real), np.isinf(g_real))
-            g_real[g_is_invalid] = 1.
-            is_nan |= np.any(g_is_invalid, axis=1)
+            g_real[g_is_invalid] = np.nan
 
             g, g_min, g_max = self._normalize_y(g_real, keep_centered=True)
-            y = np.append(f, g, axis=1)
 
             self.y_train_min = np.append(self.y_train_min, g_min)
             self.y_train_max = np.append(self.y_train_max, g_max)
             self.y_train_centered += [True]*g.shape[1]
 
-        if self._infill_avoid_nan:
-            self.x_is_nan = x_norm[is_nan, :]
-            x_norm = x_norm[~is_nan, :]
-            y = y[~is_nan, :]
-        else:
-            self.x_is_nan = None
+        x_norm, is_active, f, g = self.hc_strategy.get_training_set(x_norm, is_active, f, g)
+        y = np.append(f, g, axis=1)
 
         self.x_train = x_norm
         self.y_train = y
@@ -352,10 +348,8 @@ class SurrogateBasedInfill(ModelBasedInfillCriterion):
         return Population.new(X=x)
 
     def _get_infill_problem(self):
-        x_avoid_nan = self.x_is_nan if self._infill_avoid_nan else None
         return SurrogateInfillOptimizationProblem(
-            self.infill, self.problem, force_continuous=self._infill_force_cont, x_avoid_nan=x_avoid_nan,
-            d_avoid_nan=self._d_avoid_nan)
+            self.infill, self.problem, self.hc_strategy, force_continuous=self._infill_force_cont)
 
     def _get_termination(self):
         termination = self.termination
@@ -524,8 +518,8 @@ class SurrogateInfillCallback(Callback):
 class SurrogateInfillOptimizationProblem(MixedIntBaseProblem):
     """Problem class representing a surrogate infill problem given a SurrogateInfill instance."""
 
-    def __init__(self, infill: SurrogateInfill, problem: Problem, impute=True, force_continuous=False,
-                 x_avoid_nan=None, d_avoid_nan=.05):
+    def __init__(self, infill: SurrogateInfill, problem: Problem, hc_strategy: HCStrategy, impute=True,
+                 force_continuous=False):
         n_var = problem.n_var
         xl, xu = np.zeros(n_var), np.ones(n_var)
 
@@ -540,17 +534,14 @@ class SurrogateInfillOptimizationProblem(MixedIntBaseProblem):
             xu[is_discrete_mask] = problem.xu[is_discrete_mask]
 
         n_obj = infill.get_n_infill_objectives()
-        n_constr = infill.get_n_infill_constraints()
-        if x_avoid_nan is not None:
-            n_constr += 1
+        n_constr = infill.get_n_infill_constraints()+hc_strategy.get_n_g_infill()
 
         super(SurrogateInfillOptimizationProblem, self).__init__(
             is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, impute=impute, n_var=n_var, n_obj=n_obj,
             n_constr=n_constr, xl=xl, xu=xu)
 
         self.infill = infill
-        self.x_avoid_nan = x_avoid_nan
-        self.d_avoid_nan = d_avoid_nan
+        self.hc_strategy = hc_strategy
 
     def _evaluate(self, x, out, *args, **kwargs):
         f, g = self.infill.evaluate(x)
@@ -559,32 +550,13 @@ class SurrogateInfillOptimizationProblem(MixedIntBaseProblem):
             raise RuntimeError('Wrong objective results shape: %r != %r' % (f.shape, (x.shape[0], self.n_obj)))
         out['F'] = f
 
-        if g is None:
-            if self.n_constr > 0:
-                raise RuntimeError('Expected constraint values')
-        else:
-            if self.x_avoid_nan is not None:
-                g_avoid_nan = self._evaluate_g_avoid_nan(x)
-                g = np.column_stack([g, g_avoid_nan])
+        if g is None and self.n_constr > 0:
+            g = np.zeros((x.shape[0], 0))
 
-            if g.shape != (x.shape[0], self.n_constr):
-                raise RuntimeError('Wrong constraint results shape: %r != %r' % (g.shape, (x.shape[0], self.n_constr)))
-            out['G'] = g
-
-    def _evaluate_g_avoid_nan(self, x) -> np.ndarray:
-        """
-        Constraint to avoid nan-areas, inspired by:
-        https://www.datadvance.net/blog/tech-tips/2021/handling-non-numerical-values-in-the-design-space-exploration-and-predictive-modeling-studies.html
-        """
-        if self.x_avoid_nan is None or self.x_avoid_nan.shape[0] == 0:
-            return np.zeros((x.shape[0],))
-
-        x_norm = self.xu-self.xl
-        d_nan = np.empty((x.shape[0],))
-        for i in range(x.shape[0]):
-            d_nan[i] = np.min(np.sqrt(np.sum(((self.x_avoid_nan-x[i, :])/x_norm)**2, axis=1)))
-
-        return self.d_avoid_nan-d_nan
+        f, g = self.hc_strategy.get_f_g_infill(x, f, g, self, self.infill.surrogate_model)
+        if g.shape != (x.shape[0], self.n_constr):
+            raise RuntimeError('Wrong constraint results shape: %r != %r' % (g.shape, (x.shape[0], self.n_constr)))
+        out['G'] = g
 
 
 class InfillMetric(Metric):
