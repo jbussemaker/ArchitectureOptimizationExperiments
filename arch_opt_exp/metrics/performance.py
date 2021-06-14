@@ -19,9 +19,11 @@ import numpy as np
 from typing import *
 from arch_opt_exp.metrics_base import *
 from pymoo.model.algorithm import Algorithm
+from pymoo.model.population import Population
 from pymoo.performance_indicator.igd import IGD
 from pymoo.performance_indicator.hv import Hypervolume
 from pymoo.performance_indicator.igd_plus import IGDPlus
+from pymoo.model.duplicate import DefaultDuplicateElimination
 from pymoo.performance_indicator.distance_indicator import euclidean_distance
 
 __all__ = ['SpreadMetric', 'DeltaHVMetric', 'IGDMetric', 'IGDPlusMetric', 'MaxConstraintViolationMetric',
@@ -121,6 +123,12 @@ class IGDPlusMetric(IndicatorMetric):
 class MaxConstraintViolationMetric(Metric):
     """Metric that simply returns the maximum constraint violation of the current population."""
 
+    def __init__(self):
+        super(MaxConstraintViolationMetric, self).__init__()
+
+        self._total_pop = None
+        self._el_dup = DefaultDuplicateElimination()
+
     @property
     def name(self) -> str:
         return 'max_cv'
@@ -130,6 +138,12 @@ class MaxConstraintViolationMetric(Metric):
         return ['max_cv', 'min_cv', 'pop_max_cv', 'pop_min_cv', 'frac_nan']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
+        if self._total_pop is None:
+            self._total_pop = self._get_pop(algorithm)
+        else:
+            pop = Population.merge(self._total_pop, self._get_pop(algorithm))
+            self._total_pop = self._el_dup.do(pop)
+
         cv = self._get_opt_cv(algorithm)
         if len(cv) == 0:
             return [0., 0., 0., 0., 0.]
@@ -137,7 +151,11 @@ class MaxConstraintViolationMetric(Metric):
 
         cv_pop = self._get_pop_cv(algorithm)
         cv_pop[np.isinf(cv_pop)] = np.nan
-        frac_nan = np.sum(np.isnan(cv_pop))/len(cv_pop)
+
+        cv_total_pop = self._total_pop.get('CV')
+        cv_total_pop[np.isinf(cv_total_pop)] = np.nan
+        frac_nan = np.sum(np.isnan(cv_total_pop))/len(cv_total_pop)
+
         return [np.nanmax(cv), np.nanmin(cv), np.nanmax(cv_pop), np.nanmin(cv_pop), frac_nan]
 
 
