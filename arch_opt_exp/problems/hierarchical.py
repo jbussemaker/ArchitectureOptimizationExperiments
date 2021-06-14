@@ -283,16 +283,12 @@ class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem)
 
             g[i, 0] = self.g1(x_fg)
             g[i, 1] = self.g2(x_i[x_idx_g2[idx]]) if idx < 2 else 0.
-            if self._hc:
-                g[i, 0] += 1.
-                if idx < 2:
-                    g[i, 1] += 1.
 
         if self._hc:
             hc_violated = g[:, 1] > 0.
             if self._mo:
-                hc_violated |= np.abs(.5 - (f[:, 0] / 20) % 1) > .25
-                hc_violated |= (f[:, 1] > 1000) & (np.abs(.5 - (f[:, 1] / 100) % 1) > .3)
+                hc_violated |= np.abs(.5 - (f[:, 0] / 20) % 1) > .35
+                hc_violated |= (f[:, 1] > 1000) & (np.abs(.5 - (f[:, 1] / 100) % 1) > .35)
 
             f[hc_violated] = np.nan
             g[hc_violated] = np.nan
@@ -649,7 +645,7 @@ class HCMOHierarchicalTestProblem(HierarchicalMetaProblem):
 
     def __init__(self):
         super(HCMOHierarchicalTestProblem, self).__init__(
-            MOHierarchicalRosenbrockProblemHC(), n_rep=3, n_maps=2, f_par_range=[100, 100])
+            MOHierarchicalRosenbrockProblemHC(), n_rep=2, n_maps=2, f_par_range=[100, 100])
 
     def __repr__(self):
         return '%s()' % (self.__class__.__name__,)

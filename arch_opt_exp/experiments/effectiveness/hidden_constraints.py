@@ -38,6 +38,22 @@ def run_compare_hc_strategies(do_run=True, return_exp=False):
     return run_compare(problem, 'compare_hc', do_run=do_run, return_exp=return_exp)
 
 
+def run_nsga2(do_run=True, return_exp=False):
+    problem = HCMOHierarchicalTestProblem()
+    results_key = 'compare_hc_nsga2'
+
+    pop_size = 5*problem.n_var
+    nsga2 = get_algo(problem, n_init=pop_size, n_offspring=pop_size)
+    n_eval_max = 4000
+
+    metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
+
+    algorithms = [nsga2]
+    algorithm_names = ['NSGA2']
+    return run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_values, n_eval_max=n_eval_max,
+               do_run=do_run, return_exp=return_exp)
+
+
 def run_compare(problem: Problem, results_key, do_run=True, return_exp=False):
     metrics, plot_metric_values = get_metrics(problem, include_loo_cv=False)
 
@@ -132,6 +148,9 @@ def run(results_key, problem, algorithms, algorithm_names, metrics, plot_metric_
 
 
 if __name__ == '__main__':
+    # run_nsga2(
+    #     # do_run=False,
+    # )
     run_compare_hc_strategies(
         # do_run=False,
     )
