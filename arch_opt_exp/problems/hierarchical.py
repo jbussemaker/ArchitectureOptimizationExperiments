@@ -25,7 +25,7 @@ from pymoo.factory import get_reference_directions
 
 __all__ = ['HierarchicalGoldsteinProblem', 'HierarchicalRosenbrockProblem', 'ZaeffererHierarchicalProblem',
            'ZaeffererProblemMode', 'MOHierarchicalGoldsteinProblem', 'MOHierarchicalRosenbrockProblem',
-           'HierarchicalMetaProblem', 'MOHierarchicalTestProblem', 'MOHierarchicalRosenbrockProblemNum',
+           'HierarchicalMetaProblem', 'MOHierarchicalTestProblem', 'MOHierarchicalRosenbrockProblemHC',
            'HCMOHierarchicalTestProblem']
 
 
@@ -238,8 +238,8 @@ class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem)
     To validate, use so_run() and compare to Pelamatti 2020, Fig. 14
     """
 
-    _mo = False
-    _cv_nan_limit = None
+    _mo = False  # Multi-objective
+    _hc = False  # Hidden constraints
 
     def __init__(self):
         n_var = 13
@@ -253,8 +253,9 @@ class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem)
         is_cat_mask = np.array([0]*8+[0]*3+[1]*2, dtype=bool)
 
         n_obj = 2 if self._mo else 1
+        n_constr = 1 if self._hc else 2
         super(HierarchicalRosenbrockProblem, self).__init__(
-            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=n_var, n_obj=n_obj, n_constr=2, xl=xl, xu=xu)
+            is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, n_var=n_var, n_obj=n_obj, n_constr=n_constr, xl=xl, xu=xu)
 
     def _evaluate(self, x, out, *args, **kwargs):
         x = self.correct_x(x)
@@ -282,19 +283,21 @@ class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem)
 
             g[i, 0] = self.g1(x_fg)
             g[i, 1] = self.g2(x_i[x_idx_g2[idx]]) if idx < 2 else 0.
-            if self._cv_nan_limit is not None:
+            if self._hc:
                 g[i, 0] += 1.
                 if idx < 2:
                     g[i, 1] += 1.
 
-        if self._cv_nan_limit is not None:
-            cv = self.calc_constraint_violation(g)[:, 0]
-            nan_limit = cv >= self._cv_nan_limit
+        if self._hc:
+            hc_violated = g[:, 1] > 0.
             if self._mo:
-                nan_limit |= (f[:, 0] > 100) & (f[:, 1] > 1500)
+                hc_violated |= np.abs(.5 - (f[:, 0] / 20) % 1) > .25
+                hc_violated |= (f[:, 1] > 1000) & (np.abs(.5 - (f[:, 1] / 100) % 1) > .3)
 
-            f[nan_limit] = np.nan
-            g[nan_limit] = np.nan
+            f[hc_violated] = np.nan
+            g[hc_violated] = np.nan
+
+            g = g[:, :1]
 
         out['is_active'], out['X'] = self.is_active(x)
         out['F'] = f
@@ -394,13 +397,13 @@ class MOHierarchicalRosenbrockProblem(HierarchicalRosenbrockProblem):
         HierarchicalMetaProblem.plot_sub_problems(w_idx, res.F, show=show)
 
 
-class MOHierarchicalRosenbrockProblemNum(MOHierarchicalRosenbrockProblem):
+class MOHierarchicalRosenbrockProblemHC(MOHierarchicalRosenbrockProblem):
     """
     Adaptation of the multi-objective hierarchical Rosenbrock problem, that sets points with a large constraint
-    violation to NaN, simulating an unconverged evaluation.
+    violation to NaN, simulating hidden constraints.
     """
 
-    _cv_nan_limit = 2.
+    _hc = True
 
 
 class ZaeffererProblemMode(enum.Enum):
@@ -646,7 +649,7 @@ class HCMOHierarchicalTestProblem(HierarchicalMetaProblem):
 
     def __init__(self):
         super(HCMOHierarchicalTestProblem, self).__init__(
-            MOHierarchicalRosenbrockProblemNum(), n_rep=3, n_maps=2, f_par_range=[100, 100])
+            MOHierarchicalRosenbrockProblemHC(), n_rep=3, n_maps=2, f_par_range=[100, 100])
 
     def __repr__(self):
         return '%s()' % (self.__class__.__name__,)
@@ -679,6 +682,7 @@ if __name__ == '__main__':
     # # MOHierarchicalRosenbrockProblem().print_sparseness()
     # # MOHierarchicalGoldsteinProblem().print_sparseness()
 
+    # from arch_opt_exp.algorithms.infill_based import RepairedLatinHypercubeSampling
     # from arch_opt_exp.metrics.performance import MaxConstraintViolationMetric
     # MaxConstraintViolationMetric.calc_doe(MOHierarchicalTestProblem(), n_samples=1000)
     # MaxConstraintViolationMetric.calc_doe(HCMOHierarchicalTestProblem(), n_samples=1000)
