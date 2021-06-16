@@ -64,6 +64,59 @@ pip install -r requirements.txt
    - `model.py` base class for surrogate models
 - `experimenter.py` implementation of the `Experimenter` class and related utilities
 
+## Analytical Test Problems
+
+There are two main architecture benchmark problems. Both are based on the Goldstein problem, and include mixed-discrete
+and hierarchical design variables, and have two objectives.
+
+### Test Problem
+
+![Pareto front](resources/pf_an_prob.svg)
+
+Properties:
+- 2 objectives
+- 27 design variables
+  - 16 continuous
+  - 6 integer
+  - 5 categorical
+- ~42% of design variables are active in an initial DOE
+
+```python
+from arch_opt_exp.problems.hierarchical import MOHierarchicalTestProblem
+
+problem = MOHierarchicalTestProblem()
+
+# Determine the amount of active design points (due to design variable hierarchy)
+problem.print_sparseness()
+
+# Run an optimization using NSGA2 to visualize the Pareto front
+problem.run_test()
+```
+
+### Test Problem with Hidden Constraints
+
+![Pareto front](resources/pf_an_prob_hc.svg)
+
+Properties:
+- Same as above
+- ~60% of evaluations are invalid in an initial DOE
+
+```python
+from arch_opt_exp.problems.hierarchical import HCMOHierarchicalTestProblem
+
+problem = HCMOHierarchicalTestProblem()
+
+# Determine the amount of active design points (due to design variable hierarchy)
+problem.print_sparseness()
+
+# Determine the amount of failed evaluations: frac_nan is the fraction of evaluations returning NaN
+from arch_opt_exp.metrics.performance import MaxConstraintViolationMetric
+MaxConstraintViolationMetric.calc_doe(problem)
+
+# Run an optimization using NSGA2
+problem.run_test()
+```
+
 ## Experimenter
 
 The `Experimenter` class handles running of experiments against a combination of a problem and an algorithm. It can run
