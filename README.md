@@ -1,21 +1,33 @@
 # Architecture Optimization Experiments
 
-Code for experimenting with algorithms for system architecture optimization.
+Code for experimenting with algorithms for system architecture optimization. System architectures describe how system
+components are allocated to perform functions; choosing what does what are important decisions taken early in the design
+process with large impact on system performance.
 
-A turbofan engine architecting benchmark problem is used to investigate what optimization algorithms might be useful
-for optimizing system architectures. System architecture optimization problems are hard to solve because they are
-generally **black-box, hierarchical, mixed-integer, multi-objective** optimization problems. Black-box, because analysis
-is done with simulation code, and therefore no analytical description of the design space is available. Hierarchical,
-because design variables might activate/deactivate other design variables (i.e. there exists a hierarchy between design
-variables, and the design space size itself is variable). Mixed-integer, because architectural decisions can both be
-discrete (yes/no include this element) and continuous (e.g. sizing parameters). Multi-objective, because in general
-there might be multiple conflicting design goals to be satisfied, coming from conflicting system stakeholder needs.
+Enabling the optimization of system architectures might improve decision-making in the early design stage. However,
+system architecture optimization problems are hard to solve, because they are:
+
+* *black-box*: the optimizer does not know anything about the behavior of the analysis function, and in general the
+  design space is non-linear
+  (e.g. evaluation is done using some kind of numerical simulation with a non-linear response);
+* *mixed-discrete*: some design variables are discrete (i.e. categorical or integer type), others are continuous
+  (e.g. choose the number of aircraft engines, and for each engine the bypass ratio);
+* *hierarchical*: some design variables might be inactive based on other design variable values
+  (e.g. choose whether there will be a wing strut, if yes also choose the spanwise location);
+* *multi-objective*: due to conflicting stakeholder demands, the system might be designed for conflicting design goals
+  (e.g. optimize both for fuel efficiency and low weight);
+* subject to *hidden constraints*: sometimes an evaluation might not return a meaningful result
+  (e.g. a simulation might not converge to a solution).
 
 This repository aims to create a reproducible set of experiments to help explain the salient features of architecture
 optimization, and investigate effectiveness and efficiency of optimization algorithms. Effectiveness represents how
 well an algorithm is able to find a Pareto front (e.g. how close it is to some pre-known Pareto front, and how well
 spread it is along this front). Efficiency represents the trade-off between effectiveness and number of function
 evaluations (i.e. system simulations) needed to get to a certain result quality.
+
+Optimization is done using the [pymoo](https://pymoo.org/) (multi-objective optimization in python) framework. This
+framework includes many multi-objective evolutionary algorithms. Surrogate-based optimization algorithms are implemented
+using [scikit-learn](https://scikit-learn.org/) and [SMT](https://smt.readthedocs.io/).
 
 ## Installing
 
@@ -27,6 +39,31 @@ conda install -c conda-forge smt==0.7.1
 pip install -r requirements.txt
 ```
 
+## Package Structure
+
+- `algorithms` base package where all algorithms not already contained in pymoo are implemented
+   - `surrogate` implementation of surrogate-based optimization algorithms, containing the algorithm itself
+     (in `surrogate_infill`) and various infill criteria
+   - `infill_based.py` base class for an algorithm based on design point infills
+- `experiments` folder containing the experiments ran (most interesting ones are probably in `effectiveness`)
+- `metrics` package containing performance and convergence metrics
+   - `convergence` metrics for detecting algorithm convergence (without knowing the Pareto-front a-priori)
+   - `filters` classes for smoothing convergence metrics
+   - `performance` metrics for tracking algorithm performance (some need a prior-known Pareto-front)
+   - `termination` wrappers of convergence metrics into termination criteria
+- `problems` package containing test optimization problems
+   - `discrete.py` various mixed-discrete test problems
+   - `discretization.py` base classes and utilities for mixed-discrete test problems
+   - `hierarchical.py` various mixed-discrete hierarchical test problems
+   - `pareto_front.py` mixin for automatically calculating the Pareto front of a test problem
+   - `so_mo.py` various multi-objective versions of single-objective test problems
+   - `turbofan.py` the realistic engine architecting benchmark problem
+- `surrogates` package containing surrogate models
+   - `sklearn_models` surrogates and mixed-discrete / hierarchical kernels based on scikit-learn Gaussian processes
+   - `smt_models` RBF and Kriging surrogates based on SMT
+   - `model.py` base class for surrogate models
+- `experimenter.py` implementation of the `Experimenter` class and related utilities
+
 ## Experimenter
 
 The `Experimenter` class handles running of experiments against a combination of a problem and an algorithm. It can run
@@ -37,7 +74,7 @@ two types of experiments:
    effectiveness run would have terminated with a given termination metric.
 
 ```python
-from arch_opt_exp.metrics import *
+from arch_opt_exp.metrics_base import *
 from arch_opt_exp.experimenter import *
 
 from pymoo.factory import get_problem
