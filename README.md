@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4964341.svg)](https://doi.org/10.5281/zenodo.4964341)
+
 # Architecture Optimization Experiments
 
 Code for experimenting with algorithms for system architecture optimization. System architectures describe how system
