@@ -31,6 +31,13 @@ Optimization is done using the [pymoo](https://pymoo.org/) (multi-objective opti
 framework includes many multi-objective evolutionary algorithms. Surrogate-based optimization algorithms are implemented
 using [scikit-learn](https://scikit-learn.org/) and [SMT](https://smt.readthedocs.io/).
 
+## Citing
+
+For the accompanying paper, please refer to:
+[Effectiveness of Surrogate-Based Optimization Algorithms for System Architecture Optimization](https://arc.aiaa.org/doi/10.2514/6.2021-3095)
+
+Please cite this paper if you are using this code in your work.
+
 ## Installing
 
 ```
