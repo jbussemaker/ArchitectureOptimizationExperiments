@@ -17,15 +17,15 @@ Contact: jasper.bussemaker@dlr.de
 
 import numpy as np
 from typing import *
-from arch_opt_exp.metrics_base import *
-from pymoo.model.algorithm import Algorithm
-from pymoo.performance_indicator.gd import GD
+from arch_opt_exp.experiments.metrics_base import *
+from pymoo.core.algorithm import Algorithm
+from pymoo.indicators.gd import GD
 from pymoo.util.normalization import normalize
-from pymoo.performance_indicator.igd import IGD
-from pymoo.performance_indicator.hv import Hypervolume
-from pymoo.algorithms.nsga2 import calc_crowding_distance
+from pymoo.indicators.igd import IGD
+from pymoo.indicators.hv import Hypervolume
+from pymoo.algorithms.moo.nsga2 import calc_crowding_distance
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
-from pymoo.performance_indicator.distance_indicator import DistanceIndicator
+from pymoo.indicators.distance_indicator import DistanceIndicator
 
 __all__ = ['HVMetric', 'DistanceIndicatorConvergenceMetric', 'GDConvergenceMetric', 'IGDConvergenceMetric',
            'CrowdingDistanceMetric', 'SteadyPerformanceIndicator', 'FitnessHomogeneityIndicator',
@@ -58,7 +58,7 @@ class HVMetric(Metric):
             self.ideal_point = np.min(f, axis=0)
 
         hv_obj = Hypervolume(ref_point=np.ones(f.shape[1]))
-        hv = hv_obj.calc(normalize(f, x_max=self.nadir_point, x_min=self.ideal_point))
+        hv = hv_obj.do(normalize(f, xu=self.nadir_point, xl=self.ideal_point))
 
         return [hv]
 
@@ -86,7 +86,7 @@ class DistanceIndicatorConvergenceMetric(Metric):
         indicator.normalize = True
 
         current_pf = self.get_pareto_front(self._get_pop_f(algorithm))
-        distance = indicator.calc(current_pf)
+        distance = indicator.do(current_pf)
 
         return [distance]
 
@@ -158,7 +158,7 @@ class CrowdingDistanceMetric(Metric):
 
     @staticmethod
     def _calculate_crowding_distances(pop) -> np.ndarray:
-        """Based on pymoo.algorithms.nsga2.RankAndCrowdingSurvival"""
+        """Based on pymoo.algorithms.moo.nsga2.RankAndCrowdingSurvival"""
 
         f = pop.get("F").astype(np.float, copy=False)
         fronts = NonDominatedSorting().do(f)

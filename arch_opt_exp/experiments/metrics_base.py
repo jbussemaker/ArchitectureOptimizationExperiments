@@ -20,9 +20,9 @@ from typing import *
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
 
-from pymoo.model.algorithm import Algorithm
-from pymoo.model.indicator import Indicator
-from pymoo.model.termination import Termination
+from pymoo.core.algorithm import Algorithm
+from pymoo.core.indicator import Indicator
+from pymoo.core.termination import Termination
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
 __all__ = ['Metric', 'IndicatorMetric', 'MetricTermination', 'MetricDiffTermination', 'FilteredMetric']
@@ -140,9 +140,9 @@ class Metric:
 
     @classmethod
     def calc_doe(cls, problem, n_samples=10000, sampling=None, output=True):
-        from pymoo.model.evaluator import Evaluator
+        from pymoo.core.evaluator import Evaluator
         if sampling is None:
-            from pymoo.operators.sampling.random_sampling import FloatRandomSampling
+            from pymoo.operators.sampling.rnd import FloatRandomSampling
             sampling = FloatRandomSampling()
 
         pop = sampling.do(problem, n_samples=n_samples)
@@ -254,7 +254,7 @@ class IndicatorMetric(Metric):
         return ['indicator']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
-        return [self.indicator.calc(self._get_opt_f(algorithm))]
+        return [self.indicator.do(self._get_opt_f(algorithm))]
 
 
 class MetricTermination(Termination):

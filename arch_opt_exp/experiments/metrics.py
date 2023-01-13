@@ -16,18 +16,16 @@ Contact: jasper.bussemaker@dlr.de
 """
 
 from typing import *
-from pymoo.model.problem import Problem
-from arch_opt_exp.metrics_base import Metric
+from pymoo.core.problem import Problem
+from arch_opt_exp.experiments.metrics_base import Metric
 
 from arch_opt_exp.metrics.termination import *
 from arch_opt_exp.metrics.performance import *
-from arch_opt_exp.algorithms.surrogate.validation import *
-from arch_opt_exp.algorithms.surrogate.surrogate_infill import *
 
 __all__ = ['get_exp_metrics']
 
 
-def get_exp_metrics(problem: Problem, include_loo_cv=True) -> List[Metric]:
+def get_exp_metrics(problem: Problem) -> List[Metric]:
     pf = problem.pareto_front()
 
     return [
@@ -46,8 +44,4 @@ def get_exp_metrics(problem: Problem, include_loo_cv=True) -> List[Metric]:
         CRTermination().metric,
         MCDTermination().metric,
         SPITermination().metric,
-
-        # Diagnostics
-        InfillMetric(),
-        SurrogateQualityMetric(include_loo_cv=include_loo_cv, n_loo_cv=10),
     ]

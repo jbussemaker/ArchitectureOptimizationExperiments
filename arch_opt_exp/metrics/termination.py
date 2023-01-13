@@ -15,7 +15,7 @@ Copyright: (c) 2021, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 
-from arch_opt_exp.metrics_base import *
+from arch_opt_exp.experiments.metrics_base import *
 from arch_opt_exp.metrics.filters import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.metrics.convergence import *

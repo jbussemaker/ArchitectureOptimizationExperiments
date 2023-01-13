@@ -17,7 +17,7 @@ Contact: jasper.bussemaker@dlr.de
 
 import numpy as np
 import matplotlib.pyplot as plt
-from pymoo.model.population import Population
+from pymoo.core.population import Population
 from arch_opt_exp.problems.discretization import *
 
 __all__ = ['MixedIntBraninProblem', 'AugmentedMixedIntBraninProblem', 'MixedIntGoldsteinProblem',

@@ -11,23 +11,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-Copyright: (c) 2021, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
+Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
-
-import pytest
-import tempfile
-from arch_opt_exp.experiments.experimenter import Experimenter
-
-
-@pytest.fixture
-def temp_dir():
-    with tempfile.TemporaryDirectory() as tmp_folder:
-        yield tmp_folder
+from arch_opt_exp.problems.so_mo import MIMOGoldstein
+from arch_opt_exp.algorithms.sbo import get_sbo_krg
+from pymoo.optimize import minimize
 
 
-@pytest.fixture(autouse=True)
-def experimenter_results_folder(temp_dir):
-    Experimenter.results_folder = temp_dir
-    yield
-    Experimenter.results_folder = None
+def test_sbo():
+    algorithm = get_sbo_krg(init_size=20)
+    problem = MIMOGoldstein()
+    result = minimize(problem, algorithm, ('n_eval', 30))
+    assert len(result.opt) > 0

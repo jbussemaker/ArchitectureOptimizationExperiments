@@ -17,10 +17,11 @@ Contact: jasper.bussemaker@dlr.de
 
 import numpy as np
 from typing import *
-from pymoo.model.repair import Repair
-from pymoo.model.problem import Problem
-from pymoo.model.sampling import Sampling
-from pymoo.model.population import Population
+from pymoo.core.repair import Repair
+from pymoo.core.problem import Problem
+from pymoo.core.sampling import Sampling
+from pymoo.core.population import Population
+from pymoo.core.variable import Real, Integer, Choice
 
 __all__ = ['MixedIntBaseProblem', 'MixedIntProblemHelper', 'MixedIntProblem', 'MixedIntRepair', 'SparsenessMixin',
            'print_sparseness']
@@ -66,6 +67,18 @@ class MixedIntBaseProblem(SparsenessMixin, Problem):
         self.is_int_mask = is_int_mask if is_int_mask is not None else np.zeros((self.n_var,), dtype=bool)
         self.is_cat_mask = is_cat_mask if is_cat_mask is not None else np.zeros((self.n_var,), dtype=bool)
         self.impute = impute
+
+        self.vars = var_types = []
+        is_discrete_mask = self.is_discrete_mask
+        for i in range(self.n_var):
+            xl, xu = self.xl[i], self.xu[i]
+            if is_discrete_mask[i]:
+                if self.is_cat_mask[i]:
+                    var_types.append(Choice(options=[ii for ii in range(int(xl), int(xu)+1)]))
+                else:
+                    var_types.append(Integer(bounds=(int(xl), int(xu))))
+            else:
+                var_types.append(Real(bounds=(xl, xu)))
 
     @property
     def is_discrete_mask(self):
@@ -117,9 +130,9 @@ class MixedIntBaseProblem(SparsenessMixin, Problem):
         return x
 
     def so_run(self, n_repeat=8, pop_size=100, n_eval_max=5000, show=True):
-        from pymoo.algorithms.so_genetic_algorithm import GA
+        from pymoo.algorithms.soo.nonconvex.ga import GA
         from pymoo.factory import get_sampling, get_crossover, get_mutation
-        from arch_opt_exp.experimenter import Experimenter, ExperimenterResult
+        from arch_opt_exp.experiments.experimenter import Experimenter, ExperimenterResult
         from arch_opt_exp.metrics.performance import BestObjMetric, MaxConstraintViolationMetric
         from pymoo.operators.mixed_variable_operator import MixedVariableSampling, MixedVariableMutation, \
             MixedVariableCrossover
@@ -262,8 +275,7 @@ class MixedIntProblem(MixedIntBaseProblem):
         super(MixedIntProblem, self).__init__(
             is_int_mask=is_int_mask, is_cat_mask=is_cat_mask, impute=impute,
             n_var=problem.n_var, n_obj=problem.n_obj, n_constr=problem.n_constr, xl=problem.xl, xu=problem.xu,
-            type_var=problem.type_var, evaluation_of=problem.evaluation_of, parallelization=problem.parallelization,
-            elementwise_evaluation=problem.elementwise_evaluation, callback=problem.callback)
+            vars=problem.vars, callback=problem.callback)
 
     def pareto_front(self, *args, **kwargs):
         return self.problem.pareto_front(*args, **kwargs)
@@ -325,7 +337,7 @@ class MixedIntRepair(Repair):
 
 def print_sparseness(problem: Problem, n_samples=10000, sampling: Sampling = None, n_cont=6):
     if sampling is None:
-        from pymoo.operators.sampling.random_sampling import FloatRandomSampling
+        from pymoo.operators.sampling.rnd import FloatRandomSampling
         sampling = FloatRandomSampling()
 
     # Create initial samples of the design space, correcting for discrete design variables

@@ -28,7 +28,7 @@ def get_turbofan_problem():
 
 
 if __name__ == '__main__':
-    # from pymoo.performance_indicator.hv import Hypervolume
+    # from pymoo.indicators.hv import Hypervolume
     # pf = get_turbofan_problem().pareto_front()
     # print(Hypervolume(pf=pf, normalize=True).calc(pf))
 

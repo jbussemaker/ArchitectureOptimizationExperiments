@@ -17,7 +17,7 @@ Contact: jasper.bussemaker@dlr.de
 
 import numpy as np
 from pymoo.factory import get_problem
-from pymoo.model.problem import Problem
+from pymoo.core.problem import Problem
 from pymoo.problems.single.himmelblau import Himmelblau
 from pymoo.problems.single.rosenbrock import Rosenbrock
 from arch_opt_exp.problems.discretization import *
@@ -101,7 +101,7 @@ class MORosenbrockInv(CachedParetoFrontMixin, Problem):
 
 if __name__ == '__main__':
     from pymoo.optimize import minimize
-    from pymoo.algorithms.nsga2 import NSGA2
+    from pymoo.algorithms.moo.nsga2 import NSGA2
     from pymoo.visualization.scatter import Scatter
 
     # prob = MOHimmelblau()

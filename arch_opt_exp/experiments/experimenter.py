@@ -1,20 +1,3 @@
-"""
-Licensed under the GNU General Public License, Version 3.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    https://www.gnu.org/licenses/gpl-3.0.html.en
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-Copyright: (c) 2021, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
-Contact: jasper.bussemaker@dlr.de
-"""
-
 import os
 import bz2
 import copy
@@ -28,18 +11,20 @@ from typing import *
 import logging.config
 import concurrent.futures
 import matplotlib.pyplot as plt
-from arch_opt_exp.metrics_base import *
+import pylab as pl
+
+from arch_opt_exp.experiments.metrics_base import *
 from werkzeug.utils import secure_filename
 
 from pymoo.optimize import minimize
-from pymoo.model.result import Result
-from pymoo.model.problem import Problem
-from pymoo.model.algorithm import Algorithm
+from pymoo.core.result import Result
+from pymoo.core.problem import Problem
+from pymoo.core.algorithm import Algorithm
 from pymoo.util.termination.max_eval import MaximumFunctionCallTermination
 
 __all__ = ['Experimenter', 'EffectivenessTerminator', 'ExperimenterResult']
 
-log = logging.getLogger('arch_opt_exp.exp')
+log = logging.getLogger('assign_exp.exp')
 
 
 class EffectivenessTerminator(MaximumFunctionCallTermination):
@@ -51,11 +36,11 @@ class EffectivenessTerminator(MaximumFunctionCallTermination):
 
         self.metrics = metrics or []
 
-    def _do_continue(self, algorithm: Algorithm):
+    def do_continue(self, algorithm):
         for metric in self.metrics:
             metric.calculate_step(algorithm)
 
-        return super(EffectivenessTerminator, self)._do_continue(algorithm)
+        return super(EffectivenessTerminator, self).do_continue(algorithm)
 
 
 class ExperimenterResult(Result):
@@ -64,7 +49,7 @@ class ExperimenterResult(Result):
     def __init__(self):
         super(ExperimenterResult, self).__init__()
 
-        self.algorithm_name = None
+        self.plot_name = None
         self.metrics: Dict[str, Metric] = {}
         self.metric_converged = None
         self.termination: Optional[MetricTermination] = None
@@ -91,15 +76,15 @@ class ExperimenterResult(Result):
         return exp_result
 
     @classmethod
-    def aggregate_results(cls, results: List['ExperimenterResult']) -> 'ExperimenterResult':
+    def aggregate_results(cls, results: List['ExperimenterResult'], align_end=False) -> 'ExperimenterResult':
         """Aggregate results from multiple ExperimenterResult instances, replacing metrics values with the mean and
         adding standard deviations."""
         result = cls()
 
-        result.algorithm_name = results[0].algorithm_name
-        result.exec_time, result.exec_time_std = cls._get_mean_std(results, lambda r: r.exec_time)
-        result.n_steps, result.n_steps_std = cls._get_mean_std(results, lambda r: r.n_steps)
-        result.n_eval, result.n_eval_std = cls._get_mean_std(results, lambda r: r.n_eval)
+        result.plot_name = results[0].plot_name
+        result.exec_time, result.exec_time_std = cls._get_mean_std(results, lambda r: r.exec_time, align_end=align_end)
+        result.n_steps, result.n_steps_std = cls._get_mean_std(results, lambda r: r.n_steps, align_end=align_end)
+        result.n_eval, result.n_eval_std = cls._get_mean_std(results, lambda r: r.n_eval, align_end=align_end)
 
         for name, metric in results[0].metrics.items():
             result.metrics[name] = metric = copy.deepcopy(metric)
@@ -107,13 +92,13 @@ class ExperimenterResult(Result):
             metric.values, metric.values_std = {}, {}
             for key in metric.value_names:
                 metric.values[key], metric.values_std[key] = \
-                    cls._get_mean_std(results, lambda r: r.metrics[name].values[key])
+                    cls._get_mean_std(results, lambda r: r.metrics[name].values[key], align_end=align_end)
 
         return result
 
     @staticmethod
     def _get_mean_std(results: List['ExperimenterResult'],
-                      getter: Callable[['ExperimenterResult'], Optional[np.ndarray]]) -> Tuple[np.ndarray, np.ndarray]:
+                      getter: Callable[['ExperimenterResult'], Optional[np.ndarray]], align_end=False) -> Tuple[np.ndarray, np.ndarray]:
         """Get mean and standard deviation for several repeated experimenter results."""
 
         results_data = None
@@ -134,11 +119,17 @@ class ExperimenterResult(Result):
                     new_shape = (max(rs[0], r[0]), max(rs[1], r[1]))
 
                     results_data_ = np.zeros(new_shape+(rs[2],))*np.nan
-                    results_data_[-rs[0]:, -rs[1]:, :] = results_data
+                    if align_end:
+                        results_data_[-rs[0]:, -rs[1]:, :] = results_data
+                    else:
+                        results_data_[:rs[0], :rs[1], :] = results_data
                     results_data = results_data_
 
                     res_data_ = np.zeros(new_shape+(1,))*np.nan
-                    res_data_[-r[0]:, -r[1]:, :] = res_data
+                    if align_end:
+                        res_data_[-r[0]:, -r[1]:, :] = res_data
+                    else:
+                        res_data_[:r[0], :r[1], :] = res_data
                     res_data = res_data_
 
                 results_data = np.concatenate([results_data, res_data], axis=2)
@@ -149,14 +140,14 @@ class ExperimenterResult(Result):
         mean_data = np.nanmean(results_data, axis=2)
         if mean_data.shape[0] == 1:
             mean_data = mean_data[0, :]
-        if len(mean_data) == 1:
-            mean_data = mean_data[0]
+        # if len(mean_data) == 1:
+        #     mean_data = mean_data[0]
 
         std_data = np.nanstd(results_data, axis=2)
         if std_data.shape[0] == 1:
             std_data = std_data[0, :]
-        if len(std_data) == 1:
-            std_data = std_data[0]
+        # if len(std_data) == 1:
+        #     std_data = std_data[0]
 
         return mean_data, std_data
 
@@ -165,7 +156,7 @@ class ExperimenterResult(Result):
         metrics = [res.metrics[metric_name] for res in results]
         n_eval = [res.n_eval for res in results] if plot_evaluations else None
         if kwargs.get('titles') is None:
-            kwargs['titles'] = [res.algorithm_name for res in results]
+            kwargs['titles'] = [res.plot_name for res in results]
         Metric.plot_multiple(metrics, n_eval=n_eval, **kwargs)
 
     @staticmethod
@@ -218,6 +209,21 @@ class ExperimenterResult(Result):
         if show:
             plt.show()
 
+    def plot_obj_progress(self, save_filename=None, show=True):
+        plt.figure()
+        plt.title(f'Objective progress: {self.plot_name}')
+
+        for i, algo_step in enumerate(self.history):
+            f_pareto = algo_step.opt.get('F')
+            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=3, label=f'Step {i}')
+        plt.legend()
+
+        if save_filename is not None:
+            pl.savefig(save_filename+'.png')
+            pl.savefig(save_filename+'.svg')
+        if show:
+            plt.show()
+
     def export_pandas(self) -> pd.DataFrame:
         has_std = self.n_eval_std is not None
         data = {
@@ -245,26 +251,32 @@ class Experimenter:
     results_folder: Optional[str] = None
 
     def __init__(self, problem: Problem, algorithm: Algorithm, n_eval_max: int, algorithm_name: str = None,
-                 metrics: List[Metric] = None, log_level='INFO', results_folder: str = None):
+                 plot_name: str = None, metrics: List[Metric] = None, log_level='INFO', results_folder: str = None):
         self.problem = problem
         self.algorithm = algorithm
         self.algorithm_name = algorithm_name or algorithm.__class__.__name__
+        self.plot_name = plot_name
         self.n_eval_max = n_eval_max
+
+        if metrics is None:
+            from arch_opt_exp.experiments.metrics import get_exp_metrics
+            metrics = get_exp_metrics(problem)
         self.metrics = metrics
 
         self.results_folder = results_folder or self.results_folder  # Turn class attr into instance attr
         self._log_level = log_level
 
-    ### EFFECTIVENESS EXPERIMENTATION ###
+    # ## EFFECTIVENESS EXPERIMENTATION ## #
 
-    def run_effectiveness_parallel(self, n_repeat: int) -> List[ExperimenterResult]:
+    def run_effectiveness_parallel(self, n_repeat: int, keep_history=False):
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            futures = [executor.submit(self.run_effectiveness, i) for i in range(n_repeat)]
+            futures = [executor.submit(self.run_effectiveness, i, keep_history=keep_history) for i in range(n_repeat)]
             concurrent.futures.wait(futures)
 
-            return [fut.result() for fut in futures]
+            for fut in futures:
+                fut.result()
 
-    def run_effectiveness(self, repeat_idx: int = 0, seed=None) -> ExperimenterResult:
+    def run_effectiveness(self, repeat_idx: int = 0, seed=None, keep_history=False) -> ExperimenterResult:
         """
         Run the effectiveness experiment: find out how well the algorithm is able to approach the Pareto front. Simply
         runs the algorithm with a predefines maximum number of function evaluations.
@@ -274,7 +286,7 @@ class Experimenter:
         termination = EffectivenessTerminator(n_eval_max=self.n_eval_max, metrics=self.metrics)
 
         # Run the algorithm
-        log.info('Running effectiveness experiment: %s / %s / %d' %
+        log.info('Running effectiveness experiment:  %s / %s / %d' %
                  (self.problem.name(), self.algorithm_name, repeat_idx))
         result = minimize(
             self.problem, self.algorithm,
@@ -286,9 +298,14 @@ class Experimenter:
 
         # Prepare experimenter results by including metrics
         result = ExperimenterResult.from_result(result)
-        result.algorithm_name = self.algorithm_name
+        result.plot_name = self.plot_name or self.algorithm_name
         metrics: List[Metric] = result.algorithm.termination.metrics
         result.metrics = {met.name: met for met in metrics}
+
+        # Reduce file size to prevent memory errors
+        if not keep_history:
+            result.algorithm = None
+            result.history = None
 
         # Store results and return
         result_path = self._get_effectiveness_result_path(repeat_idx=repeat_idx)
@@ -306,14 +323,7 @@ class Experimenter:
         with open(result_path, 'rb') as fp:
             return pickle.loads(bz2.decompress(fp.read()))
 
-    def get_aggregate_effectiveness_results(self, force=False) -> ExperimenterResult:
-        """Returns results aggregated for all individual runs, using mean and std."""
-        agg_results_path = self._get_agg_effectiveness_result_path()
-        if not force and os.path.exists(agg_results_path):
-            with open(agg_results_path, 'rb') as fp:
-                return pickle.load(fp)
-
-        log.info('Aggregating effectiveness results: %s / %s' % (self.problem.name(), self.algorithm_name))
+    def get_effectiveness_results(self) -> List[ExperimenterResult]:
         results = []
         i = 0
         while True:
@@ -323,8 +333,19 @@ class Experimenter:
 
             results.append(result)
             i += 1
+        return results
 
-        res = ExperimenterResult.aggregate_results(results)
+    def get_aggregate_effectiveness_results(self, force=False, align_end=False) -> ExperimenterResult:
+        """Returns results aggregated for all individual runs, using mean and std."""
+        agg_results_path = self._get_agg_effectiveness_result_path()
+        if not force and os.path.exists(agg_results_path):
+            with open(agg_results_path, 'rb') as fp:
+                return pickle.load(fp)
+
+        log.info('Aggregating effectiveness results: %s / %s' % (self.problem.name(), self.algorithm_name))
+        results = self.get_effectiveness_results()
+
+        res = ExperimenterResult.aggregate_results(results, align_end=align_end)
         with open(agg_results_path, 'wb') as fp:
             pickle.dump(res, fp)
         return res
@@ -335,7 +356,7 @@ class Experimenter:
     def _get_agg_effectiveness_result_path(self) -> str:
         return self.get_problem_algo_results_path('result_agg.pkl')
 
-    ### EFFICIENCY EXPERIMENTATION ###
+    # ## EFFICIENCY EXPERIMENTATION ## #
 
     def run_efficiency_repeated(self, metric_termination: MetricTermination) -> List[ExperimenterResult]:
         """Run efficiency experiments for the amount of previously generated effectiveness results available."""
@@ -385,7 +406,7 @@ class Experimenter:
 
                 # Modify metrics to reflect number of steps
                 result = ExperimenterResult.from_result(result)
-                result.algorithm_name = self.algorithm_name
+                result.plot_name = self.plot_name or self.algorithm_name
                 result.metric_converged = True
                 result.termination = termination
 
@@ -454,7 +475,7 @@ class Experimenter:
     def _get_agg_efficiency_result_path(self, metric_termination: MetricTermination) -> str:
         return self.get_problem_algo_metric_results_path(metric_termination, 'result_agg.pkl')
 
-    ### HELPER FUNCTIONS ###
+    # ## HELPER FUNCTIONS ## #
 
     @staticmethod
     @contextlib.contextmanager
@@ -516,7 +537,7 @@ class Experimenter:
                 },
             },
             'loggers': {
-                'arch_opt_exp': {
+                'assign_exp': {
                     'handlers': ['console'],
                     'level': level,
                 },

@@ -173,8 +173,8 @@ class HierarchicalGoldsteinProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
     def validate_ranges(cls, n_samples=5000, show=True):
         """Compare to Pelamatti 2020, Fig. 6"""
         import matplotlib.pyplot as plt
-        from pymoo.model.initialization import Initialization
-        from pymoo.operators.sampling.latin_hypercube_sampling import LatinHypercubeSampling
+        from pymoo.core.initialization import Initialization
+        from pymoo.operators.sampling.lhs import LatinHypercubeSampling
 
         problem = cls()
         init_sampling = Initialization(LatinHypercubeSampling(), repair=problem.get_repair())
@@ -215,7 +215,7 @@ class MOHierarchicalGoldsteinProblem(HierarchicalGoldsteinProblem):
     @classmethod
     def run_test(cls):
         from pymoo.optimize import minimize
-        from pymoo.algorithms.nsga2 import NSGA2
+        from pymoo.algorithms.moo.nsga2 import NSGA2
         from pymoo.visualization.scatter import Scatter
 
         res = minimize(cls(), NSGA2(pop_size=200), termination=('n_gen', 200))
@@ -345,8 +345,8 @@ class HierarchicalRosenbrockProblem(CachedParetoFrontMixin, MixedIntBaseProblem)
     def validate_ranges(cls, n_samples=5000, show=True):
         """Compare to Pelamatti 2020, Fig. 13"""
         import matplotlib.pyplot as plt
-        from pymoo.model.initialization import Initialization
-        from pymoo.operators.sampling.latin_hypercube_sampling import LatinHypercubeSampling
+        from pymoo.core.initialization import Initialization
+        from pymoo.operators.sampling.lhs import LatinHypercubeSampling
 
         problem = cls()
         init_sampling = Initialization(LatinHypercubeSampling(), repair=problem.get_repair())
@@ -386,7 +386,7 @@ class MOHierarchicalRosenbrockProblem(HierarchicalRosenbrockProblem):
     @classmethod
     def run_test(cls, show=True):
         from pymoo.optimize import minimize
-        from pymoo.algorithms.nsga2 import NSGA2
+        from pymoo.algorithms.moo.nsga2 import NSGA2
 
         res = minimize(cls(), NSGA2(pop_size=200), termination=('n_gen', 200))
         w_idx = res.X[:, 11]*2 + res.X[:, 12]
@@ -578,7 +578,7 @@ class HierarchicalMetaProblem(CachedParetoFrontMixin, MixedIntBaseProblem):
 
     def run_test(self, show=True):
         from pymoo.optimize import minimize
-        from pymoo.algorithms.nsga2 import NSGA2
+        from pymoo.algorithms.moo.nsga2 import NSGA2
 
         print('Running hierarchical metaproblem: %d vars (%d rep, %d maps), %d obj, %d constr' %
               (self.n_var, self.n_rep, self.n_maps, self.n_obj, self.n_constr))

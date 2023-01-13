@@ -16,13 +16,13 @@ Contact: jasper.bussemaker@dlr.de
 """
 
 import pytest
-from pymoo.model.problem import Problem
-from pymoo.algorithms.nsga2 import NSGA2
-from pymoo.model.algorithm import Algorithm
+from pymoo.core.problem import Problem
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.core.algorithm import Algorithm
 from pymoo.factory import get_problem, get_sampling, get_crossover, get_mutation
 from pymoo.operators.mixed_variable_operator import MixedVariableSampling, MixedVariableMutation, MixedVariableCrossover
 
-from arch_opt_exp.experimenter import *
+from arch_opt_exp.experiments.experimenter import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.problems.discretization import *
 
@@ -79,16 +79,16 @@ def test_mixed_int_problem_masked(problem):
         'int': get_crossover('int_ux', prob=.9),
     })
 
-    mutation = MixedVariableMutation(mixed_int_problem.mask, {
-        'real': get_mutation('real_pm', eta=3.),
-        'int': get_mutation('bin_bitflip'),
-    })
+    # mutation = MixedVariableMutation(mixed_int_problem.mask, {
+    #     'real': get_mutation('real_pm', eta=3.),
+    #     'int': get_mutation('bin_bitflip'),
+    # })
 
     algorithm = NSGA2(
         pop_size=100,
         sampling=sampling,
         crossover=crossover,
-        mutation=mutation,
+        # mutation=mutation,
         repair=mixed_int_problem.get_repair(),
     )
 

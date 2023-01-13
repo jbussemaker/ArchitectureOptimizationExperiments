@@ -11,7 +11,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-Copyright: (c) 2021, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
+Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 
@@ -23,17 +23,61 @@ import arch_opt_exp
 from typing import *
 import concurrent.futures
 import matplotlib.pyplot as plt
-from arch_opt_exp.experimenter import *
-from arch_opt_exp.metrics_base import *
+from arch_opt_exp.problems.discretization import MixedIntBaseProblem
+from arch_opt_exp.experiments.metrics_base import *
+from arch_opt_exp.experiments.experimenter import *
+from arch_opt_exp.algorithms.sampling import *
+from arch_opt_exp.metrics.performance import *
 from werkzeug.utils import secure_filename
 
-from pymoo.model.problem import Problem
-from pymoo.model.algorithm import Algorithm
+from pymoo.core.problem import Problem
+from pymoo.core.algorithm import Algorithm
+from pymoo.core.evaluator import Evaluator
+from pymoo.core.initialization import Initialization
 
-__all__ = ['set_results_folder', 'get_experimenters', 'run_effectiveness_multi', 'plot_effectiveness_results']
+__all__ = ['run', 'set_results_folder', 'get_experimenters', 'run_effectiveness_multi',
+           'plot_effectiveness_results', 'calc_initial_hv']
 
 log = logging.getLogger('arch_opt_exp.runner')
 warnings.filterwarnings("ignore")
+
+
+def calc_initial_hv(problem: MixedIntBaseProblem):
+    pop = Initialization(RepairedRandomSampling(repair=problem.get_repair())).do(problem, 1000)
+    Evaluator().eval(problem, pop)
+    f = pop.get('F')
+
+    hv = DeltaHVMetric(problem.pareto_front()).calculate_delta_hv(f)[2]
+    pre, post = '', ''
+    if hv == 0:  # https://stackoverflow.com/a/287944
+        pre, post = '\033[91m', '\033[0m'
+        post = f' ({os.path.basename(problem._pf_cache_path())}){post}'
+    print(f'{pre}Initial hypervolume: {hv:.2f}{post}')
+
+
+def run(results_key, problems, algorithms, algo_names, plot_names=None, n_repeat=8, n_eval_max=300, do_run=True,
+        return_exp=False, do_plot=True):
+    set_results_folder(results_key)
+    exp = get_experimenters(problems, algorithms, n_eval_max=n_eval_max, algorithm_names=algo_names,
+                            plot_names=plot_names)
+    if return_exp:
+        return exp
+
+    import matplotlib
+    matplotlib.use('Agg')
+    if do_run:
+        run_effectiveness_multi(exp, n_repeat=n_repeat)
+    if do_plot:
+        plot_metric_values = {
+            'delta_hv': ['delta_hv'],
+            'IGD': None,
+            'spread': ['delta'],
+            'max_cv': None,
+            # 'sm_quality': ['rmse', 'loo_cv'] if include_loo_cv else ['rmse'],
+            # 'training': ['n_train', 'n_samples', 'time_train'],
+            # 'infill': ['time_infill'],
+        }
+        plot_effectiveness_results(exp, plot_metric_values=plot_metric_values, save=True, show=False)
 
 
 def set_results_folder(key: str, sub_key: str = None):
@@ -55,20 +99,46 @@ def reset_results():
         shutil.rmtree(folder)
 
 
-def get_experimenters(problem: Problem, algorithms: List[Algorithm], metrics: List[Metric],
-                      n_eval_max: Union[int, List[int]]=500, algorithm_names: List[str] = None) -> List[Experimenter]:
+def get_experimenters(problems: Union[List[Problem], Problem], algorithms: Union[List[Algorithm], Algorithm],
+                      metrics: List[Metric] = None, n_eval_max: Union[int, List[int]] = 300,
+                      algorithm_names: Union[List[str], str] = None,
+                      plot_names: List[str] = None) -> List[Experimenter]:
     """Result Experimenter instances corresponding to the algorithms."""
-    if algorithm_names is None:
-        algorithm_names = [None for _ in range(len(algorithms))]
+    if isinstance(problems, Problem):
+        if not isinstance(algorithms, list):
+            raise ValueError('Algorithms must be list!')
+        if algorithm_names is None:
+            algorithm_names = [None for _ in range(len(algorithms))]
+        if plot_names is None:
+            plot_names = [None for _ in range(len(algorithms))]
 
-    if not isinstance(n_eval_max, list):
-        n_eval_max = [n_eval_max]*len(algorithms)
+        if not isinstance(n_eval_max, list):
+            n_eval_max = [n_eval_max]*len(algorithms)
 
-    return [Experimenter(problem, algorithm, n_eval_max=n_eval_max[i], metrics=metrics,
-                         algorithm_name=algorithm_names[i]) for i, algorithm in enumerate(algorithms)]
+        return [Experimenter(problems, algorithm, n_eval_max=n_eval_max[i], metrics=metrics,
+                             algorithm_name=algorithm_names[i], plot_name=plot_names[i])
+                for i, algorithm in enumerate(algorithms)]
+
+    elif isinstance(algorithms, Algorithm):
+        raise ValueError('Algorithms must be list!')
+
+    else:
+        if len(algorithms) != len(problems):
+            raise ValueError('Algorithms and problem must be same length!')
+        if algorithm_names is None:
+            algorithm_names = [None for _ in range(len(algorithms))]
+        if plot_names is None:
+            plot_names = [None for _ in range(len(algorithms))]
+
+        if not isinstance(n_eval_max, list):
+            n_eval_max = [n_eval_max]*len(problems)
+
+        return [Experimenter(problem, algorithms[i], n_eval_max=n_eval_max[i], metrics=metrics,
+                             algorithm_name=algorithm_names[i], plot_name=plot_names[i])
+                for i, problem in enumerate(problems)]
 
 
-def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, reset=False):
+def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, reset=False, agg_align_end=False):
     """Runs the effectiveness experiment using multiple algorithms, repeated a number of time for each algorithm."""
     Experimenter.capture_log()
     log.info('Running effectiveness experiments: %d algorithms @ %d repetitions (%d total runs)' %
@@ -78,7 +148,7 @@ def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, rese
         reset_results()
     for exp in experimenters:
         exp.run_effectiveness_parallel(n_repeat=n_repeat)
-        agg_res = exp.get_aggregate_effectiveness_results(force=True)
+        agg_res = exp.get_aggregate_effectiveness_results(force=True, align_end=agg_align_end)
 
         agg_res.export_pandas().to_pickle(exp.get_problem_algo_results_path('result_agg_df.pkl'))
         agg_res.save_csv(exp.get_problem_algo_results_path('result_agg.csv'))
@@ -107,6 +177,12 @@ def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_va
             results, metric.name, plot_value_names=plot_metric_values.get(metric.name), plot_evaluations=True,
             save_filename=os.path.join(experimenters[0].results_folder, secure_filename('ns_results_%s' % metric.name)),
             std_sigma=0., show=False)
+
+    # for exp in experimenters:
+    #     results = exp.get_effectiveness_results()
+    #     for i, result in enumerate(results):
+    #         save_filename = exp.get_problem_algo_results_path(f'result_{i}_pareto')
+    #         result.plot_obj_progress(save_filename=save_filename, show=False)
 
     if show:
         plt.show()

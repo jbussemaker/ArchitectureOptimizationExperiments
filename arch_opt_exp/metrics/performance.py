@@ -17,14 +17,14 @@ Contact: jasper.bussemaker@dlr.de
 
 import numpy as np
 from typing import *
-from arch_opt_exp.metrics_base import *
-from pymoo.model.algorithm import Algorithm
-from pymoo.model.population import Population
-from pymoo.performance_indicator.igd import IGD
-from pymoo.performance_indicator.hv import Hypervolume
-from pymoo.performance_indicator.igd_plus import IGDPlus
-from pymoo.model.duplicate import DefaultDuplicateElimination
-from pymoo.performance_indicator.distance_indicator import euclidean_distance
+from arch_opt_exp.experiments.metrics_base import *
+from pymoo.core.algorithm import Algorithm
+from pymoo.core.population import Population
+from pymoo.indicators.igd import IGD
+from pymoo.indicators.hv import Hypervolume
+from pymoo.indicators.igd_plus import IGDPlus
+from pymoo.core.duplicate import DefaultDuplicateElimination
+from pymoo.indicators.distance_indicator import euclidean_distance
 
 __all__ = ['SpreadMetric', 'DeltaHVMetric', 'IGDMetric', 'IGDPlusMetric', 'MaxConstraintViolationMetric',
            'NrEvaluationsMetric', 'BestObjMetric']
@@ -84,8 +84,11 @@ class DeltaHVMetric(Metric):
     def __init__(self, pf: np.ndarray):
         super(DeltaHVMetric, self).__init__()
 
+        self.is_one_dim = pf.shape[0] == 1
+        self.max_f = np.max(pf, axis=0)
+        self.pf_0 = pf[0, :]
         self._hv = hv = Hypervolume(pf=pf, normalize=True)
-        self.hv_true = hv.calc(pf)
+        self.hv_true = hv.do(pf)
 
     @property
     def name(self) -> str:
@@ -96,9 +99,27 @@ class DeltaHVMetric(Metric):
         return ['delta_hv', 'hv', 'true_hv']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
+        return self.calculate_delta_hv(self._get_pop_f(algorithm))
+
+    def calculate_delta_hv(self, f: np.ndarray) -> List[float]:
+        # If we have only one point, calculate the relative distance to the optimal point instead (because true HV is 0)
+        if self.is_one_dim:
+            # Update max points
+            self.max_f = max_f = np.max(np.row_stack([f, [self.max_f]]), axis=0)
+
+            # Update maximum distance to the optimal point (this represents the extend of the design space)
+            true_dist = max_f-self.pf_0
+            true_dist[true_dist == 0] = 1
+            true_dist_m = np.sqrt(np.sum(true_dist**2))
+
+            # Get the relative distance of the current best point to the optimal point
+            f_rel_dist = (f-self.pf_0)/true_dist
+            f_rel_min_dist = np.min(np.sqrt(np.sum(f_rel_dist**2, axis=1)))
+
+            return [f_rel_min_dist, f_rel_min_dist*true_dist_m, true_dist_m]
+
         # Calculate current hypervolume
-        f = self._get_pop_f(algorithm)
-        hv = self._hv.calc(f)
+        hv = self._hv.do(f)
 
         # Calculate error metric
         delta_hv = (self.hv_true-hv)/self.hv_true

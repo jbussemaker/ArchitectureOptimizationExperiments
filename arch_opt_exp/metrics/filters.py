@@ -17,7 +17,7 @@ Contact: jasper.bussemaker@dlr.de
 
 import numpy as np
 from typing import *
-from arch_opt_exp.metrics_base import *
+from arch_opt_exp.experiments.metrics_base import *
 
 __all__ = ['MovingAverageFilter', 'ExpMovingAverageFilter', 'KalmanFilter']
 
