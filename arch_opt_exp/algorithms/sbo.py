@@ -50,23 +50,23 @@ __all__ = ['get_sbo_rbf', 'get_sbo_krg']
 log = logging.getLogger('arch_opt_exp.sbo')
 
 
-def get_sbo_rbf(**kwargs):
+def get_sbo_rbf(repair: Repair = None, **kwargs):
     sm = RBF(
         print_global=False,
         d0=1.,
         poly_degree=-1,
         reg=1e-10,
     )
-    return _get_sbo(sm, FunctionEstimateInfill(), **kwargs)
+    return _get_sbo(sm, FunctionEstimateInfill(), repair=repair, **kwargs)
 
 
-def get_sbo_krg(use_mvpf=True, use_ei=False, min_pof=.95, **kwargs):
+def get_sbo_krg(use_mvpf=True, use_ei=False, min_pof=.95, repair: Repair = None, **kwargs):
     sm = KRG(print_global=False)
     if use_ei:
         infill = ExpectedImprovementInfill(min_pof=min_pof)  # For single objective
     else:
         infill = MinVariancePFInfill(min_pof=min_pof) if use_mvpf else FunctionEstimatePoFInfill(min_pof=min_pof)
-    return _get_sbo(sm, infill, **kwargs)
+    return _get_sbo(sm, infill, repair=repair, **kwargs)
 
 
 def _get_sbo(sm: SurrogateModel, infill: 'SurrogateInfill', infill_size: int = 1, init_size: int = 100,
