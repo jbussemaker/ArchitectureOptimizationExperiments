@@ -31,6 +31,38 @@ Optimization is done using the [pymoo](https://pymoo.org/) (multi-objective opti
 framework includes many multi-objective evolutionary algorithms. Surrogate-based optimization algorithms are implemented
 using [scikit-learn](https://scikit-learn.org/) and [SMT](https://smt.readthedocs.io/).
 
+## Architecture Optimization Measures
+
+Architecture optimization aspects and mitigation measures:
+
+| Aspect             | Problem-level                                   | MOEA                                       | SBO                                                                                  |
+|--------------------|-------------------------------------------------|--------------------------------------------|--------------------------------------------------------------------------------------|
+| Mixed-discrete     | Convert float to int; high inf idx / dist corr  | Support discrete operations                | Cont. relaxation; specific kernels; dummy coding; force new infill point selection   |
+| Multi-objective    |                                                 | Prioritize w.r.t. distance to Pareto front | Multi-objective infill criteria                                                      |
+| Hierarchical       | Imputation; activeness; reduce imputation ratio | Impute/repair after sampling, evaluation   | Impute/repair after sampling, evaluation, during infill search; hierarchical kernels |
+| Hidden constraints | Catch errors and return NaN                     | Extreme barrier approach                   | Predict hidden constraints area                                                      |
+| Expensive          |                                                 | Use SBO to reduce function evaluations     | Intermediary results storage; resuming optimizations                                 |
+
+For MOEA's all measure are already implemented for most algorithms (incl NSGA2).
+Only care should be taken to select a repaired sampler so that the initial population is sampled correctly.
+
+SBO measure implementation status:
+
+| Measure                              | Custom SBO | SEGOMOOMOE | pysamoo | BoTorch | Trieste |
+|--------------------------------------|------------|------------|---------|---------|---------|
+| MD: continuous relaxation            | LCL        | Y          |         |         |         |
+| MD: kernels                          | N          | Y          |         |         |         |
+| MD: dummy coding                     | N          | Y          |         |         |         |
+| MD: force new infill point selection | LCL        | N          |         |         |         |
+| MO: multi-objective infill           | LCL        | Y          |         |         |         |
+| H: repaired sampling                 | LCL        | N          |         |         |         |
+| H: imputation after evaluation       | LCL        | N          |         |         |         |
+| H: imputation during infill search   | LCL        | N          |         |         |         |
+| H: kernels                           | N          | N          | N       | N       | N       |
+| HC: predict area                     | N          | N          |         |         | Y       |
+| EXP: intermediary result storage     | N          | N          |         |         |         |
+| EXP: resuming optimizations          | N          | N          |         |         |         |
+
 ## Citing
 
 For the accompanying paper, please refer to:
