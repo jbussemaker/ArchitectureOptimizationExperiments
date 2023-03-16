@@ -20,7 +20,7 @@ from pymoo.optimize import minimize
 from pymoo.core.result import Result
 from pymoo.core.problem import Problem
 from pymoo.core.algorithm import Algorithm
-from pymoo.util.termination.max_eval import MaximumFunctionCallTermination
+from pymoo.termination.max_eval import MaximumFunctionCallTermination
 
 __all__ = ['Experimenter', 'EffectivenessTerminator', 'ExperimenterResult']
 
@@ -36,11 +36,11 @@ class EffectivenessTerminator(MaximumFunctionCallTermination):
 
         self.metrics = metrics or []
 
-    def do_continue(self, algorithm):
+    def update(self, algorithm):
         for metric in self.metrics:
             metric.calculate_step(algorithm)
 
-        return super(EffectivenessTerminator, self).do_continue(algorithm)
+        return super(EffectivenessTerminator, self).update(algorithm)
 
 
 class ExperimenterResult(Result):
@@ -335,6 +335,9 @@ class Experimenter:
             i += 1
         return results
 
+    def has_aggregate_effectiveness_results(self) -> bool:
+        return os.path.exists(self._get_agg_effectiveness_result_path())
+
     def get_aggregate_effectiveness_results(self, force=False, align_end=False) -> ExperimenterResult:
         """Returns results aggregated for all individual runs, using mean and std."""
         agg_results_path = self._get_agg_effectiveness_result_path()
@@ -396,7 +399,8 @@ class Experimenter:
         for algorithm in effectiveness_result.history:
             history.append(algorithm)
 
-            if not termination.do_continue(algorithm):  # Metric convergence
+            termination.update(algorithm)
+            if termination.has_terminated():  # Metric convergence
                 algorithm.history = history
                 n_steps = len(history)
 
@@ -523,7 +527,7 @@ class Experimenter:
     def capture_log(level='INFO'):
         logging.config.dictConfig({
             'version': 1,
-            'disable_existing_loggers': True,
+            'disable_existing_loggers': False,
             'formatters': {
                 'console': {
                     'format': '%(levelname)- 8s %(asctime)s %(name)- 18s: %(message)s'

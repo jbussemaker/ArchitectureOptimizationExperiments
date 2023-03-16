@@ -270,6 +270,7 @@ class MetricTermination(Termination):
         self.lower_limit = lower_limit
         self.upper_limit = upper_limit
         self.n_eval_check = n_eval_check
+        self._scale = None
 
         super(MetricTermination, self).__init__()
 
@@ -277,16 +278,30 @@ class MetricTermination(Termination):
     def metric_name(self) -> str:
         return self.metric.name
 
-    def _do_continue(self, algorithm: Algorithm, **kwargs):
+    def _update(self, algorithm):
 
         values = self._calc_step(algorithm)
-        value = values[-1]
+        value = self._get_compare_value(values)
+        if np.isnan(value):
+            return 0.
 
-        if self.lower_limit is not None and value <= self.lower_limit:
-            return False
-        if self.upper_limit is not None and value >= self.upper_limit:
-            return False
-        return True
+        diff = None
+        if self.lower_limit is not None:
+            diff = value - self.lower_limit
+
+        if self.upper_limit is not None:
+            diff = self.upper_limit - value
+
+        if diff is not None:
+            if self._scale is None:
+                self._scale = diff if diff > 0 else 1.
+            progress = max(0, 1 - diff/self._scale)
+            return progress
+
+        return 0.
+
+    def _get_compare_value(self, values) -> float:
+        return values[-1]
 
     def _calc_step(self, algorithm: Algorithm):
         do_calc = True
@@ -336,19 +351,15 @@ class MetricDiffTermination(MetricTermination):
 
         self.diff_values = []
 
-    def _do_continue(self, algorithm: Algorithm, **kwargs):
-
-        values = self._calc_step(algorithm)
+    def _get_compare_value(self, values) -> float:
         values = np.array(values)
         real_values = values[~np.isnan(values)]
 
         if len(real_values) < 2:
-            self.diff_values.append(np.nan)
-            return True
-
+            return np.nan
         diff = abs(real_values[-1]-real_values[-2])
         self.diff_values.append(diff)
-        return diff > self.lower_limit
+        return diff
 
     def plot(self, save_filename=None, show=True):
         _ll = self.lower_limit
