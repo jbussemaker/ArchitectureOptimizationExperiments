@@ -23,10 +23,10 @@ import arch_opt_exp
 from typing import *
 import concurrent.futures
 import matplotlib.pyplot as plt
-from arch_opt_exp.problems.discretization import MixedIntBaseProblem
+from sb_arch_opt.sampling import *
+from sb_arch_opt.problem import ArchOptProblemBase
 from arch_opt_exp.experiments.metrics_base import *
 from arch_opt_exp.experiments.experimenter import *
-from arch_opt_exp.algorithms.sampling import *
 from arch_opt_exp.metrics.performance import *
 from werkzeug.utils import secure_filename
 
@@ -36,13 +36,13 @@ from pymoo.core.evaluator import Evaluator
 from pymoo.core.initialization import Initialization
 
 __all__ = ['run', 'set_results_folder', 'get_experimenters', 'run_effectiveness_multi',
-           'plot_effectiveness_results', 'calc_initial_hv']
+           'plot_effectiveness_results', 'calc_initial_hv', 'capture_log']
 
 log = logging.getLogger('arch_opt_exp.runner')
 warnings.filterwarnings("ignore")
 
 
-def calc_initial_hv(problem: MixedIntBaseProblem):
+def calc_initial_hv(problem: ArchOptProblemBase):
     pop = Initialization(RepairedRandomSampling(repair=problem.get_repair())).do(problem, 1000)
     Evaluator().eval(problem, pop)
     f = pop.get('F')
@@ -53,6 +53,10 @@ def calc_initial_hv(problem: MixedIntBaseProblem):
         pre, post = '\033[91m', '\033[0m'
         post = f' ({os.path.basename(problem._pf_cache_path())}){post}'
     print(f'{pre}Initial hypervolume: {hv:.2f}{post}')
+
+
+def capture_log(level='INFO'):
+    Experimenter.capture_log(level)
 
 
 def run(results_key, problems, algorithms, algo_names, plot_names=None, n_repeat=8, n_eval_max=300, do_run=True,

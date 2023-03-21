@@ -24,7 +24,7 @@ from pymoo.termination.max_eval import MaximumFunctionCallTermination
 
 __all__ = ['Experimenter', 'EffectivenessTerminator', 'ExperimenterResult']
 
-log = logging.getLogger('assign_exp.exp')
+log = logging.getLogger('arch_opt_exp.exp')
 
 
 class EffectivenessTerminator(MaximumFunctionCallTermination):
@@ -527,7 +527,6 @@ class Experimenter:
     def capture_log(level='INFO'):
         logging.config.dictConfig({
             'version': 1,
-            'disable_existing_loggers': False,
             'formatters': {
                 'console': {
                     'format': '%(levelname)- 8s %(asctime)s %(name)- 18s: %(message)s'
@@ -541,7 +540,11 @@ class Experimenter:
                 },
             },
             'loggers': {
-                'assign_exp': {
+                'arch_opt_exp': {
+                    'handlers': ['console'],
+                    'level': level,
+                },
+                'sb_arch_opt': {
                     'handlers': ['console'],
                     'level': level,
                 },
