@@ -32,13 +32,13 @@ _all_problems = [
 
     MDZDT1Small(),  # Non-hierarchical mixed-discrete test problem
     CombHierBranin(),  # More realistic hierarchical test problem
-    CombHierMORosenbrock(),  # More realistic multi-objective hierarchical test problem
+    CombHierRosenbrock(),  # More realistic multi-objective hierarchical test problem
 ]
 _problems = [
     SimpleTurbofanArch(),  # Realistic hierarchical problem
     MDZDT1Small(),  # Non-hierarchical mixed-discrete test problem
     CombHierBranin(),  # More realistic hierarchical test problem
-    CombHierMORosenbrock(),  # More realistic multi-objective hierarchical test problem
+    CombHierRosenbrock(),  # More realistic multi-objective hierarchical test problem
 ]
 
 
@@ -122,7 +122,7 @@ def exp_01_02_sampling_similarity():
     - Each sampler was tested with 1000 samples
     - For non-hierarchical problems all samplers perform well: correspondence is < 3%
     - For hierarchical problems:
-      - Non-repaired samplers always perform bad: 20% < correspondence < 33%
+      - Non-repaired samplers always perform bad: 20% < correspondence < 40%
       - Repaired samplers perform well: correspondence < 4%
       - Repaired samplers do this by exhaustively-sampling all discrete design vectors and then randomly sampling these
       - A safeguard against time/memory usage is implemented; if triggered, they perform as non-repaired samplers
