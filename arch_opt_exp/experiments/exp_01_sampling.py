@@ -51,25 +51,25 @@ _all_problems = [
 
     MDZDT1Small(),  # Non-hierarchical mixed-discrete test problem
     CombHierBranin(),  # More realistic hierarchical test problem
-    CombHierRosenbrock(),  # More realistic multi-objective hierarchical test problem
-    CombHierDRosenbrock(),  # More realistic multi-objective discrete hierarchical test problem
+    CombHierMO(),  # More realistic multi-objective hierarchical test problem
+    CombHierDMO(),  # More realistic multi-objective discrete hierarchical test problem
 ]
 _problems = [
     SimpleTurbofanArch(),  # Realistic hierarchical problem
     MDZDT1Small(),  # Non-hierarchical mixed-discrete test problem
     CombHierBranin(),  # More realistic hierarchical test problem
-    CombHierRosenbrock(),  # More realistic multi-objective hierarchical test problem
-    CombHierDRosenbrock(),  # More realistic multi-objective discrete hierarchical test problem
+    CombHierMO(),  # More realistic multi-objective hierarchical test problem
+    CombHierDMO(),  # More realistic multi-objective discrete hierarchical test problem
 ]
 
 
-class RepairedUniformRandomSampling(RepairedRandomSampling):
+class HierarchicalUniformRandomSampling(HierarchicalRandomSampling):
 
     def __init__(self):
         super().__init__(sobol=False)
 
 
-class RepairedSobolSampling(RepairedRandomSampling):
+class HierarchicalSobolSampling(HierarchicalRandomSampling):
 
     def __init__(self):
         super().__init__(sobol=True)
@@ -79,9 +79,9 @@ _samplers = [
     (False, FloatRandomSampling()),
     (False, MixedVariableSampling()),
     (False, LatinHypercubeSampling()),
-    (True, RepairedUniformRandomSampling()),
-    (True, RepairedSobolSampling()),
-    (True, RepairedLatinHypercubeSampling()),
+    (True, HierarchicalUniformRandomSampling()),
+    (True, HierarchicalSobolSampling()),
+    (True, HierarchicalLatinHypercubeSampling()),
 ]
 
 
@@ -112,7 +112,7 @@ def exp_01_01_dv_opt_occurrence():
         for i, problem in enumerate(_all_problems):
             # Exhaustively sample the problem
             log.info(f'Sampling {problem!r}')
-            x = RepairedExhaustiveSampling(n_cont=1).do(problem, 0).get('X')
+            x = HierarchicalExhaustiveSampling(n_cont=1).do(problem, 0).get('X')
 
             # Count appearances of design variable options
             d_mask = problem.is_discrete_mask
@@ -168,18 +168,18 @@ def exp_01_02_sampling_similarity():
     Investigates which non-exhaustive sampling algorithms best approximate the occurrence rates of exhaustive sampling.
 
     Hypothesis:
-    For non-hierarchical problems it does not matter (probably LHS is better). For hierarchical problems the repaired
-    samplers are closer to the exhaustively-sampled occurrence rates.
+    For non-hierarchical problems it does not matter (probably LHS is better). For hierarchical problems the
+    hierarchical samplers are closer to the exhaustively-sampled occurrence rates.
 
     Conclusions:
     - Correspondence to exhaustively-sampled rates is measured as max(max(rate-rate_exhaustive per x) over all x)
     - Each sampler was tested with 1000 samples
     - For non-hierarchical problems all samplers perform well: correspondence is < 3%
     - For hierarchical problems:
-      - Non-repaired samplers always perform bad: 20% < correspondence < 40%
-      - Repaired samplers perform well: correspondence < 4%
-      - Repaired samplers do this by exhaustively-sampling all discrete design vectors and then randomly sampling these
-      - A safeguard against time/memory usage is implemented; if triggered, they perform as non-repaired samplers
+      - Non-hierarchical samplers always perform bad: 20% < correspondence < 40%
+      - Hierarchical samplers perform well: correspondence < 4%
+      - They do this by exhaustively-sampling all discrete design vectors and then randomly sampling these
+      - A safeguard against time/memory usage is implemented; if triggered, they perform as non-hierarchical samplers
     """
     exp1_folder = set_results_folder(_exp_01_01_folder)
     folder = set_results_folder(_exp_01_02_folder)
@@ -231,12 +231,18 @@ def exp_01_03_doe_accuracy():
     Investigates how accurate surrogate models trained on DOE's sampled by the different samplers are.
 
     Hypothesis:
-    Using repaired samplers for hierarchical problems results in higher accuracy (lower errors). For non-hierarchical
-    problems it does not matter.
+    Using hierarchical samplers for hierarchical problems results in higher accuracy (lower errors).
+    For non-hierarchical problems it does not matter.
+
+    Conclusions:
+    - For non-hierarchical test problems, all samplers have the same performance.
+    - For mixed-discrete hierarchical test problems, hierarchical samplers perform better.
+    - For the discrete hierarchical test problem, hierarchical samplers perform worse.
+    - In terms of CPU time, LHS is much more expensive than the other samplers, at a marginal benefit.
     """
     folder = set_results_folder(_exp_01_03_folder)
     n_train_mult = np.array([1, 2, 5, 10])
-    n_test_factor = .5
+    n_test_factor = 1
     n_repeat = 20
     problems = _problems[1:]
 
@@ -253,7 +259,7 @@ def exp_01_03_doe_accuracy():
                 log.info(f'Sampling {problem!r} ({i+1}/{len(problems)}) '
                          f'with sampler: {sampler!r} ({j+1}/{len(_samplers)})')
 
-                rep = f'{i+1}/{len(problems)}; {j+1}/{len(_samplers)}; '
+                rep = f'prob {i+1}/{len(problems)}; sampler {j+1}/{len(_samplers)}; rep '
                 futures = [executor.submit(_sample_and_train, f'{rep}{k+1}/{n_repeat}', problem, sampler,
                                            is_repaired, n_train_mult, n_test_factor) for k in range(n_repeat)]
                 concurrent.futures.wait(futures)
@@ -311,7 +317,7 @@ def _sample_and_train(rep, problem, sampler, is_repaired, n_train_mult_factors, 
         y_norm = np.mean(y_train)
         y_train /= y_norm
 
-        x_test = _sample_and_repair(problem, RepairedRandomSampling(), max(1, int(n_test_factor*problem.n_var)))
+        x_test = _sample_and_repair(problem, HierarchicalRandomSampling(), max(1, int(n_test_factor * problem.n_var)))
         y_test = problem.evaluate(x_test, return_as_dictionary=True)['F']/y_norm
 
         # Normalize inputs
