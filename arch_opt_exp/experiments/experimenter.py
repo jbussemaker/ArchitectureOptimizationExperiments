@@ -543,6 +543,7 @@ class Experimenter:
     def capture_log(level='INFO'):
         logging.config.dictConfig({
             'version': 1,
+            'disable_existing_loggers': False,
             'formatters': {
                 'console': {
                     'format': '%(levelname)- 8s %(asctime)s %(name)- 18s: %(message)s'
