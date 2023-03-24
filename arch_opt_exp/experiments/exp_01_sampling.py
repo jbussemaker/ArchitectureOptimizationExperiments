@@ -291,7 +291,7 @@ def exp_01_03_doe_accuracy():
 
             for sampler in df.columns.get_level_values(0).unique():
                 name = sampler.replace('Sampling', '')
-                fmt = '--' if 'Repaired' not in name else '-'
+                fmt = '--' if 'Hierarchical' not in name else '-'
                 data = df[sampler]
                 k, mid = data.index.values, data['median'].values
                 l, = plt.plot(k, mid, fmt, linewidth=1, marker='.', label=name)
