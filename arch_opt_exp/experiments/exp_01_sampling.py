@@ -23,6 +23,7 @@ import concurrent.futures
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
 from arch_opt_exp.experiments.runner import *
+from arch_opt_exp.experiments.hierarchical_comb import *
 
 from pymoo.problems.multi.omnitest import OmniTest
 from pymoo.core.mixed import MixedVariableSampling
@@ -54,23 +55,101 @@ _all_problems = [
     MOHierarchicalTestProblem(),  # Hierarchical test problem by Bussemaker (2021)
 
     MDZDT1Small(),  # Non-hierarchical mixed-discrete test problem
-    CombHierBranin(),  # More realistic hierarchical test problem
-    CombHierMO(),  # More realistic multi-objective hierarchical test problem
-    CombHierDMO(),  # More realistic multi-objective discrete hierarchical test problem
+    HierBranin(),  # More realistic hierarchical test problem
+    HierZDT1(),  # More realistic multi-objective hierarchical test problem
+    HierDiscreteZDT1(),  # More realistic multi-objective discrete hierarchical test problem
 ]
 _problems = [
     SimpleTurbofanArch(),  # Realistic hierarchical problem
     MDZDT1Small(),  # Non-hierarchical mixed-discrete test problem
-    CombHierBranin(),  # More realistic hierarchical test problem
-    CombHierMO(),  # More realistic multi-objective hierarchical test problem
-    CombHierDMO(),  # More realistic multi-objective discrete hierarchical test problem
+    HierBranin(),  # More realistic hierarchical test problem
+    HierZDT1(),  # More realistic multi-objective hierarchical test problem
+    HierDiscreteZDT1(),  # More realistic multi-objective discrete hierarchical test problem
 ]
 
 
-class HierarchicalUniformRandomSampling(HierarchicalRandomSampling):
+class HierarchicalActSepRandomSampling(HierarchicalRandomSampling):
 
     def __init__(self):
         super().__init__(sobol=False)
+
+    @classmethod
+    def _sample_discrete_x(cls, n_samples: int, is_cont_mask, x_all: np.ndarray, is_act_all: np.ndarray, sobol=False):
+
+        def _choice(n_choose, n_from, replace=True):
+            return cls._choice(n_choose, n_from, replace=replace, sobol=sobol)
+
+        # Separate by nr of active discrete variables
+        x_all_grouped, is_act_all_grouped, i_x_groups = cls.split_by_discrete_n_active(x_all, is_act_all, is_cont_mask)
+
+        # Uniformly choose from which group to sample
+        i_groups = np.sort(_choice(n_samples, len(x_all_grouped)))
+        x = []
+        is_active = []
+        has_x_cont = np.any(is_cont_mask)
+        i_x_sampled = np.ones((x_all.shape[0],), dtype=bool)
+        for i_group in range(len(x_all_grouped)):
+            i_x_group = np.where(i_groups == i_group)[0]
+            if len(i_x_group) == 0:
+                continue
+
+            # Randomly select values within group
+            x_group = x_all_grouped[i_group]
+            if len(i_x_group) < x_group.shape[0]:
+                i_x = _choice(len(i_x_group), x_group.shape[0], replace=False)
+
+            # If there are more samples requested than points available, only repeat points if there are continuous vars
+            elif has_x_cont:
+                i_x_add = _choice(len(i_x_group)-x_group.shape[0], x_group.shape[0])
+                i_x = np.sort(np.concatenate([np.arange(x_group.shape[0]), i_x_add]))
+            else:
+                i_x = np.arange(x_group.shape[0])
+
+            x.append(x_group[i_x, :])
+            is_active.append(is_act_all_grouped[i_group][i_x, :])
+            i_x_sampled[i_x_groups[i_group][i_x]] = True
+
+        x = np.row_stack(x)
+        is_active = np.row_stack(is_active)
+
+        # Uniformly add discrete vectors if there are not enough (can happen if some groups are very small and there
+        # are no continuous dimensions)
+        if x.shape[0] < n_samples:
+            n_add = n_samples-x.shape[0]
+            x_available = x_all[~i_x_sampled, :]
+            is_act_available = is_act_all[~i_x_sampled, :]
+
+            if n_add < x_available.shape[0]:
+                i_x = _choice(n_add, x_available.shape[0], replace=False)
+            else:
+                i_x = np.arange(x_available.shape[0])
+
+            x = np.row_stack([x, x_available[i_x, :]])
+            is_active = np.row_stack([is_active, is_act_available[i_x, :]])
+
+        return x, is_active
+
+    @staticmethod
+    def split_by_discrete_n_active(x_discrete: np.ndarray, is_act_discrete: np.ndarray, is_cont_mask) \
+            -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
+
+        # Calculate nr of active variables for each design vector
+        is_discrete_mask = ~is_cont_mask
+        n_active = np.sum(is_act_discrete[:, is_discrete_mask], axis=1)
+
+        # Sort by nr active
+        i_sorted = np.argsort(n_active)
+        x_discrete = x_discrete[i_sorted, :]
+        is_act_discrete = is_act_discrete[i_sorted, :]
+
+        # Split by nr active
+        # https://stackoverflow.com/a/43094244
+        i_split = np.unique(n_active[i_sorted], return_index=True)[1][1:]
+        x_all_grouped = np.split(x_discrete, i_split, axis=0)
+        is_act_all_grouped = np.split(is_act_discrete, i_split, axis=0)
+        i_x_groups = np.split(np.arange(x_discrete.shape[0]), i_split)
+
+        return x_all_grouped, is_act_all_grouped, i_x_groups
 
 
 class HierarchicalSobolSampling(HierarchicalRandomSampling):
@@ -85,31 +164,13 @@ class HierarchicalDirectRandomSampling(HierarchicalRandomSampling):
     def __init__(self):
         super().__init__(sobol=False)
 
-    @classmethod
-    def _sample_discrete_x(cls, n_samples: int, is_cont_mask, x_all: np.ndarray, is_act_all: np.ndarray, sobol=False):
-        has_x_cont = np.any(is_cont_mask)
-
-        x = x_all
-        if n_samples < x.shape[0]:
-            i_x = cls._choice(n_samples, x.shape[0], replace=False, sobol=sobol)
-        elif has_x_cont:
-            # If there are more samples requested than points available, only repeat points if there are continuous vars
-            i_x_add = cls._choice(n_samples-x.shape[0], x.shape[0], sobol=sobol)
-            i_x = np.sort(np.concatenate([np.arange(x.shape[0]), i_x_add]))
-        else:
-            i_x = np.arange(x.shape[0])
-
-        x = x[i_x, :]
-        is_active = is_act_all[i_x, :]
-        return x, is_active
-
 
 _samplers = [
     (False, FloatRandomSampling()),
     (False, MixedVariableSampling()),
     (False, LatinHypercubeSampling()),
+    (True, HierarchicalActSepRandomSampling()),
     (True, HierarchicalDirectRandomSampling()),
-    (True, HierarchicalUniformRandomSampling()),
     (True, HierarchicalSobolSampling()),
     (True, HierarchicalLatinHypercubeSampling()),
 ]
@@ -285,9 +346,9 @@ def exp_01_03_doe_accuracy():
     n_repeat = 100
     problems = [
         MDZDT1Small(),  # Non-hierarchical mixed-discrete test problem
-        CombHierBranin(),  # More realistic hierarchical test problem
-        CombHierMO(),  # More realistic multi-objective hierarchical test problem
-        CombHierDMO(),  # More realistic multi-objective discrete hierarchical test problem
+        HierBranin(),  # More realistic hierarchical test problem
+        HierZDT1(),  # More realistic multi-objective hierarchical test problem
+        HierDiscreteZDT1(),  # More realistic multi-objective discrete hierarchical test problem
 
         HierarchicalGoldstein(),  # Hierarchical test problem by Pelamatti
         HierarchicalRosenbrock(),  # Hierarchical test problem by Pelamatti
@@ -455,7 +516,7 @@ def exp_01_04_activeness_diversity_ratio():
     samplers = [
         (False, FloatRandomSampling()),
         (True, HierarchicalDirectRandomSampling()),
-        (True, HierarchicalUniformRandomSampling()),
+        (True, HierarchicalActSepRandomSampling()),
     ]
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for set_name, problem_set in problems:
@@ -534,7 +595,7 @@ def get_activeness_diversity_ratio(problem: ArchOptProblemBase):
         return 1.
 
     is_cont_mask = HierarchicalExhaustiveSampling.get_is_cont_mask(problem)
-    x_groups, _, _ = HierarchicalRandomSampling.split_by_discrete_n_active(
+    x_groups, _, _ = HierarchicalActSepRandomSampling.split_by_discrete_n_active(
         x_discrete, is_act_discrete, is_cont_mask)
 
     group_sizes = [len(group) for group in x_groups]
@@ -610,7 +671,7 @@ def exp_01_05_performance_influence():
     samplers = [
         (False, FloatRandomSampling()),
         (True, HierarchicalDirectRandomSampling()),
-        (True, HierarchicalUniformRandomSampling()),
+        (True, HierarchicalActSepRandomSampling()),
     ]
 
     problems = [
@@ -752,7 +813,7 @@ def exp_01_05_performance_influence():
             df['problem', 'ir_train_dir'] = [get_train_cont_act_ratio(problem, lambda: _sample_and_repair(
                 problem, HierarchicalDirectRandomSampling(), n_train)) for problem in problem_set]
             df['problem', 'ir_train_uni'] = [get_train_cont_act_ratio(problem, lambda: _sample_and_repair(
-                problem, HierarchicalUniformRandomSampling(), n_train)) for problem in problem_set]
+                problem, HierarchicalActSepRandomSampling(), n_train)) for problem in problem_set]
             df['problem', 'poa_ratio'] = [get_partial_option_activeness_ratio(problem, problem._x_sel.shape[1])
                                           for problem in problem_set]
 
