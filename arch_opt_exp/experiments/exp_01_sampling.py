@@ -203,43 +203,11 @@ def exp_01_01_dv_opt_occurrence():
         for i, problem in enumerate(_all_problems):
             # Exhaustively sample the problem
             log.info(f'Sampling {problem!r}')
-            x = HierarchicalExhaustiveSampling(n_cont=1).do(problem, 0).get('X')
 
             # Count appearances of design variable options
-            d_mask = problem.is_discrete_mask
-            x_rel = _count_appearance(x[:, d_mask], problem.xl[d_mask], problem.xu[d_mask])
-            index = [f'opt {i}' for i in range(x_rel.shape[0])]
-
-            # Calculate spread of option appearance
-            x_mean = np.nanmean(x_rel, axis=0)
-            x_spread = np.sqrt(np.nanmean((x_rel-x_mean)**2, axis=0))
-            index.append('rmse')
-
-            x_range = np.nanmax(x_rel, axis=0)-np.nanmin(x_rel, axis=0)
-            index.append('range')
-
-            x_rel = np.row_stack([x_rel, x_spread, x_range])
-
-            cols = [f'x{ix}' for ix in range(problem.n_var) if d_mask[ix]]
-            df = pd.DataFrame(index=index, data=x_rel, columns=cols)
+            df = problem.get_discrete_rates(force=True).iloc[:, problem.is_discrete_mask]
             df.to_excel(writer, sheet_name=repr(problem))
             df.to_pickle(f'{folder}/df_{secure_filename(repr(problem))}.pkl')
-
-
-def _count_appearance(x, xl, xu):
-    # Round and reduce bin sizes in order to count continuous variables
-    x -= np.min(x, axis=0)
-    for i in range(x.shape[1]):
-        if xu[i]-xl[i] > 6:
-            x[:, i] = x[:, i]*(6/(xu[i]-xl[i]))
-    x = np.round(x)
-
-    n_opt_max = int(np.max(x)+1)
-    x_count = np.zeros((n_opt_max, x.shape[1]))*np.nan
-    for ix in range(x.shape[1]):
-        values, counts = np.unique(x[:, ix], return_counts=True)
-        x_count[:len(counts), ix] = counts
-    return x_count/x.shape[0]
 
 
 def _sample_and_repair(problem, sampler, n_samples, is_repaired=True):
@@ -272,6 +240,7 @@ def exp_01_02_sampling_similarity():
       - They do this by exhaustively-sampling all discrete design vectors and then randomly sampling these
       - A safeguard against time/memory usage is implemented; if triggered, they perform as non-hierarchical samplers
     """
+    raise RuntimeError('Experiment code is broken --> update to use problem.get_discrete_rates!')
     exp1_folder = set_results_folder(_exp_01_01_folder)
     folder = set_results_folder(_exp_01_02_folder)
     n_samples = 1000
@@ -864,8 +833,8 @@ def exp_01_05_performance_influence():
 
 
 if __name__ == '__main__':
-    # exp_01_01_dv_opt_occurrence()
+    exp_01_01_dv_opt_occurrence()
     # exp_01_02_sampling_similarity()
-    exp_01_03_doe_accuracy()
+    # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
