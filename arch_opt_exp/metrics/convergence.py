@@ -51,7 +51,7 @@ class HVMetric(Metric):
         return ['hv']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
-        f = self._get_pop_f(algorithm)
+        f = self._get_pop_f(algorithm, valid_only=True)
 
         if self.nadir_point is None or self.ideal_point is None:
             self.nadir_point = np.max(f, axis=0)

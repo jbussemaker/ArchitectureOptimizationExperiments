@@ -25,16 +25,10 @@ from arch_opt_exp.metrics.performance import *
 __all__ = ['get_exp_metrics']
 
 
-def get_exp_metrics(problem: Problem) -> List[Metric]:
+def get_exp_metrics(problem: Problem, including_convergence=True) -> List[Metric]:
     pf = problem.pareto_front()
 
-    return [
-        # Algorithm performance
-        DeltaHVMetric(pf),
-        IGDMetric(pf),
-        SpreadMetric(),
-        MaxConstraintViolationMetric(),
-
+    convergence = [
         # Convergence detection
         MDRTermination().metric,
         MGBMTermination().metric,
@@ -45,3 +39,11 @@ def get_exp_metrics(problem: Problem) -> List[Metric]:
         MCDTermination().metric,
         SPITermination().metric,
     ]
+
+    return [
+        # Algorithm performance
+        DeltaHVMetric(pf),
+        IGDMetric(pf),
+        SpreadMetric(),
+        MaxConstraintViolationMetric(),
+    ]+(convergence if including_convergence else [])

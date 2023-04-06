@@ -19,6 +19,7 @@ import numpy as np
 from typing import *
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
+from sb_arch_opt.problem import ArchOptProblemBase
 
 from pymoo.core.algorithm import Algorithm
 from pymoo.core.indicator import Indicator
@@ -34,6 +35,7 @@ class Metric:
     def __init__(self):
         self.values = {name: [] for name in self.value_names}
         self.values_std = None  # Used in ExperimenterResults
+        self.values_agg = None
 
     def calculate_step(self, algorithm: Algorithm):
         values = self._calculate_values(algorithm)
@@ -52,12 +54,17 @@ class Metric:
             return {}
         return {key: np.array(value) for key, value in self.values_std.items()}
 
-    def plot(self, std_sigma=1., show=True, **kwargs):
-        self.plot_multiple([self], std_sigma=std_sigma, show=show, **kwargs)
+    def results_agg(self, agg_key) -> Dict[str, np.ndarray]:
+        if self.values_agg is None:
+            return {}
+        return {key: np.array(value[agg_key]) for key, value in self.values_agg.items()}
+
+    def plot(self, show=True, **kwargs):
+        self.plot_multiple([self], show=show, **kwargs)
 
     @staticmethod
     def plot_multiple(metrics: List['Metric'], titles: List[str] = None, colors: List[str] = None,
-                      plot_value_names: List[str] = None, std_sigma=1., n_eval: List[List[float]] = None,
+                      plot_value_names: List[str] = None, n_eval: List[List[float]] = None,
                       save_filename=None, show=True):
         """Function for plotting multiple metrics of the same kind, but coming from different optimization runs."""
 
@@ -79,9 +86,11 @@ class Metric:
             plt.figure(figsize=(16, 12))
 
             x_max = None
-            err_title = ''
             for i, metric in enumerate(metrics):
-                y = np.atleast_1d(metric.values[value_name])
+                if metric.values_agg is not None:
+                    y = np.atleast_1d(metric.values_agg[value_name]['median'])
+                else:
+                    y = np.atleast_1d(metric.values[value_name])
 
                 if n_eval is not None:
                     x = np.atleast_1d(n_eval[i])
@@ -90,7 +99,8 @@ class Metric:
                 else:
                     x = list(range(len(y)))
 
-                y_err = np.array(metric.values_std[value_name]) if metric.values_std is not None else None
+                y_q25 = np.array(metric.values_agg[value_name]['q25']) if metric.values_agg is not None else None
+                y_q75 = np.array(metric.values_agg[value_name]['q75']) if metric.values_agg is not None else None
 
                 kwargs = {'linewidth': 1}
                 if len(metrics) == 1:
@@ -109,20 +119,15 @@ class Metric:
                 color = l.get_color()
                 kwargs['color'] = color
 
-                if y_err is not None and std_sigma != 0.:
-                    if 'label' in kwargs:
-                        del kwargs['label']
-
-                    err_title = ' (std $\\sigma$ = %.2f)' % std_sigma
-                    plt.errorbar(x, y+y_err*std_sigma, fmt='--', **kwargs)
-                    plt.errorbar(x, y-y_err*std_sigma, fmt='--', **kwargs)
+                if y_q25 is not None:
+                    plt.fill_between(x, y_q25, y_q75, alpha=.05, color=kwargs['color'], linewidth=0)
 
                 metric.plot_fig_callback(x, value_name, color=None if len(metrics) == 1 else color)
 
                 if x_max is None or x[-1] > x_max:
                     x_max = x[-1]
 
-            plt.title('Metric: %s.%s%s' % (metrics[0].name, value_name, err_title))
+            plt.title('Metric: %s.%s' % (metrics[0].name, value_name))
             plt.xlim([0, x_max])
             plt.xlabel('Iterations' if n_eval is None else 'Function evaluations')
             plt.ylabel(value_name)
@@ -133,7 +138,7 @@ class Metric:
             if save_filename is not None:
                 save_value_filename = '%s_%s' % (save_filename, secure_filename(value_name))
                 plt.savefig(save_value_filename+'.png')
-                plt.savefig(save_value_filename+'.svg')
+                # plt.savefig(save_value_filename+'.svg')
 
         if show:
             plt.show()
@@ -176,31 +181,34 @@ class Metric:
         raise NotImplementedError
 
     @classmethod
-    def _get_pop_x(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
+    def _get_pop_x(cls, algorithm: Algorithm, feasible_only=False, valid_only=False) -> np.ndarray:
         """Design vectors of the population: (n_pop, n_x)"""
-        return cls._get_pop(algorithm, feasible_only=feasible_only).get('X')
+        return cls._get_pop(algorithm, feasible_only=feasible_only, valid_only=valid_only).get('X')
 
     @classmethod
-    def _get_pop_f(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
+    def _get_pop_f(cls, algorithm: Algorithm, feasible_only=False, valid_only=False) -> np.ndarray:
         """Objective values of the population: (n_pop, n_f)"""
-        return cls._get_pop(algorithm, feasible_only=feasible_only).get('F')
+        return cls._get_pop(algorithm, feasible_only=feasible_only, valid_only=valid_only).get('F')
 
     @classmethod
-    def _get_pop_g(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
+    def _get_pop_g(cls, algorithm: Algorithm, feasible_only=False, valid_only=False) -> np.ndarray:
         """Constraint values of the population: (n_pop, n_g)"""
-        return cls._get_pop(algorithm, feasible_only=feasible_only).get('G')
+        return cls._get_pop(algorithm, feasible_only=feasible_only, valid_only=valid_only).get('G')
 
     @classmethod
-    def _get_pop_cv(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
+    def _get_pop_cv(cls, algorithm: Algorithm, feasible_only=False, valid_only=False) -> np.ndarray:
         """Constraint violation values of the population: (n_pop, n_g)"""
-        return cls._get_pop(algorithm, feasible_only=feasible_only).get('CV')
+        return cls._get_pop(algorithm, feasible_only=feasible_only, valid_only=valid_only).get('CV')
 
     @staticmethod
-    def _get_pop(algorithm: Algorithm, feasible_only=False):
+    def _get_pop(algorithm: Algorithm, feasible_only=False, valid_only=False):
         pop = algorithm.pop
+        if valid_only or feasible_only:
+            is_failed = ArchOptProblemBase.get_failed_points(pop)
+            pop = pop[~is_failed]
         if feasible_only:
             i_feasible = np.where(pop.get('feasible'))[0]
-            return pop[i_feasible]
+            pop = pop[i_feasible]
         return pop
 
     @classmethod

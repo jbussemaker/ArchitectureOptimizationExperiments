@@ -24,16 +24,16 @@ Nomenclature:
 - `f`: objective values, assumed to be minimized (`n` x `nf`)
 - `g`: constraint values of explicit constraints, assumed satisfied if `g <= 0` (`n` x `ng`)
 - failed point: x where the evaluation failed and therefore the hidden constraint is violated
-- `x_ok`: non-failed subset of x (`n_ok` x `nx`); with corresponding `f_ok` and `g_ok`
+- `x_valid`: valid (non-failed) subset of x (`n_valid` x `nx`); with corresponding `f_valid` and `g_valid`
 - `x_failed`: subset of x where evaluation failed (`n_failed` x `nx`)
 
 Known approaches for dealing with hidden constraints (for global optimization):
 - Rejection [Mueller2019]: remove (reject) failed points from the population after evaluation
 - Extreme barrier [Mueller2019]: replace `f` and `g` of failed points with `inf` (n/a for SBO)
-- Neighbour values [Huyer2008]: replace `f` and `g` of failed points with non-failed values of neighbour points
+- Neighbour values [Huyer2008]: replace `f` and `g` of failed points with valid values of neighbour points
 - Trained replacement [Forrester2006]: replace `f` and `g` of failed points with upper bound (mean + variance) of a GP
-  trained on only the non-failed points
-- Prediction [Lee2011]: split in `x_ok` and `x_failed`, use `x_failed` to train some model to predict regions with
+  trained on only the valid points
+- Prediction [Lee2011]: split in `x_valid` and `x_failed`, use `x_failed` to train some model to predict regions with
   hidden constraints (at some confidence level), use some evasion strategy to stay away from predicted hidden
   constraint violations
 
@@ -73,17 +73,17 @@ References:
 Hidden constraint strategies can be broken down as follows:
 1. Rejection
 2. Value replacement
-   1. *Global worst*: replace failed outputs by the worst values in the non-failed dataset
-   2. *Local worst*: replace failed outputs by values of the closest non-failed points
-   3. *Neighborhood worst*: replace failed outputs by the worst values of the closest `n` non-failed points
-   4. *Neighborhood mean*: replace failed outputs by the mean of the values of the closest `n` non-failed points
-   5. *Predicted worst*: replace failed outputs by the (mean + var) of a GP trained on the non-failed dataset
+   1. *Global worst*: replace failed outputs by the worst values in the valid dataset
+   2. *Local worst*: replace failed outputs by values of the closest valid points
+   3. *Neighborhood worst*: replace failed outputs by the worst values of the closest `n` valid points
+   4. *Neighborhood mean*: replace failed outputs by the mean of the values of the closest `n` valid points
+   5. *Predicted worst*: replace failed outputs by the (mean + var) of a GP trained on the valid dataset
 3. Prediction
-   1. Prediction model choice
+   1. Prediction model choice (see also: https://scikit-learn.org/stable/tutorial/machine_learning_map/index.html)
       1. Random forest classifier
       2. k-nearest neighbors classifier
       3. Gaussian process classifier
-      4. Linear support vector machine
+      4. Least squares support vector machine
       5. RBF support vector machine
       6. Linear RBF regressor
       7. Gaussian process regressor

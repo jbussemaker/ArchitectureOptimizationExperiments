@@ -59,11 +59,11 @@ def capture_log(level='INFO'):
     Experimenter.capture_log(level)
 
 
-def run(results_key, problems, algorithms, algo_names, plot_names=None, n_repeat=8, n_eval_max=300, do_run=True,
-        return_exp=False, do_plot=True):
+def run(results_key, problems, algorithms, algo_names, doe=None, plot_names=None, problem_name=None, n_repeat=8,
+        n_eval_max=300, do_run=True, return_exp=False, do_plot=True, additional_plot=None, metrics=None):
     set_results_folder(results_key)
-    exp = get_experimenters(problems, algorithms, n_eval_max=n_eval_max, algorithm_names=algo_names,
-                            plot_names=plot_names)
+    exp = get_experimenters(problems, algorithms, doe=doe, n_eval_max=n_eval_max, algorithm_names=algo_names,
+                            plot_names=plot_names, problem_name=problem_name, metrics=metrics)
     if return_exp:
         return exp
 
@@ -81,6 +81,8 @@ def run(results_key, problems, algorithms, algo_names, plot_names=None, n_repeat
             # 'training': ['n_train', 'n_samples', 'time_train'],
             # 'infill': ['time_infill'],
         }
+        if additional_plot is not None:
+            plot_metric_values.update(additional_plot)
         plot_effectiveness_results(exp, plot_metric_values=plot_metric_values, save=True, show=False)
 
 
@@ -104,9 +106,9 @@ def reset_results():
 
 
 def get_experimenters(problems: Union[List[Problem], Problem], algorithms: Union[List[Algorithm], Algorithm],
-                      metrics: List[Metric] = None, n_eval_max: Union[int, List[int]] = 300,
+                      doe: dict = None, metrics: List[Metric] = None, n_eval_max: Union[int, List[int]] = 300,
                       algorithm_names: Union[List[str], str] = None,
-                      plot_names: List[str] = None) -> List[Experimenter]:
+                      plot_names: List[str] = None, problem_name=None) -> List[Experimenter]:
     """Result Experimenter instances corresponding to the algorithms."""
     if isinstance(problems, Problem):
         if not isinstance(algorithms, list):
@@ -119,8 +121,8 @@ def get_experimenters(problems: Union[List[Problem], Problem], algorithms: Union
         if not isinstance(n_eval_max, list):
             n_eval_max = [n_eval_max]*len(algorithms)
 
-        return [Experimenter(problems, algorithm, n_eval_max=n_eval_max[i], metrics=metrics,
-                             algorithm_name=algorithm_names[i], plot_name=plot_names[i])
+        return [Experimenter(problems, algorithm, n_eval_max=n_eval_max[i], doe=doe, metrics=metrics,
+                             algorithm_name=algorithm_names[i], plot_name=plot_names[i], problem_name=problem_name)
                 for i, algorithm in enumerate(algorithms)]
 
     elif isinstance(algorithms, Algorithm):
@@ -137,8 +139,8 @@ def get_experimenters(problems: Union[List[Problem], Problem], algorithms: Union
         if not isinstance(n_eval_max, list):
             n_eval_max = [n_eval_max]*len(problems)
 
-        return [Experimenter(problem, algorithms[i], n_eval_max=n_eval_max[i], metrics=metrics,
-                             algorithm_name=algorithm_names[i], plot_name=plot_names[i])
+        return [Experimenter(problem, algorithms[i], n_eval_max=n_eval_max[i], doe=doe, metrics=metrics,
+                             algorithm_name=algorithm_names[i], plot_name=plot_names[i], problem_name=problem_name)
                 for i, problem in enumerate(problems)]
 
 
@@ -162,25 +164,32 @@ def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_va
                                save=False, show=True):
     """Plot metrics results generated using run_effectiveness_multi."""
     Experimenter.capture_log()
-    results = [exp.get_aggregate_effectiveness_results() for exp in experimenters]
+    results = []
+    for exp in experimenters:
+        agg_res = exp.get_aggregate_effectiveness_results()
+        agg_res.save_excel(exp.get_problem_algo_results_path('results.xlsx'))
+        results.append(agg_res)
+
     metrics = sorted(results[0].metrics.values(), key=lambda m: m.name)
     if plot_metric_values is None:
         plot_metric_values = {met.name: None for met in metrics}
 
+    base_plot_path = f'{experimenters[0].results_folder}/{secure_filename(experimenters[0].problem_name)}'
     for ii, metric in enumerate(metrics):
         if metric.name not in plot_metric_values:
             continue
         log.info('Plotting metric: %s -> %r' % (metric.name, plot_metric_values.get(metric.name)))
-        save_filename = os.path.join(experimenters[0].results_folder, secure_filename('results_%s' % metric.name))
 
+        save_filename = f'{base_plot_path}/{secure_filename("results_"+ metric.name)}'
         ExperimenterResult.plot_compare_metrics(
             results, metric.name, plot_value_names=plot_metric_values.get(metric.name), plot_evaluations=True,
             save_filename=save_filename, show=False)
 
-        ExperimenterResult.plot_compare_metrics(
-            results, metric.name, plot_value_names=plot_metric_values.get(metric.name), plot_evaluations=True,
-            save_filename=os.path.join(experimenters[0].results_folder, secure_filename('ns_results_%s' % metric.name)),
-            std_sigma=0., show=False)
+        # ExperimenterResult.plot_compare_metrics(
+        #     results, metric.name, plot_value_names=plot_metric_values.get(metric.name), plot_evaluations=True,
+        #     save_filename=os.path.join(experimenters[0].results_folder,
+        #                                secure_filename('ns_results_%s' % metric.name)),
+        #     std_sigma=0., show=False)
 
     # for exp in experimenters:
     #     results = exp.get_effectiveness_results()

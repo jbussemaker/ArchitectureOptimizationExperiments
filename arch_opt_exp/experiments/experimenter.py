@@ -36,6 +36,7 @@ from pymoo.optimize import minimize
 from pymoo.core.result import Result
 from pymoo.core.problem import Problem
 from pymoo.core.algorithm import Algorithm
+from pymoo.core.initialization import Initialization
 from pymoo.termination.max_eval import MaximumFunctionCallTermination
 
 __all__ = ['Experimenter', 'EffectivenessTerminator', 'ExperimenterResult']
@@ -72,11 +73,14 @@ class ExperimenterResult(Result):
 
         self.n_steps = None
         self.n_steps_std = None
+        self.n_steps_agg = None
 
         self.n_eval = None
         self.n_eval_std = None
+        self.n_eval_agg = None
 
         self.exec_time_std = None
+        self.exec_time_agg = None
 
     @classmethod
     def from_result(cls, result: Result) -> 'ExperimenterResult':
@@ -98,24 +102,28 @@ class ExperimenterResult(Result):
         result = cls()
 
         result.plot_name = results[0].plot_name
-        result.exec_time, result.exec_time_std = cls._get_mean_std(results, lambda r: r.exec_time, align_end=align_end)
-        result.n_steps, result.n_steps_std = cls._get_mean_std(results, lambda r: r.n_steps, align_end=align_end)
-        result.n_eval, result.n_eval_std = cls._get_mean_std(results, lambda r: r.n_eval, align_end=align_end)
+        result.exec_time, result.exec_time_std, result.exec_time_agg = \
+            cls._aggregate_values(results, lambda r: r.exec_time, align_end=align_end)
+        result.n_steps, result.n_steps_std, result.n_steps_agg = \
+            cls._aggregate_values(results, lambda r: r.n_steps, align_end=align_end)
+        result.n_eval, result.n_eval_std, result.n_eval_agg = \
+            cls._aggregate_values(results, lambda r: r.n_eval, align_end=align_end)
 
         for name, metric in results[0].metrics.items():
             result.metrics[name] = metric = copy.deepcopy(metric)
 
-            metric.values, metric.values_std = {}, {}
+            metric.values, metric.values_std, metric.values_agg = {}, {}, {}
             for key in metric.value_names:
-                metric.values[key], metric.values_std[key] = \
-                    cls._get_mean_std(results, lambda r: r.metrics[name].values[key], align_end=align_end)
+                metric.values[key], metric.values_std[key], metric.values_agg[key] = \
+                    cls._aggregate_values(results, lambda r: r.metrics[name].values[key], align_end=align_end)
 
         return result
 
     @staticmethod
-    def _get_mean_std(results: List['ExperimenterResult'],
-                      getter: Callable[['ExperimenterResult'], Optional[np.ndarray]], align_end=False) -> Tuple[np.ndarray, np.ndarray]:
-        """Get mean and standard deviation for several repeated experimenter results."""
+    def _aggregate_values(results: List['ExperimenterResult'],
+                          getter: Callable[['ExperimenterResult'], Optional[np.ndarray]], align_end=False) \
+            -> Tuple[np.ndarray, np.ndarray, Dict[str, np.ndarray]]:
+        """Get aggregated values for several repeated experimenter results: mean, std, median, q25, q75, min, max"""
 
         results_data = None
         for result in results:
@@ -151,21 +159,25 @@ class ExperimenterResult(Result):
                 results_data = np.concatenate([results_data, res_data], axis=2)
 
         if results_data is None:
-            return None, None
+            return None, None, None
 
-        mean_data = np.nanmean(results_data, axis=2)
-        if mean_data.shape[0] == 1:
-            mean_data = mean_data[0, :]
-        # if len(mean_data) == 1:
-        #     mean_data = mean_data[0]
+        def _agg(func):
+            agg_data_ = func(results_data, axis=2)
+            if agg_data_.shape[0] == 1:
+                agg_data_ = agg_data_[0, :]
+            return agg_data_
 
-        std_data = np.nanstd(results_data, axis=2)
-        if std_data.shape[0] == 1:
-            std_data = std_data[0, :]
-        # if len(std_data) == 1:
-        #     std_data = std_data[0]
+        mean_data = _agg(np.nanmean)
+        std_data = _agg(np.nanstd)
+        agg_data = {
+            'mean': mean_data,
+            'std': std_data,
+            'median': _agg(np.nanmedian),
+            'q25': _agg(lambda x, **kw: np.nanquantile(x, .25, **kw)),
+            'q75': _agg(lambda x, **kw: np.nanquantile(x, .75, **kw)),
+        }
 
-        return mean_data, std_data
+        return mean_data, std_data, agg_data
 
     @staticmethod
     def plot_compare_metrics(results: List['ExperimenterResult'], metric_name: str, plot_evaluations=False, **kwargs):
@@ -243,15 +255,17 @@ class ExperimenterResult(Result):
     def export_pandas(self) -> pd.DataFrame:
         has_std = self.n_eval_std is not None
         data = {
-            'n_eval': self.n_eval,
+            'n_eval': self.n_eval_agg['median'],
         }
         if has_std:
-            data['n_eval_std'] = self.n_eval_std
+            data['n_eval_q25'] = self.n_eval_agg['q25']
+            data['n_eval_q75'] = self.n_eval_agg['q75']
 
         for name, metric in self.metrics.items():
-            data.update({'%s_%s' % (name, key): value for key, value in metric.results().items()})
+            data.update({'%s_%s' % (name, key): value for key, value in metric.results_agg('median').items()})
             if has_std:
-                data.update({'%s_%s_std' % (name, key): value for key, value in metric.results_std().items()})
+                data.update({'%s_%s_q25' % (name, key): value for key, value in metric.results_agg('q25').items()})
+                data.update({'%s_%s_q75' % (name, key): value for key, value in metric.results_agg('q75').items()})
 
         return pd.DataFrame(index=np.array(range(len(self.n_eval)), dtype=int)+1, data=data)
 
@@ -260,6 +274,10 @@ class ExperimenterResult(Result):
         with open(path, 'w') as fp:
             fp.write(res)
 
+    def save_excel(self, path):
+        with pd.ExcelWriter(path) as writer:
+            self.export_pandas().to_excel(writer)
+
 
 class Experimenter:
     """Main class that handles the experiment for a given problem and algorithm."""
@@ -267,12 +285,15 @@ class Experimenter:
     results_folder: Optional[str] = None
 
     def __init__(self, problem: Problem, algorithm: Algorithm, n_eval_max: int, algorithm_name: str = None,
-                 plot_name: str = None, metrics: List[Metric] = None, log_level='INFO', results_folder: str = None):
+                 plot_name: str = None, problem_name: str = None, metrics: List[Metric] = None, doe=None,
+                 log_level='INFO', results_folder: str = None):
         self.problem = problem
         self.algorithm = algorithm
         self.algorithm_name = algorithm_name or algorithm.__class__.__name__
         self.plot_name = plot_name
+        self.problem_name = problem_name or problem.name()
         self.n_eval_max = n_eval_max
+        self.doe = doe
 
         if metrics is None:
             from arch_opt_exp.experiments.metrics import get_exp_metrics
@@ -301,13 +322,18 @@ class Experimenter:
 
         termination = EffectivenessTerminator(n_eval_max=self.n_eval_max, metrics=self.metrics)
 
+        algorithm = copy.deepcopy(self.algorithm)
+        if self.doe is not None and repeat_idx in self.doe:
+            doe_pop = self.doe[repeat_idx]
+            algorithm.initialization = Initialization(doe_pop)
+
         # Run the algorithm
         log.info('Running effectiveness experiment:  %s / %s / %d' %
-                 (self.problem.name(), self.algorithm_name, repeat_idx))
+                 (self.problem_name, self.algorithm_name, repeat_idx))
         result = minimize(
-            self.problem, self.algorithm,
+            self.problem, algorithm,
             termination=termination,
-            copy_algorithm=True, copy_termination=True,
+            copy_algorithm=False, copy_termination=True,
             seed=seed,
             save_history=True,
         )
@@ -329,7 +355,7 @@ class Experimenter:
             fp.write(bz2.compress(pickle.dumps(result)))
 
         # log.info('Effectiveness experiment finished: %s / %s / %d' %
-        #          (self.problem.name(), self.algorithm_name, repeat_idx))
+        #          (self.problem_name, self.algorithm_name, repeat_idx))
         return result
 
     def get_effectiveness_result(self, repeat_idx: int) -> Optional[ExperimenterResult]:
@@ -361,7 +387,7 @@ class Experimenter:
             with open(agg_results_path, 'rb') as fp:
                 return pickle.load(fp)
 
-        log.info('Aggregating effectiveness results: %s / %s' % (self.problem.name(), self.algorithm_name))
+        log.info('Aggregating effectiveness results: %s / %s' % (self.problem_name, self.algorithm_name))
         results = self.get_effectiveness_results()
 
         res = ExperimenterResult.aggregate_results(results, align_end=align_end)
@@ -408,7 +434,7 @@ class Experimenter:
 
         # Simulate algorithm execution using provided termination metric
         log.info('Running efficiency experiment: %s / %s / %s / %d' %
-                 (self.problem.name(), self.algorithm_name, metric_termination.metric_name, repeat_idx))
+                 (self.problem_name, self.algorithm_name, metric_termination.metric_name, repeat_idx))
         history = []
         result = None
         algorithm: Algorithm
@@ -448,7 +474,7 @@ class Experimenter:
             fp.write(bz2.compress(pickle.dumps(result)))
 
         log.info('Efficiency experiment finished (converged: %r): %s / %s / %d' %
-                 (result.metric_converged, self.problem.name(), self.algorithm_name, repeat_idx))
+                 (result.metric_converged, self.problem_name, self.algorithm_name, repeat_idx))
         return result
 
     def get_efficiency_result(self, metric_termination: MetricTermination, repeat_idx: int) \
@@ -468,7 +494,7 @@ class Experimenter:
                 return pickle.load(fp)
 
         log.info('Aggregating efficiency results: %s / %s / %s' %
-                 (self.problem.name(), self.algorithm_name, metric_termination.metric_name))
+                 (self.problem_name, self.algorithm_name, metric_termination.metric_name))
         results = self.get_list_efficiency_results(metric_termination)
 
         res = ExperimenterResult.aggregate_results(results)
@@ -517,7 +543,7 @@ class Experimenter:
         Experimenter.results_folder = orig_res_folder
 
     def get_problem_algo_results_path(self, sub_path: str = None) -> str:
-        problem_algo_path = '%s/%s' % (secure_filename(self.problem.name()), secure_filename(self.algorithm_name))
+        problem_algo_path = '%s/%s' % (secure_filename(self.problem_name), secure_filename(self.algorithm_name))
         if sub_path is not None:
             problem_algo_path += '/'+sub_path
         return self._get_results_path(problem_algo_path)
@@ -567,3 +593,6 @@ class Experimenter:
                 },
             },
         })
+
+        from sb_arch_opt.util import capture_log
+        capture_log(level=level)

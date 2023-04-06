@@ -3,4 +3,5 @@ pandas
 pytest
 werkzeug
 matplotlib
+scikit-learn~=1.2
 git+https://github.com/jbussemaker/SBArchOpt.git#egg=sb-arch-opt

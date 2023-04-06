@@ -49,7 +49,7 @@ class SpreadMetric(Metric):
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         if algorithm.problem.n_obj != 2:
-            raise ValueError('Spread metric is only available for problems with 2 objectives!')
+            return [np.nan]
 
         # Get objective values of the current Pareto front (n_opt, n_obj), and sort along the first objective
         f = self._get_opt_f(algorithm)
@@ -99,7 +99,7 @@ class DeltaHVMetric(Metric):
         return ['delta_hv', 'hv', 'true_hv']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
-        return self.calculate_delta_hv(self._get_pop_f(algorithm))
+        return self.calculate_delta_hv(self._get_pop_f(algorithm, valid_only=True))
 
     def calculate_delta_hv(self, f: np.ndarray) -> List[float]:
         # If we have only one point, calculate the relative distance to the optimal point instead (because true HV is 0)
