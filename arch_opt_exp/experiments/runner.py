@@ -84,6 +84,7 @@ def run(results_key, problems, algorithms, algo_names, doe=None, plot_names=None
         if additional_plot is not None:
             plot_metric_values.update(additional_plot)
         plot_effectiveness_results(exp, plot_metric_values=plot_metric_values, save=True, show=False)
+    return exp
 
 
 def set_results_folder(key: str, sub_key: str = None):
@@ -158,6 +159,7 @@ def run_effectiveness_multi(experimenters: List[Experimenter], n_repeat=12, rese
 
         agg_res.export_pandas().to_pickle(exp.get_problem_algo_results_path('result_agg_df.pkl'))
         agg_res.save_csv(exp.get_problem_algo_results_path('result_agg.csv'))
+        agg_res.save_excel(exp.get_problem_algo_results_path('result_agg.xlsx'))
 
 
 def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_values: Dict[str, List[str]] = None,
@@ -167,7 +169,6 @@ def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_va
     results = []
     for exp in experimenters:
         agg_res = exp.get_aggregate_effectiveness_results()
-        agg_res.save_excel(exp.get_problem_algo_results_path('results.xlsx'))
         results.append(agg_res)
 
     metrics = sorted(results[0].metrics.values(), key=lambda m: m.name)

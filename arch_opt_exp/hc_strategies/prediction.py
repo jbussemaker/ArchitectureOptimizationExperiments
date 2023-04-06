@@ -31,9 +31,17 @@ __all__ = ['PredictionHCStrategy', 'PredictorInterface',
 class PredictorInterface:
     """Interface class for some validity predictor"""
     _training_doe = {}
+    _reset_pickle_keys = []
 
     def __init__(self):
         self.training_set = None
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        for key in self._reset_pickle_keys:
+            if key in state:
+                state[key] = None
+        return state
 
     def get_stats(self, problem: ArchOptProblemBase = None, min_pov=.5, n=50, train=True, plot=True, save_ref=True,
                   save_path=None, show=True):
@@ -72,8 +80,15 @@ class PredictorInterface:
         pov_ref = (1-is_failed_ref.astype(float)).reshape(xx1.shape)
 
         pov_predicted = self.evaluate_probability_of_validity(x_eval_norm)
-        pov_predicted = pov_predicted_vec = np.clip(pov_predicted, 0, 1)
+        pov_predicted = pov_predicted_roc = np.clip(pov_predicted, 0, 1)
         pov_predicted = pov_predicted.reshape(xx1.shape)
+
+        # For the ROC curve, ensure we sufficiently cover the design space
+        if x_train.shape[1] > 2:
+            x_eval_roc_abs = HierarchicalRandomSampling().do(problem, 10000).get('X')
+            is_failed_ref = problem.get_failed_points(problem.evaluate(x_eval_roc_abs, return_as_dictionary=True))
+            x_eval_roc = (x_eval_roc_abs-problem.xl)/(problem.xu-problem.xl)
+            pov_predicted_roc = np.clip(self.evaluate_probability_of_validity(x_eval_roc), 0, 1)
 
         # Get ROC curve: false positive rate vs true positive rate for various minimum pov's
         # https://en.wikipedia.org/wiki/Receiver_operating_characteristic
@@ -84,7 +99,7 @@ class PredictorInterface:
         is_valid_ref = ~is_failed_ref
         n_pos, n_neg = np.sum(is_valid_ref), np.sum(~is_valid_ref)
         for i, thr_value in enumerate(thr_values):
-            predicted = pov_predicted_vec >= thr_value
+            predicted = pov_predicted_roc >= thr_value
             tpr[i] = np.sum(predicted & is_valid_ref) / n_pos
             fpr[i] = np.sum(predicted & ~is_valid_ref) / n_neg
             acc[i] = (np.sum(predicted & is_valid_ref) + np.sum(~predicted & ~is_valid_ref)) / len(is_valid_ref)
@@ -202,6 +217,7 @@ class PredictionHCStrategy(HiddenConstraintStrategy):
 
 
 class SKLearnClassifier(PredictorInterface):
+    _reset_pickle_keys = ['_predictor']
 
     def __init__(self):
         self._predictor = None
@@ -288,6 +304,7 @@ class SVMClassifier(SKLearnClassifier):
 
 
 class VariationalGP(PredictorInterface):
+    _reset_pickle_keys = ['_model']
 
     def __init__(self):
         self._model = None
@@ -319,6 +336,7 @@ class VariationalGP(PredictorInterface):
 
 
 class SMTPredictor(PredictorInterface):
+    _reset_pickle_keys = ['_model']
 
     def __init__(self):
         self._model: Optional[SurrogateModel] = None
@@ -359,7 +377,7 @@ class GPRegressor(SMTPredictor):
 
 
 if __name__ == '__main__':
-    GPRegressor().get_stats()
+    # GPRegressor().get_stats()
     # GPRegressor().get_stats(HCBranin())
     # LinearRBFRegressor().get_stats()
 
@@ -369,3 +387,6 @@ if __name__ == '__main__':
     # SVMClassifier().get_stats()
 
     # VariationalGP().get_stats()
+
+    # GPClassifier().get_stats(CantileveredBeamHC())
+    RandomForestClassifier(n=500).get_stats(HierarchicalRosenbrockHC())

@@ -262,10 +262,10 @@ class ExperimenterResult(Result):
             data['n_eval_q75'] = self.n_eval_agg['q75']
 
         for name, metric in self.metrics.items():
-            data.update({'%s_%s' % (name, key): value for key, value in metric.results_agg('median').items()})
-            if has_std:
-                data.update({'%s_%s_q25' % (name, key): value for key, value in metric.results_agg('q25').items()})
-                data.update({'%s_%s_q75' % (name, key): value for key, value in metric.results_agg('q75').items()})
+            results_agg = [(metric.results_agg(key), post)
+                           for post, key in [('', 'median'), ('_q25', 'q25'), ('_q75', 'q75')]]
+            for key in results_agg[0][0].keys():
+                data.update({f'{name}_{key}{post}': values[key] for values, post in results_agg})
 
         return pd.DataFrame(index=np.array(range(len(self.n_eval)), dtype=int)+1, data=data)
 

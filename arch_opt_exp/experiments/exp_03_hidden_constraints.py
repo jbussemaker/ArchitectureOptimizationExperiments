@@ -15,29 +15,46 @@ Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 import os
+import pickle
 import logging
 import itertools
 import numpy as np
+import pandas as pd
+from typing import List
 import matplotlib.pyplot as plt
 from scipy.spatial import distance
+from smt.surrogate_models.krg import KRG
+from werkzeug.utils import secure_filename
 from pymoo.core.evaluator import Evaluator
 from pymoo.core.population import Population
 from arch_opt_exp.experiments.runner import *
+from pymoo.core.initialization import Initialization
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
 from sb_arch_opt.sampling import *
 from sb_arch_opt.problem import *
 from sb_arch_opt.algo.pymoo_interface import *
 from sb_arch_opt.problems.turbofan_arch import *
+from sb_arch_opt.algo.simple_sbo.infill import *
 from sb_arch_opt.problems.hidden_constraints import *
+
+from arch_opt_exp.hc_strategies.metrics import *
+from arch_opt_exp.hc_strategies.rejection import *
+from arch_opt_exp.hc_strategies.prediction import *
+from arch_opt_exp.hc_strategies.replacement import *
+from arch_opt_exp.hc_strategies.sbo_with_hc import *
+from arch_opt_exp.experiments.metrics import get_exp_metrics
 
 log = logging.getLogger('arch_opt_exp.03_hc')
 capture_log()
 
 _exp_03_01_folder = '03_hc_01_hc_area'
 _exp_03_02_folder = '03_hc_02_hc_test_area'
+_exp_03_03_folder = '03_hc_03_hc_predictors'
+_exp_03_04_folder = '03_hc_04_simple_optimization'
+_exp_03_05_folder = '03_hc_05_optimization'
 
-_test_problems = [
+_test_problems = lambda: [
     # HFR = high failure rate; G = constrained
     (HCBranin(), '00_far'),
     (Mueller02(), '01'),
@@ -203,12 +220,272 @@ def exp_03_02_hc_test_area():
     Conclusions: hypothesis confirmed
     """
     folder = set_results_folder(_exp_03_02_folder)
-    for problem, category in _test_problems:
+    for problem, category in _test_problems():
         name = f'{category} {problem.__class__.__name__}'
         log.info(f'Plotting {problem.__class__.__name__}')
         plot_distance_distributions(problem, f'{folder}/plot_{category}_{problem.__class__.__name__}', name)
 
 
+_predictors: List[PredictorInterface] = [
+    RandomForestClassifier(n=100),
+    KNNClassifier(k=5),
+    GPClassifier(nu=2.5),
+    SVMClassifier(),
+    LinearRBFRegressor(),
+    GPRegressor(),
+    VariationalGP(),
+]
+
+
+def exp_03_03_hc_predictors():
+    """
+    Plot different predictors applied to a very simple test problem.
+
+    Hypothesis:
+    Some predictors are well able to capture the hidden constraint areas.
+
+    Conclusions:
+    - GP regressor/classifier, Linear RBF and Random Forest Classifier seem most promising
+    """
+    folder = set_results_folder(_exp_03_03_folder)
+
+    ref_saved = False
+    for n in [50]:
+        curves = []
+        max_acc = []
+        predictor_names = []
+        for i, predictor in enumerate(_predictors):
+            log.info(f'Testing {n} samples for predictor ({i+1}/{len(_predictors)}): {predictor!s}')
+            predictor_names.append(str(predictor))
+
+            save_path = f'{folder}/{n}_{i}_{secure_filename(str(predictor))}'
+            fpr, tpr, acc, _ = predictor.get_stats(
+                Alimo(), n=n, plot=True, save_path=save_path, save_ref=not ref_saved, show=False)
+            curves.append((fpr, tpr))
+            max_acc.append(max(acc))
+            plt.close('all')
+            ref_saved = True
+
+        plt.figure(figsize=(10, 4)), plt.title(f'ROC Curves ({n} samples)')
+        for i, name in enumerate(predictor_names):
+            label = f'{name} ({max_acc[i]*100:.1f}% acc)'
+            plt.plot(curves[i][0], curves[i][1], linewidth=1, label=label)
+        plt.xlim([0, 1]), plt.ylim([0, 1]), plt.xlabel('False Positive Rate'), plt.ylabel('True Positive Rate')
+        plt.legend(loc='center left', bbox_to_anchor=(1, .5), frameon=False)
+        plt.gca().set_aspect('equal')
+        plt.tight_layout()
+        plt.savefig(f'{folder}/{n}_roc.png')
+
+
+_strategies: List[HiddenConstraintStrategy] = [
+    RejectionHCStrategy(),
+
+    GlobalWorstReplacement(),
+    LocalReplacement(n=1),
+    LocalReplacement(n=5, mean=False),
+    LocalReplacement(n=5, mean=True),
+    PredictedWorstReplacement(mul=1.),
+    PredictedWorstReplacement(mul=2.),
+
+    PredictionHCStrategy(RandomForestClassifier(n=100)),
+    PredictionHCStrategy(RandomForestClassifier(n=100), constraint=False),
+    PredictionHCStrategy(GPClassifier(nu=2.5)),
+    PredictionHCStrategy(GPClassifier(nu=2.5), constraint=False),
+    PredictionHCStrategy(LinearRBFRegressor()),
+    PredictionHCStrategy(LinearRBFRegressor(), constraint=False),
+    PredictionHCStrategy(GPRegressor()),
+    PredictionHCStrategy(GPRegressor(), constraint=False),
+]
+
+
+def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population):
+    model = KRG(print_global=False)
+    if problem.n_obj == 1:
+        infill = ExpectedImprovementInfill()
+    else:
+        infill = MinVariancePFInfill()
+
+    sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy)\
+        .algorithm(infill_size=1, init_size=len(doe_pop))
+    sbo.initialization = Initialization(doe_pop)
+    return sbo
+
+
+def exp_03_04_simple_optimization():
+    """
+    Plot different predictors applied to a very simple test problem.
+
+    Hypothesis:
+    Some predictors are well able to capture the hidden constraint areas.
+
+    Conclusions:
+    - The test problem is simple so most strategies are able to approximate the best point closely
+    - The rejection strategy get stuck at a failed point in the design space with high EI after about 10 iterations, it
+      is not able to find any valid points after that
+    - The replacement strategies struggle to approximate the best point, and generate many failed points
+      - Local 5 mean replacement seems to work best
+      - Predicted worst replacement is able to relatively quickly find the best point without generating failed points;
+        after that, it start generating many failed points
+    - The tested prediction strategies all work very well, they all manage to find the best point in 3 to 4 iterations
+      - Constraint-based infill reduces the amount of failed points after finding the best point
+      - Objective-based infill on the other hand leads to more exploration after finding the best point
+    """
+    folder = set_results_folder(_exp_03_04_folder)
+    n_init = 30
+    n_infill = 30
+    for problem, f_known_best in [(Alimo(), -1.0474), (AlimoEdge(), -1.0468)]:
+        prob_name = problem.__class__.__name__
+        doe = get_doe_algo(n_init)
+        doe.setup(problem)
+        doe.run()
+        doe_pop = doe.pop
+        log.info(f'Best of initial DOE: {np.nanmin(doe_pop.get("F")[:, 0])} (best: {f_known_best})')
+
+        for i, strategy in enumerate(_strategies):
+            log.info(f'Strategy {i+1}/{len(_strategies)}: {strategy!s}')
+            strategy_folder = f'{folder}/{prob_name}_{i:02d}_{secure_filename(str(strategy))}'
+            os.makedirs(strategy_folder, exist_ok=True)
+
+            sbo = _get_sbo(problem, strategy, doe_pop)
+            sbo.setup(problem)
+            sbo.ask()  # Once to initialize the infill search using the DOE
+            sbo_infill: HiddenConstraintsSBO = sbo.infill_obj
+            n_pop, n_fail = [len(doe_pop)], [np.sum(ArchOptProblemBase.get_failed_points(doe_pop))]
+            f_best = [np.nanmin(doe_pop.get('F')[:, 0])]
+            for i_infill in range(n_infill):
+                # Do the last infill using the mean prediction
+                if i_infill == n_infill-1:
+                    sbo_infill.infill = inf = FunctionEstimatePoFInfill()
+                    inf.initialize(sbo_infill.problem, sbo_infill.surrogate_model)
+
+                log.info(f'Infill {i_infill+1}/{n_infill}')
+                infills = sbo.ask()
+                assert len(infills) == 1
+                sbo.evaluator.eval(problem, infills)
+
+                if i_infill == 0:
+                    sbo_infill.plot_state(save_path=f'{strategy_folder}/doe', show=False)
+                sbo_infill.plot_state(x_infill=infills.get('X')[0, :], plot_std=False,
+                                      save_path=f'{strategy_folder}/infill_{i_infill}', show=False)
+                if isinstance(strategy, PredictionHCStrategy):
+                    strategy.predictor.get_stats(problem, train=False, save_ref=False,
+                                                 save_path=f'{strategy_folder}/predictor_{i_infill}', show=False)
+
+                sbo.tell(infills=infills)
+
+                n_pop.append(len(sbo.pop))
+                n_fail.append(np.sum(ArchOptProblemBase.get_failed_points(sbo.pop)))
+                f_best.append(np.nanmin(sbo.pop.get('F')[:, 0]))
+
+            n_pop, n_fail, f_best = np.array(n_pop), np.array(n_fail), np.array(f_best)
+            plt.figure(), plt.title(f'{strategy!s} on {prob_name}')
+            plt.plot(n_fail/n_pop, 'k', linewidth=2, label='Failure rate')
+            plt.plot(n_fail[0]/n_pop, '--k', linewidth=.5, label='Perfect failure rate')
+            plt.legend(frameon=False), plt.xlabel('Iteration'), plt.ylabel('Failure rate')
+            plt.tight_layout()
+            plt.savefig(f'{strategy_folder}/failure_rate.png')
+
+            plt.figure(), plt.title(f'{strategy!s} on {prob_name}')
+            plt.plot(f_best, 'k', linewidth=2)
+            plt.plot([f_known_best]*len(f_best), '--k', linewidth=.5)
+            plt.xlabel('Iteration'), plt.ylabel('Best $f$')
+            plt.tight_layout()
+            plt.savefig(f'{strategy_folder}/f.png')
+
+
+def exp_03_05_optimization():
+    """
+    Apply the different strategies to all test problems.
+
+    For the DOE size the following rule of thumb is used:
+    5 times the nr of dimensions, corrected for the expected failure rate --> 5*n_dim/(1-expected_fail_rate)
+    This is the ensure there are enough valid points to start the optimization with.
+
+    Hypothesis:
+    Some predictors are well able to capture the hidden constraint areas.
+
+    Conclusions:
+    """
+    folder = set_results_folder(_exp_03_05_folder)
+    expected_fail_rate = .6
+    n_infill = 30
+    n_repeat = 20
+
+    problems = _test_problems()
+    problem_paths = []
+    problem_names = []
+    for i, (problem, category) in enumerate(problems):
+        name = f'{category} {problem.__class__.__name__}'
+        problem_names.append(name)
+        problem_path = f'{folder}/{secure_filename(name)}'
+        problem_paths.append(problem_path)
+
+        # Rule of thumb: 5*n_dim --> corrected for expected fail rate (unknown before running a problem, of course)
+        n_init = int(np.ceil(5*problem.n_var/(1-expected_fail_rate)))
+
+        log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
+        problem.pareto_front()
+
+        doe = {}
+        for i_rep in range(n_repeat):
+            doe_algo = get_doe_algo(n_init)
+            doe_algo.setup(problem)
+            doe_algo.run()
+            doe[i_rep] = doe_algo.pop
+
+        metrics = get_exp_metrics(problem, including_convergence=False)
+        metrics += [
+            FailRateMetric(),
+            PredictorMetric(),
+        ]
+        additional_plot = {
+            'fail': ['rate'],
+            'hc_pred': ['acc', 'max_acc', 'max_acc_pov'],
+        }
+
+        algorithms = []
+        algo_names = []
+        for j, strategy in enumerate(_strategies):
+            sbo = _get_sbo(problem, strategy, doe[0])
+            algorithms.append(sbo)
+            algo_names.append(str(strategy))
+
+        do_run = True
+        # do_run = False
+        exps = run(_exp_03_05_folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+
+        df_data = []
+        for exp in exps:
+            with open(exp.get_problem_algo_results_path('result_agg_df.pkl'), 'rb') as fp:
+                df_strat = pickle.load(fp)
+                df_data.append(pd.Series(df_strat.iloc[-1, :], name=exp.algorithm_name))
+
+        df_prob = pd.concat(df_data, axis=1).T
+        df_prob.to_pickle(f'{problem_path}/df_strategies.pkl')
+        with pd.ExcelWriter(f'{problem_path}/df_strategies.xlsx') as writer:
+            df_prob.to_excel(writer)
+
+    df_probs = []
+    for i, problem_name in enumerate(problem_names):
+        problem_path = problem_paths[i]
+        try:
+            with open(f'{problem_path}/df_strategies.pkl', 'rb') as fp:
+                df_prob = pickle.load(fp)
+        except FileNotFoundError:
+            continue
+
+        df_prob = df_prob.set_index(pd.MultiIndex.from_tuples([(problem_name, val) for val in df_prob.index]))
+        df_probs.append(df_prob)
+
+    with pd.ExcelWriter(f'{folder}/results.xlsx') as writer:
+        df_agg = pd.concat(df_probs, axis=0)
+        df_agg.to_excel(writer)
+
+
 if __name__ == '__main__':
     # exp_03_01_hc_area()
-    exp_03_02_hc_test_area()
+    # exp_03_02_hc_test_area()
+    # exp_03_03_hc_predictors()
+    # exp_03_04_simple_optimization()
+    exp_03_05_optimization()
