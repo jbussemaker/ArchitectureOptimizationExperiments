@@ -20,24 +20,27 @@ import logging
 import itertools
 import numpy as np
 import pandas as pd
-from typing import List
+from typing import List, Union, Dict, Any
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from scipy.spatial import distance
 from smt.surrogate_models.krg import KRG
 from werkzeug.utils import secure_filename
 from pymoo.core.evaluator import Evaluator
 from pymoo.core.population import Population
-from arch_opt_exp.experiments.runner import *
 from pymoo.core.initialization import Initialization
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
 from sb_arch_opt.sampling import *
 from sb_arch_opt.problem import *
+from sb_arch_opt.problems.continuous import *
 from sb_arch_opt.algo.pymoo_interface import *
 from sb_arch_opt.problems.turbofan_arch import *
 from sb_arch_opt.algo.simple_sbo.infill import *
 from sb_arch_opt.problems.hidden_constraints import *
 
+from arch_opt_exp.experiments.runner import *
+from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.hc_strategies.metrics import *
 from arch_opt_exp.hc_strategies.rejection import *
 from arch_opt_exp.hc_strategies.prediction import *
@@ -52,11 +55,15 @@ _exp_03_01_folder = '03_hc_01_hc_area'
 _exp_03_02_folder = '03_hc_02_hc_test_area'
 _exp_03_03_folder = '03_hc_03_hc_predictors'
 _exp_03_04_folder = '03_hc_04_simple_optimization'
+_exp_03_04a_folder = '03_hc_04a_doe_size_min_pov'
 _exp_03_05_folder = '03_hc_05_optimization'
 
 _test_problems = lambda: [
     # HFR = high failure rate; G = constrained
+    (Branin(), '00_no_HC'),
     (HCBranin(), '00_far'),
+    (Alimo(), '01'),
+    (AlimoEdge(), '01'),
     (Mueller02(), '01'),
     (HCSphere(), '01'),
     (Mueller01(), '02_HFR'),
@@ -70,6 +77,8 @@ _test_problems = lambda: [
     (MDCantileveredBeamHC(), '07_MD_G_HFR'),
     (MDMOMueller08(), '08_MD_MO_HFR'),
     (MDCarsideHC(), '09_MD_MO_G_HFR'),
+    (HierAlimo(), '10_HIER'),
+    (HierAlimoEdge(), '10_HIER'),
     (HierMueller02(), '10_HIER'),
     (HierMueller08(), '10_HIER_HFR'),
     (HierarchicalRosenbrockHC(), '11_HIER_G'),
@@ -289,11 +298,14 @@ _strategies: List[HiddenConstraintStrategy] = [
 
     PredictionHCStrategy(RandomForestClassifier(n=100)),
     PredictionHCStrategy(RandomForestClassifier(n=100), constraint=False),
-    PredictionHCStrategy(GPClassifier(nu=2.5)),
-    PredictionHCStrategy(GPClassifier(nu=2.5), constraint=False),
+    # PredictionHCStrategy(GPClassifier(nu=2.5)),
+    # PredictionHCStrategy(GPClassifier(nu=2.5), constraint=False),
+    PredictionHCStrategy(KNNClassifier(k_dim=2)),
+    PredictionHCStrategy(KNNClassifier(k_dim=2), constraint=False),
     PredictionHCStrategy(LinearRBFRegressor()),
     PredictionHCStrategy(LinearRBFRegressor(), constraint=False),
     PredictionHCStrategy(GPRegressor()),
+    PredictionHCStrategy(GPRegressor(), min_pov=.75),
     PredictionHCStrategy(GPRegressor(), constraint=False),
 ]
 
@@ -355,7 +367,7 @@ def exp_03_04_simple_optimization():
             for i_infill in range(n_infill):
                 # Do the last infill using the mean prediction
                 if i_infill == n_infill-1:
-                    sbo_infill.infill = inf = FunctionEstimatePoFInfill()
+                    sbo_infill.infill = inf = FunctionEstimateConstrainedInfill()
                     inf.initialize(sbo_infill.problem, sbo_infill.surrogate_model)
 
                 log.info(f'Infill {i_infill+1}/{n_infill}')
@@ -393,7 +405,110 @@ def exp_03_04_simple_optimization():
             plt.savefig(f'{strategy_folder}/f.png')
 
 
-def exp_03_05_optimization():
+def exp_03_04a_doe_size_min_pov(post_process=False):
+    """
+    Investigate the effect of (relative) DOE sizes and the amount of hidden constraint exploration vs exploitation
+    needed for predictor strategies.
+
+    Hypothesis:
+    Smaller DOE sizes tend to less accurately capture hidden constraint behavior, therefore require less strict hidden
+    constraint infill constraints to enable exploration of the hidden constraint area.
+
+    Conclusions:
+    - A larger DOE size leads to a closer approximation to the Pareto front within a given nr of infills (however less
+      relative improvement) and a higher predictor accuracy
+    - A lower fail rate ratio requires a high predictor accuracy (> 70%), leads to a lower Delta HV ratio
+    - Minimum PoV (if used as an infill constraint):
+      - A higher value (i.e. being more conservative; requiring more certainty about validity), leads to a lower fail
+        rate ratio (less failed infill points)
+      - However, a too high value leads to being too conservative at the edges of the failed areas, which might prevent
+        the optimizer from finding optimal values if they lie near the edge
+      - Choosing a value between 50% and 75% therefore is a safe bet that might work well for all problems
+    - Using PoV as a penalty to the infill objective yields the same performance as a Minimum PoV of 10% (constraint),
+      so it seems using Pov as a constraint yields better results
+    """
+    folder = set_results_folder(_exp_03_04a_folder)
+    expected_fail_rate = .6
+    k_doe_test = [.5, 1, 2, 5]
+    min_pov_test = [.1, .25, .5, .75, .9, -1]
+    n_infill = 30
+    n_repeat = 20
+    problems = [
+        (Alimo(), '01'),
+        (AlimoEdge(), '01'),
+        (Mueller01(), '02_HFR'),
+    ]
+
+    problem_paths = []
+    problem_names = []
+    problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
+    for i, (problem, category) in enumerate(problems):
+        name = f'{category} {problem.__class__.__name__}'
+        problem_names.append(name)
+        problem_path = f'{folder}/{secure_filename(name)}'
+        problem_paths.append(problem_path)
+        if post_process:
+            continue
+
+        log.info(f'Running optimizations for {i+1}/{len(problems)}: {name}')
+        problem.pareto_front()
+
+        doe: Dict[Any, Dict[int, Population]] = {}
+        for k in k_doe_test:
+            n_init = int(np.ceil(k*problem.n_var/(1-expected_fail_rate)))
+            doe_k, _ = _create_does(problem, n_init, n_repeat)
+            doe[k] = doe_k
+
+        metrics, additional_plot = _get_metrics(problem)
+
+        algorithms, algo_names = [], []
+        doe_exp = {}
+        for k in k_doe_test:
+            for min_pov in min_pov_test:
+                strategy = PredictionHCStrategy(GPRegressor(), constraint=min_pov != -1,
+                                                min_pov=.5 if min_pov == -1 else min_pov)
+                sbo = _get_sbo(problem, strategy, doe[k][0])
+                algo_name = f'DOE K={k}; min_pov={min_pov}'
+                doe_exp[algo_name] = doe[k]
+                algorithms.append(sbo)
+                algo_names.append(algo_name)
+
+        exps = run(_exp_03_04a_folder, problem, algorithms, algo_names, doe=doe_exp, n_repeat=n_repeat,
+                   n_eval_max=n_infill, metrics=metrics, additional_plot=additional_plot, problem_name=name,
+                   do_run=not post_process, return_exp=post_process)
+        _agg_prob_exp(problem, problem_path, exps)
+
+    def _add_cols(df_agg_):
+        df_agg_['doe_k'] = [float(val[1].split(';')[0].split('K=')[1]) for val in df_agg_.index]
+        min_pov_values = [val[1].split(';')[1].split('=')[1] for val in df_agg_.index]
+        df_agg_['min_pov'] = ['F' if val == '-1' else val for val in min_pov_values]
+
+    df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    for category in ['doe_k', 'min_pov']:
+        _plot_problem_bars(df_agg, folder, category, 'delta_hv_ratio', y_log=True)
+        _plot_problem_bars(df_agg, folder, category, 'delta_hv_delta_hv', y_log=True)
+        _plot_problem_bars(df_agg, folder, category, 'delta_hv_pass_10')
+        _plot_problem_bars(df_agg, folder, category, 'delta_hv_pass_20')
+        _plot_problem_bars(df_agg, folder, category, 'delta_hv_pass_50')
+        _plot_problem_bars(df_agg, folder, category, 'fail_ratio')
+        _plot_problem_bars(df_agg, folder, category, 'hc_pred_acc')
+
+    _plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='fail_ratio', y_log=True)
+    _plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
+    _plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
+
+
+def _get_metrics(problem):
+    metrics = get_exp_metrics(problem, including_convergence=False)+[FailRateMetric(), PredictorMetric()]
+    additional_plot = {
+        'fail': ['rate', 'ratio'],
+        'hc_pred': ['acc', 'max_acc', 'max_acc_pov'],
+    }
+    return metrics, additional_plot
+
+
+def exp_03_05_optimization(post_process=False):
     """
     Apply the different strategies to all test problems.
 
@@ -414,34 +529,26 @@ def exp_03_05_optimization():
     problems = _test_problems()
     problem_paths = []
     problem_names = []
+    problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
     for i, (problem, category) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
+        if post_process:
+            continue
 
-        # Rule of thumb: 5*n_dim --> corrected for expected fail rate (unknown before running a problem, of course)
-        n_init = int(np.ceil(5*problem.n_var/(1-expected_fail_rate)))
+        # Rule of thumb: k*n_dim --> corrected for expected fail rate (unknown before running a problem, of course)
+        n_init = int(np.ceil(2*problem.n_var/(1-expected_fail_rate)))
 
         log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
         problem.pareto_front()
 
-        doe = {}
-        for i_rep in range(n_repeat):
-            doe_algo = get_doe_algo(n_init)
-            doe_algo.setup(problem)
-            doe_algo.run()
-            doe[i_rep] = doe_algo.pop
+        doe, doe_delta_hvs = _create_does(problem, n_init, n_repeat)
+        log.info(f'DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
+                 f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
 
-        metrics = get_exp_metrics(problem, including_convergence=False)
-        metrics += [
-            FailRateMetric(),
-            PredictorMetric(),
-        ]
-        additional_plot = {
-            'fail': ['rate'],
-            'hc_pred': ['acc', 'max_acc', 'max_acc_pov'],
-        }
+        metrics, additional_plot = _get_metrics(problem)
 
         algorithms = []
         algo_names = []
@@ -450,22 +557,55 @@ def exp_03_05_optimization():
             algorithms.append(sbo)
             algo_names.append(str(strategy))
 
-        do_run = True
+        do_run = not post_process
         # do_run = False
         exps = run(_exp_03_05_folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
-                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                   return_exp=post_process)
+        _agg_prob_exp(problem, problem_path, exps)
 
-        df_data = []
-        for exp in exps:
-            with open(exp.get_problem_algo_results_path('result_agg_df.pkl'), 'rb') as fp:
-                df_strat = pickle.load(fp)
-                df_data.append(pd.Series(df_strat.iloc[-1, :], name=exp.algorithm_name))
+    def _add_cols(df_agg_):
+        df_agg_['strategy'] = [val[1].split(':')[0].lower().split(' ')[0] for val in df_agg_.index]
+        df_agg_['rep_strat'] = [val[1].split(':')[1].strip() if val[1].startswith('Replacement:') else None
+                                for val in df_agg_.index]
+        df_agg_['g_f_strat'] = [('G' if 'G:' in val[1] else 'F') if val[1].startswith('Prediction') else None
+                                for val in df_agg_.index]
+        df_agg_['pw_strat'] = [val[1].split(':')[1].strip() if 'Predicted Worst' in val[1] else None
+                               for val in df_agg_.index]
+        return df_agg_
 
-        df_prob = pd.concat(df_data, axis=1).T
-        df_prob.to_pickle(f'{problem_path}/df_strategies.pkl')
-        with pd.ExcelWriter(f'{problem_path}/df_strategies.xlsx') as writer:
-            df_prob.to_excel(writer)
+    df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
+    _plot_scatter(df_agg, folder, 'fail_rate_ratio', 'delta_hv_ratio', y_log=True)
+    _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_ratio', y_log=True)
+    # _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_ratio', z_col='g_f_strat', y_log=True)
+
+    _plot_problem_bars(df_agg, folder, 'strategy', 'delta_hv_ratio', y_log=True)
+    _plot_problem_bars(df_agg, folder, 'rep_strat', 'delta_hv_ratio', y_log=True)
+    _plot_problem_bars(df_agg, folder, 'g_f_strat', 'delta_hv_ratio', y_log=True)
+    _plot_problem_bars(df_agg, folder, 'g_f_strat', 'fail_rate_ratio')
+    _plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_rate_ratio')
+
+
+def _agg_prob_exp(problem, problem_path, exps):
+    df_data = []
+    for exp in exps:
+        with open(exp.get_problem_algo_results_path('result_agg_df.pkl'), 'rb') as fp:
+            df_strat = pickle.load(fp)
+            strat_data = pd.Series(df_strat.iloc[-1, :], name=exp.algorithm_name)
+            strat_data['n_init'] = df_strat['fail_total'].values[0]
+            strat_data['prob_fail_rate'] = problem.get_failure_rate()
+            strat_data['prob_imp_ratio'] = problem.get_imputation_ratio()
+            strat_data['prob_n_valid_discr'] = problem.get_n_valid_discrete()
+            df_data.append(strat_data)
+
+    df_prob = pd.concat(df_data, axis=1).T
+    df_prob.to_pickle(f'{problem_path}/df_strategies.pkl')
+    with pd.ExcelWriter(f'{problem_path}/df_strategies.xlsx') as writer:
+        df_prob.to_excel(writer)
+
+
+def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
     df_probs = []
     for i, problem_name in enumerate(problem_names):
         problem_path = problem_paths[i]
@@ -478,9 +618,142 @@ def exp_03_05_optimization():
         df_prob = df_prob.set_index(pd.MultiIndex.from_tuples([(problem_name, val) for val in df_prob.index]))
         df_probs.append(df_prob)
 
-    with pd.ExcelWriter(f'{folder}/results.xlsx') as writer:
-        df_agg = pd.concat(df_probs, axis=0)
-        df_agg.to_excel(writer)
+    df_agg = pd.concat(df_probs, axis=0)
+    df_agg_ = add_cols_callback(df_agg)
+    if df_agg_ is not None:
+        df_agg = df_agg_
+
+    try:
+        with pd.ExcelWriter(f'{folder}/results.xlsx') as writer:
+            df_agg.to_excel(writer)
+    except PermissionError:
+        pass
+    return df_agg
+
+
+def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat):
+    doe: Dict[int, Population] = {}
+    doe_delta_hvs = []
+    for i_rep in range(n_repeat):
+        for _ in range(10):
+            doe_algo = get_doe_algo(n_doe)
+            doe_algo.setup(problem)
+            doe_algo.run()
+
+            doe_pf = DeltaHVMetric.get_pareto_front(doe_algo.pop.get('F'))
+            doe_f = DeltaHVMetric.get_valid_pop(doe_algo.pop).get('F')
+            delta_hv = DeltaHVMetric(problem.pareto_front()).calculate_delta_hv(doe_pf, doe_f)[0]
+            if delta_hv < 1e-6:
+                continue
+            break
+
+        doe[i_rep] = doe_algo.pop
+        doe_delta_hvs.append(delta_hv)
+    return doe, doe_delta_hvs
+
+
+_col_names = {
+    'fail_rate_ratio': 'Fail rate ratio',
+    'fail_ratio': 'Fail rate ratio',
+    'delta_hv_ratio': 'Delta HV ratio',
+    'delta_hv_delta_hv': 'Delta HV',
+    'hc_pred_acc': 'Predictor Accuracy',
+    'hc_pred_max_acc': 'Predictor Max Accuracy',
+    'hc_pred_max_acc_pov': 'Predictor POV @ Max Accuracy',
+    'strategy': 'Strategy',
+    'rep_strat': 'Replacement Strategy',
+    'g_f_strat': 'Acquisition constraint (G) vs penalty (F)',
+    'pw_strat': 'Predicted Worst Replacement variant',
+    'doe_k': 'DOE K',
+    'min_pov': '$PoV_{min}$',
+    'delta_hv_pass_10': 'Delta HV pass 10%',
+    'delta_hv_pass_20': 'Delta HV pass 20%',
+    'delta_hv_pass_50': 'Delta HV pass 50%',
+}
+
+
+def _plot_scatter(df_agg, folder, x_col, y_col, z_col=None, x_log=False, y_log=False, z_log=False, cmap='inferno'):
+    x_name, y_name = _col_names[x_col], _col_names[y_col]
+    z_name = _col_names[z_col] if z_col is not None else None
+    plt.figure(figsize=(8, 4)), plt.title(f'{x_name} vs {y_name}')
+
+    x_all, y_all, z_all = [], [], []
+    x, y = df_agg[x_col].values, df_agg[y_col].values
+    x_all += list(x)
+    y_all += list(y)
+    if z_col is not None:
+        z = df_agg[z_col].values
+        if z.dtype == np.object:
+            values = {val for val in z if val is not None}
+            z_num = np.zeros((len(z),))*np.nan
+            for i_val, value in enumerate(sorted(values)):
+                if value or value == 0.:
+                    z_num[z == value] = i_val
+            z = z_num
+        z_all += list(np.log10(z) if z_log else z)
+        size = 50
+    else:
+        z_all = 'k'
+        size = 10
+
+    c = plt.scatter(x_all, y_all, s=size, c=z_all, cmap=cmap)
+    plt.colorbar(c).set_label((z_name + ' (log)') if z_log else z_name)
+
+    if x_log:
+        plt.gca().set_xscale('log')
+    if y_log:
+        plt.gca().set_yscale('log')
+    plt.xlabel(x_name), plt.ylabel(y_name)
+
+    plt.tight_layout()
+    filename = f'{folder}/{x_col}_{y_col}{f"_{z_col}" if z_col is not None else ""}'
+    plt.savefig(filename+'.png')
+
+
+def _plot_problem_bars(df_agg, folder, cat_col, y_col, y_log=False):
+    col_name, y_col_name = _col_names[cat_col], _col_names[y_col]
+    plt.figure(figsize=(8, 6)), plt.title(col_name)
+
+    categories = df_agg[cat_col].unique()
+    categories = np.array([val for val in categories if val and val != 0.])
+    if len(categories) <= 3:
+        cat_colors = ['r', 'b'] if len(categories) == 2 else ['r', 'g', 'b']
+    else:
+        cat_colors = plt.cm.plasma(np.linspace(0, 1, len(categories)))
+    x, w0 = 0, .8
+    w = w0/len(categories)
+    x_bars, y_bars, y_lower, y_upper, colors, labels = [], [], [], [], [], []
+    for prob_name, df_group in df_agg.groupby(level=0):
+        for i_cat, cat_value in enumerate(categories):
+            cat_mask = df_group[cat_col] == cat_value
+            medians = list(df_group[y_col].values[cat_mask])
+            for q_post in ['q25', 'q75']:
+                if f'{y_col}_{q_post}' in df_group.columns:
+                    medians += list(df_group[f'{y_col}_{q_post}'].values[cat_mask])
+            if len(medians) == 0:
+                continue
+
+            x_bars.append(x-.5*w0+w*i_cat)
+            labels.append(prob_name if i_cat == 0 else '')
+            medians = sorted(medians)
+            y_bars.append(np.nanmedian(medians))
+            y_lower.append(y_bars[-1]-np.nanquantile(medians, .25))
+            y_upper.append(np.nanquantile(medians, .75)-y_bars[-1])
+            colors.append(cat_colors[i_cat])
+        x += 1
+
+    plt.bar(x_bars, y_bars, w, color=colors, tick_label=labels, yerr=np.array([y_lower, y_upper]), capsize=2,
+            edgecolor='k', linewidth=.5, error_kw={'linewidth': .5})
+    plt.xticks(rotation=80, fontsize=8)
+    if y_log:
+        plt.yscale('log')
+    plt.gca().legend([Line2D([0], [0], color=cat_colors[i_cat], lw=4) for i_cat, label in enumerate(categories)],
+                     categories, loc='center left', bbox_to_anchor=(1, .5), frameon=False)
+    plt.ylabel(y_col_name)
+    plt.tight_layout()
+
+    filename = f'{folder}/{cat_col}_{y_col}'
+    plt.savefig(filename+'.png')
 
 
 if __name__ == '__main__':
@@ -488,4 +761,5 @@ if __name__ == '__main__':
     # exp_03_02_hc_test_area()
     # exp_03_03_hc_predictors()
     # exp_03_04_simple_optimization()
+    # exp_03_04a_doe_size_min_pov()
     exp_03_05_optimization()

@@ -29,13 +29,17 @@ __all__ = ['FailRateMetric', 'PredictorMetric']
 class FailRateMetric(Metric):
     """Measure the failure rate in the population"""
 
+    def __init__(self):
+        self.rate0 = None
+        super().__init__()
+
     @property
     def name(self):
         return 'fail'
 
     @property
     def value_names(self) -> List[str]:
-        return ['total', 'failed', 'rate']
+        return ['total', 'failed', 'rate', 'ratio']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         pop = self._get_pop(algorithm)
@@ -44,7 +48,12 @@ class FailRateMetric(Metric):
         n_total = len(is_failed)
         n_failed = int(np.sum(is_failed))
         fail_rate = 0 if n_total == 0 else (n_failed/n_total)
-        return [n_total, n_failed, fail_rate]
+
+        if self.rate0 is None:
+            self.rate0 = fail_rate
+        fail_rate_ratio = fail_rate/self.rate0 if self.rate0 > 0 else 0
+
+        return [n_total, n_failed, fail_rate, fail_rate_ratio]
 
 
 class PredictorMetric(Metric):

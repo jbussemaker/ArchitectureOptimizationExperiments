@@ -155,6 +155,9 @@ class PredictorInterface:
             plt.show()
         return fpr, tpr, acc, thr_values
 
+    def initialize(self, problem: ArchOptProblemBase):
+        pass
+
     def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         """Train the model (x's are normalized), y_is_valid is a vector"""
         raise NotImplementedError
@@ -178,6 +181,9 @@ class PredictionHCStrategy(HiddenConstraintStrategy):
         self.constraint = constraint
         self.min_pov = min_pov
         super().__init__()
+
+    def initialize(self, problem: ArchOptProblemBase):
+        self.predictor.initialize(problem)
 
     def mod_xy_train(self, x_norm: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # Remove failed points form the training set
@@ -221,13 +227,22 @@ class SKLearnClassifier(PredictorInterface):
 
     def __init__(self):
         self._predictor = None
+        self._trained_single_class = None
         super().__init__()
 
     def evaluate_probability_of_validity(self, x_norm: np.ndarray) -> np.ndarray:
+        if self._trained_single_class is not None:
+            return np.ones((x_norm.shape[0],))*self._trained_single_class
+
         pov = self._predictor.predict_proba(x_norm)[:, 1]  # Probability of belonging to class 1 (valid points)
         return pov[:, 0] if len(pov.shape) == 2 else pov
 
     def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+        # Check if we are training a classifier with only 1 class
+        self._trained_single_class = y_is_valid[0] if len(set(y_is_valid)) == 1 else None
+        self._train(x_norm, y_is_valid)
+
+    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         raise NotImplementedError
 
     def __str__(self):
@@ -240,7 +255,7 @@ class RandomForestClassifier(SKLearnClassifier):
         self.n = n
         super().__init__()
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from sklearn.ensemble import RandomForestClassifier
         self._predictor = clf = RandomForestClassifier(n_estimators=self.n)
         clf.fit(x_norm, y_is_valid)
@@ -254,11 +269,16 @@ class RandomForestClassifier(SKLearnClassifier):
 
 class KNNClassifier(SKLearnClassifier):
 
-    def __init__(self, k: int = 5):
-        self.k = k
+    def __init__(self, k: int = 5, k_dim: float = None):
+        self.k = self.k0 = k
+        self.k_dim = k_dim
         super().__init__()
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def initialize(self, problem: ArchOptProblemBase):
+        if self.k_dim is not None:
+            self.k = max(self.k0, int(self.k_dim*problem.n_var))
+
+    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from sklearn.neighbors import KNeighborsClassifier
         self._predictor = clf = KNeighborsClassifier(n_neighbors=self.k)
         clf.fit(x_norm, y_is_valid)
@@ -276,7 +296,7 @@ class GPClassifier(SKLearnClassifier):
         self.nu = nu
         super().__init__()
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from sklearn.gaussian_process import GaussianProcessClassifier
         from sklearn.gaussian_process.kernels import Matern
         self._predictor = clf = GaussianProcessClassifier(kernel=1.*Matern(length_scale=.1, nu=self.nu))
@@ -291,7 +311,7 @@ class GPClassifier(SKLearnClassifier):
 
 class SVMClassifier(SKLearnClassifier):
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from sklearn.svm import SVR
         self._predictor = clf = SVR(kernel='rbf')
         clf.fit(x_norm, y_is_valid)

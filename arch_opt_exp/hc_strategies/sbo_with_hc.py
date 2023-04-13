@@ -36,6 +36,9 @@ class HiddenConstraintStrategy:
         """Whether the strategy needs a surrogate model that also provides variance estimates"""
         return False
 
+    def initialize(self, problem: ArchOptProblemBase):
+        pass
+
     def mod_xy_train(self, x_norm: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Modify inputs and outputs for the surrogate model used for the main infill function"""
         return x_norm, y
@@ -83,6 +86,7 @@ class HiddenConstraintsSBO(SBOInfill):
     def _build_model(self):
         if self.hc_strategy is None:
             raise ValueError('HC strategy not set!')
+        self.hc_strategy.initialize(self.problem)
         super()._build_model()
 
         x = self.total_pop.get('X')

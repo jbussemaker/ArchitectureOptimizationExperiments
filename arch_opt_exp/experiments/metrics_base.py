@@ -23,6 +23,7 @@ from sb_arch_opt.problem import ArchOptProblemBase
 
 from pymoo.core.algorithm import Algorithm
 from pymoo.core.indicator import Indicator
+from pymoo.core.population import Population
 from pymoo.core.termination import Termination
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
@@ -200,16 +201,20 @@ class Metric:
         """Constraint violation values of the population: (n_pop, n_g)"""
         return cls._get_pop(algorithm, feasible_only=feasible_only, valid_only=valid_only).get('CV')
 
-    @staticmethod
-    def _get_pop(algorithm: Algorithm, feasible_only=False, valid_only=False):
+    @classmethod
+    def _get_pop(cls, algorithm: Algorithm, feasible_only=False, valid_only=False):
         pop = algorithm.pop
         if valid_only or feasible_only:
-            is_failed = ArchOptProblemBase.get_failed_points(pop)
-            pop = pop[~is_failed]
+            pop = cls.get_valid_pop(pop)
         if feasible_only:
             i_feasible = np.where(pop.get('feasible'))[0]
             pop = pop[i_feasible]
         return pop
+
+    @staticmethod
+    def get_valid_pop(population: Population) -> Population:
+        is_failed = ArchOptProblemBase.get_failed_points(population)
+        return population[~is_failed]
 
     @classmethod
     def _get_opt_x(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:

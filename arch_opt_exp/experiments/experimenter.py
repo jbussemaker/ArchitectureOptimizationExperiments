@@ -323,8 +323,13 @@ class Experimenter:
         termination = EffectivenessTerminator(n_eval_max=self.n_eval_max, metrics=self.metrics)
 
         algorithm = copy.deepcopy(self.algorithm)
-        if self.doe is not None and repeat_idx in self.doe:
-            doe_pop = self.doe[repeat_idx]
+        if self.doe is not None:
+            if repeat_idx in self.doe:
+                doe_pop = self.doe[repeat_idx]
+            elif self.algorithm_name in self.doe and repeat_idx in self.doe[self.algorithm_name]:
+                doe_pop = self.doe[self.algorithm_name][repeat_idx]
+            else:
+                raise RuntimeError(f'DOE not found for {self.algorithm_name} @ {repeat_idx}')
             algorithm.initialization = Initialization(doe_pop)
 
         # Run the algorithm
