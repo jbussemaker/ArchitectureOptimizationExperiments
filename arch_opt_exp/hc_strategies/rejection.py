@@ -24,10 +24,10 @@ __all__ = ['RejectionHCStrategy']
 class RejectionHCStrategy(HiddenConstraintStrategy):
     """Strategy that simply rejects failed points before training the model"""
 
-    def mod_xy_train(self, x_norm: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def mod_xy_train(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # Remove failed points from the training set
         is_not_failed = ~self.is_failed(y)
-        return x_norm[is_not_failed, :], y[is_not_failed, :]
+        return x[is_not_failed, :], y[is_not_failed, :]
 
     def __str__(self):
         return 'Rejection'

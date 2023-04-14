@@ -20,6 +20,7 @@ from sb_arch_opt.problem import *
 from sb_arch_opt.sampling import *
 from arch_opt_exp.hc_strategies.sbo_with_hc import *
 from sb_arch_opt.problems.hidden_constraints import *
+from pymoo.util.normalization import Normalization, SimpleZeroToOneNormalization
 
 from smt.surrogate_models.surrogate_model import SurrogateModel
 
@@ -35,6 +36,7 @@ class PredictorInterface:
 
     def __init__(self):
         self.training_set = None
+        self._normalization: Optional[Normalization] = None
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -51,35 +53,33 @@ class PredictorInterface:
             problem = Alimo()
 
         if train:
+            self.initialize(problem)
             cache_key = (repr(problem), n)
             if cache_key in self._training_doe:
                 x_train = self._training_doe[cache_key]
             else:
                 self._training_doe[cache_key] = x_train = HierarchicalRandomSampling().do(problem, n).get('X')
             out_train = problem.evaluate(x_train, return_as_dictionary=True)
-            x_norm = (x_train-problem.xl)/(problem.xu-problem.xl)
 
             is_failed_train = problem.get_failed_points(out_train)
-            self.train(x_norm, 1-is_failed_train.astype(float))
+            self.train(x_train, 1-is_failed_train.astype(float))
         else:
             if self.training_set is None:
                 return
-            x_norm, is_valid_train = self.training_set
-            x_train = x_norm*(problem.xu-problem.xl)+problem.xl
+            x_train, is_valid_train = self.training_set
             is_failed_train = (1-is_valid_train).astype(bool)
 
-        x1, x2 = np.linspace(0, 1, 100), np.linspace(0, 1, 100)
+        x1, x2 = np.linspace(problem.xl[0], problem.xu[0], 100), np.linspace(problem.xl[1], problem.xu[1], 100)
         xx1, xx2 = np.meshgrid(x1, x2)
-        x_eval = .5*np.ones((len(xx1.ravel()), x_train.shape[1]))
+        x_eval = np.ones((len(xx1.ravel()), x_train.shape[1]))
+        x_eval *= .5*(problem.xu-problem.xl)+problem.xl
         x_eval[:, 0] = xx1.ravel()
         x_eval[:, 1] = xx2.ravel()
-        x_eval_norm = x_eval
-        x_eval = x_eval*(problem.xu-problem.xl) + problem.xl
         out_plot = problem.evaluate(x_eval, return_as_dictionary=True)
         is_failed_ref = problem.get_failed_points(out_plot)
         pov_ref = (1-is_failed_ref.astype(float)).reshape(xx1.shape)
 
-        pov_predicted = self.evaluate_probability_of_validity(x_eval_norm)
+        pov_predicted = self.evaluate_probability_of_validity(x_eval)
         pov_predicted = pov_predicted_roc = np.clip(pov_predicted, 0, 1)
         pov_predicted = pov_predicted.reshape(xx1.shape)
 
@@ -87,8 +87,7 @@ class PredictorInterface:
         if x_train.shape[1] > 2:
             x_eval_roc_abs = HierarchicalRandomSampling().do(problem, 10000).get('X')
             is_failed_ref = problem.get_failed_points(problem.evaluate(x_eval_roc_abs, return_as_dictionary=True))
-            x_eval_roc = (x_eval_roc_abs-problem.xl)/(problem.xu-problem.xl)
-            pov_predicted_roc = np.clip(self.evaluate_probability_of_validity(x_eval_roc), 0, 1)
+            pov_predicted_roc = np.clip(self.evaluate_probability_of_validity(x_eval_roc_abs), 0, 1)
 
         # Get ROC curve: false positive rate vs true positive rate for various minimum pov's
         # https://en.wikipedia.org/wiki/Receiver_operating_characteristic
@@ -113,8 +112,8 @@ class PredictorInterface:
                 for line in ref_border.allsegs[0]:
                     plt.plot(line[:, 0], line[:, 1], '--k', linewidth=.5)
 
-            plt.scatter(x_norm[is_failed_train, 0], x_norm[is_failed_train, 1], s=25, c='r', marker='x')
-            plt.scatter(x_norm[~is_failed_train, 0], x_norm[~is_failed_train, 1], s=25, color=(0, 1, 0), marker='x')
+            plt.scatter(x_train[is_failed_train, 0], x_train[is_failed_train, 1], s=25, c='r', marker='x')
+            plt.scatter(x_train[~is_failed_train, 0], x_train[~is_failed_train, 1], s=25, color=(0, 1, 0), marker='x')
 
             plt.xlabel('$x_0$'), plt.ylabel('$x_1$')
             return border
@@ -156,14 +155,21 @@ class PredictorInterface:
         return fpr, tpr, acc, thr_values
 
     def initialize(self, problem: ArchOptProblemBase):
+        self._normalization = self._get_normalization(problem)
+        self._initialize(problem)
+
+    def _get_normalization(self, problem: ArchOptProblemBase) -> Normalization:
+        return SimpleZeroToOneNormalization(xl=problem.xl, xu=problem.xu, estimate_bounds=False)
+
+    def _initialize(self, problem: ArchOptProblemBase):
         pass
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
-        """Train the model (x's are normalized), y_is_valid is a vector"""
+    def train(self, x: np.ndarray, y_is_valid: np.ndarray):
+        """Train the model (x's are not normalized), y_is_valid is a vector"""
         raise NotImplementedError
 
-    def evaluate_probability_of_validity(self, x_norm: np.ndarray) -> np.ndarray:
-        """Get the probability of validity (0 to 1) at nx points (x is normalized); should return a vector!"""
+    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+        """Get the probability of validity (0 to 1) at nx points (x is not normalized); should return a vector!"""
         raise NotImplementedError
 
     def __str__(self):
@@ -185,27 +191,27 @@ class PredictionHCStrategy(HiddenConstraintStrategy):
     def initialize(self, problem: ArchOptProblemBase):
         self.predictor.initialize(problem)
 
-    def mod_xy_train(self, x_norm: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def mod_xy_train(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # Remove failed points form the training set
         is_not_failed = ~self.is_failed(y)
-        return x_norm[is_not_failed, :], y[is_not_failed, :]
+        return x[is_not_failed, :], y[is_not_failed, :]
 
-    def prepare_infill_search(self, x_norm: np.ndarray, y: np.ndarray):
+    def prepare_infill_search(self, x: np.ndarray, y: np.ndarray):
         is_failed = self.is_failed(y)
         y_is_valid = (~is_failed).astype(float)
-        self.predictor.train(x_norm, y_is_valid)
-        self.predictor.training_set = (x_norm, y_is_valid)
+        self.predictor.train(x, y_is_valid)
+        self.predictor.training_set = (x, y_is_valid)
 
     def adds_infill_constraint(self) -> bool:
         return self.constraint
 
-    def evaluate_infill_constraint(self, x_norm: np.ndarray) -> np.ndarray:
-        pov = self.predictor.evaluate_probability_of_validity(x_norm)
+    def evaluate_infill_constraint(self, x: np.ndarray) -> np.ndarray:
+        pov = self.predictor.evaluate_probability_of_validity(x)
         pov = np.clip(pov, 0, 1)
         return self.min_pov-pov
 
-    def mod_infill_objectives(self, x_norm: np.ndarray, f_infill: np.ndarray) -> np.ndarray:
-        pov = self.predictor.evaluate_probability_of_validity(x_norm)
+    def mod_infill_objectives(self, x: np.ndarray, f_infill: np.ndarray) -> np.ndarray:
+        pov = self.predictor.evaluate_probability_of_validity(x)
         pov = np.clip(pov, 0, 1)
 
         # The infill objectives are a minimization of some value between 0 and 1:
@@ -215,6 +221,7 @@ class PredictionHCStrategy(HiddenConstraintStrategy):
 
     def __str__(self):
         type_str = 'G' if self.constraint else 'F'
+        type_str += f' min_pov={self.min_pov}' if self.constraint and self.min_pov != .5 else ''
         return f'Prediction {type_str}: {self.predictor!s}'
 
     def __repr__(self):
@@ -230,17 +237,18 @@ class SKLearnClassifier(PredictorInterface):
         self._trained_single_class = None
         super().__init__()
 
-    def evaluate_probability_of_validity(self, x_norm: np.ndarray) -> np.ndarray:
+    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
         if self._trained_single_class is not None:
-            return np.ones((x_norm.shape[0],))*self._trained_single_class
+            return np.ones((x.shape[0],))*self._trained_single_class
 
+        x_norm = self._normalization.forward(x)
         pov = self._predictor.predict_proba(x_norm)[:, 1]  # Probability of belonging to class 1 (valid points)
         return pov[:, 0] if len(pov.shape) == 2 else pov
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def train(self, x: np.ndarray, y_is_valid: np.ndarray):
         # Check if we are training a classifier with only 1 class
         self._trained_single_class = y_is_valid[0] if len(set(y_is_valid)) == 1 else None
-        self._train(x_norm, y_is_valid)
+        self._train(self._normalization.forward(x), y_is_valid)
 
     def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         raise NotImplementedError
@@ -274,7 +282,7 @@ class KNNClassifier(SKLearnClassifier):
         self.k_dim = k_dim
         super().__init__()
 
-    def initialize(self, problem: ArchOptProblemBase):
+    def _initialize(self, problem: ArchOptProblemBase):
         if self.k_dim is not None:
             self.k = max(self.k0, int(self.k_dim*problem.n_var))
 
@@ -316,8 +324,8 @@ class SVMClassifier(SKLearnClassifier):
         self._predictor = clf = SVR(kernel='rbf')
         clf.fit(x_norm, y_is_valid)
 
-    def evaluate_probability_of_validity(self, x_norm: np.ndarray) -> np.ndarray:
-        return self._predictor.predict(x_norm)
+    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+        return self._predictor.predict(self._normalization.forward(x))
 
     def __str__(self):
         return f'RBF SVM'
@@ -330,7 +338,7 @@ class VariationalGP(PredictorInterface):
         self._model = None
         super().__init__()
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def train(self, x: np.ndarray, y_is_valid: np.ndarray):
         import tensorflow as tf
         from trieste.models.gpflow import build_vgp_classifier, VariationalGaussianProcess
         from trieste.models.optimizer import BatchOptimizer
@@ -338,16 +346,18 @@ class VariationalGP(PredictorInterface):
         from trieste.space import Box
 
         # https://secondmind-labs.github.io/trieste/1.0.0/notebooks/failure_ego.html#Build-GPflow-models
+        x_norm = self._normalization.forward(x)
         dataset = Dataset(tf.constant(x_norm, dtype=tf.float64), tf.cast(y_is_valid[:, None], dtype=tf.float64))
-        search_space = Box([0]*x_norm.shape[1], [1]*x_norm.shape[1])
+        search_space = Box([0] * x.shape[1], [1] * x.shape[1])
         classifier = build_vgp_classifier(dataset, search_space, noise_free=True)
 
         self._model = model = VariationalGaussianProcess(
             classifier, BatchOptimizer(tf.optimizers.Adam(1e-3)), use_natgrads=True)
         model.optimize(dataset)
 
-    def evaluate_probability_of_validity(self, x_norm: np.ndarray) -> np.ndarray:
+    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
         import tensorflow as tf
+        x_norm = self._normalization.forward(x)
         pov, _ = self._model.predict(tf.constant(x_norm, dtype=tf.float64))
         return pov.numpy()[:, 0]
 
@@ -362,10 +372,13 @@ class SMTPredictor(PredictorInterface):
         self._model: Optional[SurrogateModel] = None
         super().__init__()
 
-    def evaluate_probability_of_validity(self, x_norm: np.ndarray) -> np.ndarray:
-        return self._model.predict_values(x_norm)[:, 0]
+    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+        return self._model.predict_values(self._normalization.forward(x))[:, 0]
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def train(self, x: np.ndarray, y_is_valid: np.ndarray):
+        self._train(self._normalization.forward(x), y_is_valid)
+
+    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         raise NotImplementedError
 
     def __str__(self):
@@ -374,9 +387,9 @@ class SMTPredictor(PredictorInterface):
 
 class LinearRBFRegressor(SMTPredictor):
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from smt.surrogate_models.rbf import RBF
-        self._model = model = RBF(print_global=False, poly_degree=1)
+        self._model = model = RBF(print_global=False)
         model.set_training_values(x_norm, y_is_valid)
         model.train()
 
@@ -386,7 +399,7 @@ class LinearRBFRegressor(SMTPredictor):
 
 class GPRegressor(SMTPredictor):
 
-    def train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from smt.surrogate_models.krg import KRG
         self._model = model = KRG(print_global=False)
         model.set_training_values(x_norm, y_is_valid)
@@ -397,7 +410,8 @@ class GPRegressor(SMTPredictor):
 
 
 if __name__ == '__main__':
-    # GPRegressor().get_stats()
+    GPRegressor().get_stats()
+    # GPRegressor().get_stats(AlimoEdge())
     # GPRegressor().get_stats(HCBranin())
     # LinearRBFRegressor().get_stats()
 
@@ -409,4 +423,4 @@ if __name__ == '__main__':
     # VariationalGP().get_stats()
 
     # GPClassifier().get_stats(CantileveredBeamHC())
-    RandomForestClassifier(n=500).get_stats(HierarchicalRosenbrockHC())
+    # RandomForestClassifier(n=500).get_stats(HierarchicalRosenbrockHC())

@@ -24,7 +24,6 @@ from typing import List, Union, Dict, Any
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from scipy.spatial import distance
-from smt.surrogate_models.krg import KRG
 from werkzeug.utils import secure_filename
 from pymoo.core.evaluator import Evaluator
 from pymoo.core.population import Population
@@ -35,6 +34,7 @@ from sb_arch_opt.sampling import *
 from sb_arch_opt.problem import *
 from sb_arch_opt.problems.continuous import *
 from sb_arch_opt.algo.pymoo_interface import *
+from sb_arch_opt.algo.simple_sbo.models import *
 from sb_arch_opt.problems.turbofan_arch import *
 from sb_arch_opt.algo.simple_sbo.infill import *
 from sb_arch_opt.problems.hidden_constraints import *
@@ -311,7 +311,7 @@ _strategies: List[HiddenConstraintStrategy] = [
 
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population):
-    model = KRG(print_global=False)
+    model = ModelFactory.get_kriging_model()
     if problem.n_obj == 1:
         infill = ExpectedImprovementInfill()
     else:
@@ -360,7 +360,10 @@ def exp_03_04_simple_optimization():
 
             sbo = _get_sbo(problem, strategy, doe_pop)
             sbo.setup(problem)
-            sbo.ask()  # Once to initialize the infill search using the DOE
+            doe_pop = sbo.ask()  # Once to initialize the infill search using the DOE
+            sbo.evaluator.eval(problem, doe_pop)
+            sbo.tell(doe_pop)
+
             sbo_infill: HiddenConstraintsSBO = sbo.infill_obj
             n_pop, n_fail = [len(doe_pop)], [np.sum(ArchOptProblemBase.get_failed_points(doe_pop))]
             f_best = [np.nanmin(doe_pop.get('F')[:, 0])]
@@ -368,7 +371,7 @@ def exp_03_04_simple_optimization():
                 # Do the last infill using the mean prediction
                 if i_infill == n_infill-1:
                     sbo_infill.infill = inf = FunctionEstimateConstrainedInfill()
-                    inf.initialize(sbo_infill.problem, sbo_infill.surrogate_model)
+                    inf.initialize(sbo_infill.problem, sbo_infill.surrogate_model, sbo_infill.normalization)
 
                 log.info(f'Infill {i_infill+1}/{n_infill}')
                 infills = sbo.ask()
@@ -477,6 +480,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
                    n_eval_max=n_infill, metrics=metrics, additional_plot=additional_plot, problem_name=name,
                    do_run=not post_process, return_exp=post_process)
         _agg_prob_exp(problem, problem_path, exps)
+        plt.close('all')
 
     def _add_cols(df_agg_):
         df_agg_['doe_k'] = [float(val[1].split(';')[0].split('K=')[1]) for val in df_agg_.index]
@@ -760,6 +764,6 @@ if __name__ == '__main__':
     # exp_03_01_hc_area()
     # exp_03_02_hc_test_area()
     # exp_03_03_hc_predictors()
-    # exp_03_04_simple_optimization()
+    exp_03_04_simple_optimization()
     # exp_03_04a_doe_size_min_pov()
-    exp_03_05_optimization()
+    # exp_03_05_optimization()

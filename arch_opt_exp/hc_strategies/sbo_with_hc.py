@@ -39,21 +39,21 @@ class HiddenConstraintStrategy:
     def initialize(self, problem: ArchOptProblemBase):
         pass
 
-    def mod_xy_train(self, x_norm: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def mod_xy_train(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Modify inputs and outputs for the surrogate model used for the main infill function"""
-        return x_norm, y
+        return x, y
 
-    def prepare_infill_search(self, x_norm: np.ndarray, y: np.ndarray):
+    def prepare_infill_search(self, x: np.ndarray, y: np.ndarray):
         """Prepare infill search given the (non-modified) normalized inputs and outputs"""
 
     def adds_infill_constraint(self) -> bool:
         """Whether the strategy adds an inequality constraint to the infill search problem"""
         return False
 
-    def evaluate_infill_constraint(self, x_norm: np.ndarray) -> np.ndarray:
+    def evaluate_infill_constraint(self, x: np.ndarray) -> np.ndarray:
         """If the problem added an infill constraint, evaluate it here, returning an nx-length vector"""
 
-    def mod_infill_objectives(self, x_norm: np.ndarray, f_infill: np.ndarray) -> np.ndarray:
+    def mod_infill_objectives(self, x: np.ndarray, f_infill: np.ndarray) -> np.ndarray:
         """Modify the infill objectives (in-place)"""
         return f_infill
 
@@ -80,8 +80,8 @@ class HiddenConstraintsSBO(SBOInfill):
             raise ValueError(f'HC {self.hc_strategy!r} needs variance which is not provided by the surrogate model')
         return model
 
-    def _get_xy_train(self, x_norm: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        return self.hc_strategy.mod_xy_train(x_norm, y)
+    def _get_xy_train(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        return self.hc_strategy.mod_xy_train(x, y)
 
     def _build_model(self):
         if self.hc_strategy is None:
@@ -94,8 +94,7 @@ class HiddenConstraintsSBO(SBOInfill):
         if self.problem.n_ieq_constr > 0:
             y = np.column_stack([y, self.total_pop.get('G')])
 
-        x_norm = self._normalize(x)
-        self.hc_strategy.prepare_infill_search(x_norm, y)
+        self.hc_strategy.prepare_infill_search(x, y)
 
     def _get_infill_problem(self, infill: SurrogateInfill = None, force_new_points=None):
         hc_infill = HCInfill(self.infill if infill is None else infill, self.hc_strategy)
@@ -107,17 +106,15 @@ class HiddenConstraintsSBO(SBOInfill):
         problem = self.problem
         total_pop = self.total_pop
         x_train = total_pop.get('X')
-        x_norm = (x_train-problem.xl)/(problem.xu-problem.xl)
         is_failed_train = ArchOptProblemBase.get_failed_points(total_pop)
         n_fail = np.sum(is_failed_train)
 
-        x1, x2 = np.linspace(0, 1, 100), np.linspace(0, 1, 100)
+        x1, x2 = np.linspace(problem.xl[0], problem.xu[0], 100), np.linspace(problem.xl[1], problem.xu[1], 100)
         xx1, xx2 = np.meshgrid(x1, x2)
-        x_eval = .5*np.ones((len(xx1.ravel()), problem.n_var))
+        x_eval = np.ones((len(xx1.ravel()), x_train.shape[1]))
+        x_eval *= .5*(problem.xu-problem.xl)+problem.xl
         x_eval[:, 0] = xx1.ravel()
         x_eval[:, 1] = xx2.ravel()
-        x_eval_norm = x_eval
-        x_eval = x_eval*(problem.xu-problem.xl) + problem.xl
         out_plot = problem.evaluate(x_eval, return_as_dictionary=True)
         is_failed_ref = ArchOptProblemBase.get_failed_points(out_plot)
         pov_ref = (1-is_failed_ref.astype(float)).reshape(xx1.shape)
@@ -133,14 +130,15 @@ class HiddenConstraintsSBO(SBOInfill):
             if is_g:
                 plt.contour(xx1, xx2, zz, [0], linewidths=2, colors='k')
             plt.contour(xx1, xx2, pov_ref, [.5], linewidths=.5, colors='r')
-            plt.scatter(x_norm[is_failed_train, 0], x_norm[is_failed_train, 1], s=25, c='r', marker='x')
-            plt.scatter(x_norm[~is_failed_train, 0], x_norm[~is_failed_train, 1], s=25, color=(0, 1, 0), marker='x')
+            plt.scatter(x_train[is_failed_train, 0], x_train[is_failed_train, 1], s=25, c='r', marker='x')
+            plt.scatter(x_train[~is_failed_train, 0], x_train[~is_failed_train, 1], s=25, color=(0, 1, 0), marker='x')
             if x_infill is not None:
                 plt.scatter([x_infill[0]], [x_infill[1]], s=50, c='b', marker='x')
             plt.xlabel('$x_0$'), plt.ylabel('$x_1$')
             if save_path is not None:
                 plt.savefig(f'{save_path}_{path_post}.png')
 
+        x_eval_norm = self.normalization.forward(x_eval)
         y_predicted = self.surrogate_model.predict_values(x_eval_norm)
         y_predicted_std = np.sqrt(self.surrogate_model.predict_variances(x_eval_norm))
         y_names = [f'f{i}' for i in range(problem.n_obj)]+[f'g{i}' for i in range(problem.n_ieq_constr)]
@@ -186,7 +184,7 @@ class HCInfill(SurrogateInfill):
         return self._infill.predict(x)
 
     def _initialize(self):
-        self._infill.initialize(self.problem, self.surrogate_model)
+        self._infill.initialize(self.problem, self.surrogate_model, self.normalization)
 
     def select_infill_solutions(self, population, infill_problem, n_infill):
         return self._infill.select_infill_solutions(population, infill_problem, n_infill)

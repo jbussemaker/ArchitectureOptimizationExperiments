@@ -18,7 +18,9 @@ import numpy as np
 from typing import *
 from scipy.spatial import distance
 from smt.surrogate_models.krg import KRG
+from sb_arch_opt.problem import ArchOptProblemBase
 from arch_opt_exp.hc_strategies.sbo_with_hc import *
+from pymoo.util.normalization import SimpleZeroToOneNormalization
 
 __all__ = ['ReplacementHCStrategyBase', 'GlobalWorstReplacement', 'LocalReplacement', 'PredictedWorstReplacement']
 
@@ -26,17 +28,24 @@ __all__ = ['ReplacementHCStrategyBase', 'GlobalWorstReplacement', 'LocalReplacem
 class ReplacementHCStrategyBase(HiddenConstraintStrategy):
     """Base class for a strategy that replaces failed outputs by some value"""
 
-    def mod_xy_train(self, x_norm: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def __init__(self):
+        self._normalization: Optional[SimpleZeroToOneNormalization] = None
+        super().__init__()
+
+    def initialize(self, problem: ArchOptProblemBase):
+        self._normalization = SimpleZeroToOneNormalization(xl=problem.xl, xu=problem.xu)
+
+    def mod_xy_train(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # Separate into failed and valid (non-failed) set
         is_failed = self.is_failed(y)
-        x_valid = x_norm[~is_failed, :]
+        x_valid = x[~is_failed, :]
         y_valid = y[~is_failed, :]
-        x_failed = x_norm[is_failed, :]
+        x_failed = x[is_failed, :]
         y_failed = y[is_failed, :]
 
         # If there are no failed points, no need to replace
         if x_failed.shape[0] == 0:
-            return x_norm, y
+            return x, y
 
         # If there are no valid points, replace with 1
         if y_valid.shape[0] == 0:
@@ -47,7 +56,7 @@ class ReplacementHCStrategyBase(HiddenConstraintStrategy):
         # Replace values
         y = y.copy()
         y[is_failed, :] = y_failed_replace
-        return x_norm, y
+        return x, y
 
     def _replace_y(self, x_failed: np.ndarray, y_failed: np.ndarray, x_valid: np.ndarray, y_valid: np.ndarray) \
             -> np.ndarray:
@@ -92,7 +101,7 @@ class LocalReplacement(ReplacementHCStrategyBase):
             -> np.ndarray:
         # Get distances from failed points to valid points
         n, mean = self.n, self.mean
-        x_dist = distance.cdist(x_failed, x_valid)
+        x_dist = distance.cdist(self._normalization.forward(x_failed), self._normalization.forward(x_valid))
 
         def _agg(y_):
             if mean:
@@ -133,13 +142,15 @@ class PredictedWorstReplacement(ReplacementHCStrategyBase):
         y_norm = (y_valid - y_min) / norm
 
         # Train Kriging surrogate model
+        x_norm = self._normalization.forward
+
         model = KRG(print_global=False)
-        model.set_training_values(x_valid, y_norm)
+        model.set_training_values(x_norm(x_valid), y_norm)
         model.train()
 
         # Predict values of failed points
-        y_predict = model.predict_values(x_failed)
-        y_predict_var = model.predict_variances(x_failed)
+        y_predict = model.predict_values(x_norm(x_failed))
+        y_predict_var = model.predict_variances(x_norm(x_failed))
 
         # Replace failed points with mean + sigma*var of the prediction
         y_replace = y_predict + self.mul * np.sqrt(y_predict_var)
