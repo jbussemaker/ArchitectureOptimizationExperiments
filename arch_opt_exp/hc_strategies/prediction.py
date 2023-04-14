@@ -18,6 +18,7 @@ import numpy as np
 from typing import *
 from sb_arch_opt.problem import *
 from sb_arch_opt.sampling import *
+from sb_arch_opt.algo.simple_sbo.models import *
 from arch_opt_exp.hc_strategies.sbo_with_hc import *
 from sb_arch_opt.problems.hidden_constraints import *
 from pymoo.util.normalization import Normalization, SimpleZeroToOneNormalization
@@ -25,8 +26,8 @@ from pymoo.util.normalization import Normalization, SimpleZeroToOneNormalization
 from smt.surrogate_models.surrogate_model import SurrogateModel
 
 __all__ = ['PredictionHCStrategy', 'PredictorInterface',
-           'RandomForestClassifier', 'KNNClassifier', 'GPClassifier', 'SVMClassifier', 'LinearRBFRegressor',
-           'GPRegressor', 'VariationalGP']
+           'RandomForestClassifier', 'KNNClassifier', 'GPClassifier', 'SVMClassifier', 'RBFRegressor',
+           'GPRegressor', 'MDGPRegressor', 'VariationalGP', 'LinearInterpolator', 'RBFInterpolator']
 
 
 class PredictorInterface:
@@ -37,6 +38,7 @@ class PredictorInterface:
     def __init__(self):
         self.training_set = None
         self._normalization: Optional[Normalization] = None
+        self._trained_single_class = None
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -46,7 +48,7 @@ class PredictorInterface:
         return state
 
     def get_stats(self, problem: ArchOptProblemBase = None, min_pov=.5, n=50, train=True, plot=True, save_ref=True,
-                  save_path=None, show=True):
+                  save_path=None, add_close_points=False, show=True, i_repeat=None):
         import matplotlib.pyplot as plt
         from matplotlib.collections import LineCollection
         if problem is None:
@@ -54,11 +56,21 @@ class PredictorInterface:
 
         if train:
             self.initialize(problem)
-            cache_key = (repr(problem), n)
+            cache_key = (repr(problem), n, add_close_points, i_repeat)
             if cache_key in self._training_doe:
                 x_train = self._training_doe[cache_key]
             else:
-                self._training_doe[cache_key] = x_train = HierarchicalRandomSampling().do(problem, n).get('X')
+                x_train = HierarchicalRandomSampling().do(problem, n).get('X')
+                if add_close_points:
+                    x_opt = problem.pareto_set()[[0], :]
+                    scale = .025
+                    dx0, dx1 = np.linspace(-scale, scale, 5), np.linspace(-scale, scale, 5)
+                    dxx0, dxx1 = np.meshgrid(dx0, dx1)
+                    dx = np.column_stack([dxx0.ravel(), dxx1.ravel()])
+                    x_opt_close = np.repeat(x_opt, dx.shape[0], axis=0)
+                    x_opt_close[:, :2] += dx
+                    x_train = np.row_stack([x_train, x_opt_close])
+                self._training_doe[cache_key] = x_train
             out_train = problem.evaluate(x_train, return_as_dictionary=True)
 
             is_failed_train = problem.get_failed_points(out_train)
@@ -165,10 +177,23 @@ class PredictorInterface:
         pass
 
     def train(self, x: np.ndarray, y_is_valid: np.ndarray):
+        # Check if we are training a classifier with only 1 class
+        self._trained_single_class = single_class = y_is_valid[0] if len(set(y_is_valid)) == 1 else None
+
+        if single_class is None:
+            self._train(x, y_is_valid)
+
+    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+        if self._trained_single_class is not None:
+            return np.ones((x.shape[0],))*self._trained_single_class
+
+        return self._evaluate_probability_of_validity(x)
+
+    def _train(self, x: np.ndarray, y_is_valid: np.ndarray):
         """Train the model (x's are not normalized), y_is_valid is a vector"""
         raise NotImplementedError
 
-    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+    def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
         """Get the probability of validity (0 to 1) at nx points (x is not normalized); should return a vector!"""
         raise NotImplementedError
 
@@ -234,23 +259,17 @@ class SKLearnClassifier(PredictorInterface):
 
     def __init__(self):
         self._predictor = None
-        self._trained_single_class = None
         super().__init__()
 
-    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
-        if self._trained_single_class is not None:
-            return np.ones((x.shape[0],))*self._trained_single_class
-
+    def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
         x_norm = self._normalization.forward(x)
         pov = self._predictor.predict_proba(x_norm)[:, 1]  # Probability of belonging to class 1 (valid points)
         return pov[:, 0] if len(pov.shape) == 2 else pov
 
-    def train(self, x: np.ndarray, y_is_valid: np.ndarray):
-        # Check if we are training a classifier with only 1 class
-        self._trained_single_class = y_is_valid[0] if len(set(y_is_valid)) == 1 else None
-        self._train(self._normalization.forward(x), y_is_valid)
+    def _train(self, x: np.ndarray, y_is_valid: np.ndarray):
+        self._do_train(self._normalization.forward(x), y_is_valid)
 
-    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         raise NotImplementedError
 
     def __str__(self):
@@ -263,7 +282,7 @@ class RandomForestClassifier(SKLearnClassifier):
         self.n = n
         super().__init__()
 
-    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from sklearn.ensemble import RandomForestClassifier
         self._predictor = clf = RandomForestClassifier(n_estimators=self.n)
         clf.fit(x_norm, y_is_valid)
@@ -277,7 +296,7 @@ class RandomForestClassifier(SKLearnClassifier):
 
 class KNNClassifier(SKLearnClassifier):
 
-    def __init__(self, k: int = 5, k_dim: float = None):
+    def __init__(self, k: int = 2, k_dim: float = 2.):
         self.k = self.k0 = k
         self.k_dim = k_dim
         super().__init__()
@@ -286,9 +305,12 @@ class KNNClassifier(SKLearnClassifier):
         if self.k_dim is not None:
             self.k = max(self.k0, int(self.k_dim*problem.n_var))
 
-    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from sklearn.neighbors import KNeighborsClassifier
-        self._predictor = clf = KNeighborsClassifier(n_neighbors=self.k)
+        k = self.k
+        if k > x_norm.shape[0]:
+            k = x_norm.shape[0]
+        self._predictor = clf = KNeighborsClassifier(n_neighbors=k)
         clf.fit(x_norm, y_is_valid)
 
     def __str__(self):
@@ -304,7 +326,7 @@ class GPClassifier(SKLearnClassifier):
         self.nu = nu
         super().__init__()
 
-    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from sklearn.gaussian_process import GaussianProcessClassifier
         from sklearn.gaussian_process.kernels import Matern
         self._predictor = clf = GaussianProcessClassifier(kernel=1.*Matern(length_scale=.1, nu=self.nu))
@@ -319,12 +341,12 @@ class GPClassifier(SKLearnClassifier):
 
 class SVMClassifier(SKLearnClassifier):
 
-    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from sklearn.svm import SVR
         self._predictor = clf = SVR(kernel='rbf')
         clf.fit(x_norm, y_is_valid)
 
-    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+    def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
         return self._predictor.predict(self._normalization.forward(x))
 
     def __str__(self):
@@ -332,13 +354,18 @@ class SVMClassifier(SKLearnClassifier):
 
 
 class VariationalGP(PredictorInterface):
+    """
+    Implementation based on:
+    - https://secondmind-labs.github.io/trieste/1.1.2/notebooks/failure_ego.html
+    - https://gpflow.github.io/GPflow/2.7.1/notebooks/getting_started/classification_and_other_data_distributions.html#The-Variational-Gaussion-Process
+    """
     _reset_pickle_keys = ['_model']
 
     def __init__(self):
         self._model = None
         super().__init__()
 
-    def train(self, x: np.ndarray, y_is_valid: np.ndarray):
+    def _train(self, x: np.ndarray, y_is_valid: np.ndarray):
         import tensorflow as tf
         from trieste.models.gpflow import build_vgp_classifier, VariationalGaussianProcess
         from trieste.models.optimizer import BatchOptimizer
@@ -349,16 +376,18 @@ class VariationalGP(PredictorInterface):
         x_norm = self._normalization.forward(x)
         dataset = Dataset(tf.constant(x_norm, dtype=tf.float64), tf.cast(y_is_valid[:, None], dtype=tf.float64))
         search_space = Box([0] * x.shape[1], [1] * x.shape[1])
-        classifier = build_vgp_classifier(dataset, search_space, noise_free=True)
+        classifier = build_vgp_classifier(dataset, search_space, noise_free=False, kernel_variance=100.)
 
         self._model = model = VariationalGaussianProcess(
             classifier, BatchOptimizer(tf.optimizers.Adam(1e-3)), use_natgrads=True)
         model.optimize(dataset)
+        # from gpflow.utilities import print_summary
+        # print_summary(model.model)
 
-    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+    def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
         import tensorflow as tf
         x_norm = self._normalization.forward(x)
-        pov, _ = self._model.predict(tf.constant(x_norm, dtype=tf.float64))
+        pov, _ = self._model.predict_y(tf.constant(x_norm, dtype=tf.float64))
         return pov.numpy()[:, 0]
 
     def __str__(self):
@@ -372,36 +401,37 @@ class SMTPredictor(PredictorInterface):
         self._model: Optional[SurrogateModel] = None
         super().__init__()
 
-    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+    def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
         return self._model.predict_values(self._normalization.forward(x))[:, 0]
 
-    def train(self, x: np.ndarray, y_is_valid: np.ndarray):
-        self._train(self._normalization.forward(x), y_is_valid)
+    def _train(self, x: np.ndarray, y_is_valid: np.ndarray):
+        self._do_train(self._normalization.forward(x), y_is_valid)
 
-    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         raise NotImplementedError
 
     def __str__(self):
         raise NotImplementedError
 
 
-class LinearRBFRegressor(SMTPredictor):
+class RBFRegressor(SMTPredictor):
+    """Uses SMT's continuous RBF regressor"""
 
-    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from smt.surrogate_models.rbf import RBF
         self._model = model = RBF(print_global=False)
         model.set_training_values(x_norm, y_is_valid)
         model.train()
 
     def __str__(self):
-        return 'Linear RBF'
+        return 'RBF'
 
 
 class GPRegressor(SMTPredictor):
+    """Uses SMT's continuous Kriging regressor"""
 
-    def _train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
-        from smt.surrogate_models.krg import KRG
-        self._model = model = KRG(print_global=False)
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+        self._model = model = ModelFactory.get_kriging_model(corr='abs_exp', theta0=[1e-2], n_start=5)
         model.set_training_values(x_norm, y_is_valid)
         model.train()
 
@@ -409,11 +439,97 @@ class GPRegressor(SMTPredictor):
         return 'GP'
 
 
+class MDGPRegressor(SMTPredictor):
+    """Uses SMT's mixed-discrete Kriging regressor"""
+
+    def __init__(self):
+        self._problem = None
+        super().__init__()
+
+    def _get_normalization(self, problem: ArchOptProblemBase) -> Normalization:
+        return ModelFactory(problem).get_md_normalization()
+
+    def _initialize(self, problem: ArchOptProblemBase):
+        self._problem = problem
+
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+        model, _ = ModelFactory(self._problem).get_md_kriging_model(corr='abs_exp', theta0=[1e-2], n_start=5)
+        self._model = model
+        model.set_training_values(x_norm, y_is_valid)
+        model.train()
+
+    def __str__(self):
+        return 'MD-GP'
+
+
+class MOERegressor(SMTPredictor):
+    """Uses SMT's Mixture-of-Expert surrogate model"""
+
+    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
+        self._model = model = ModelFactory.get_moe_model(
+            smooth_recombination=False,
+            n_clusters=2,
+            variances_support=False,
+        )
+        model.set_training_values(x_norm, y_is_valid)
+        model.train()
+
+    # def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+    #     x_norm = self._normalization.forward(x)
+    #     return self._model.moe._proba_cluster(x_norm)[:, 1]
+
+    def __str__(self):
+        return 'MOE'
+
+
+class LinearInterpolator(PredictorInterface):
+
+    def __init__(self):
+        self._inter = None
+        self._extra = None
+        super().__init__()
+
+    def _train(self, x: np.ndarray, y_is_valid: np.ndarray):
+        from scipy.interpolate import LinearNDInterpolator, NearestNDInterpolator
+        x_norm = self._normalization.forward(x)
+        self._inter = LinearNDInterpolator(x_norm, y_is_valid)
+        self._extra = NearestNDInterpolator(x_norm, y_is_valid)
+
+    def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+        x_norm = self._normalization.forward(x)
+        pov = self._inter(x_norm)
+        nan_mask = np.isnan(pov)
+        pov[nan_mask] = self._extra(x_norm[nan_mask, :])
+        return pov
+
+    def __str__(self):
+        return 'Linear Interpolator'
+
+
+class RBFInterpolator(PredictorInterface):
+
+    def __init__(self):
+        self._inter = None
+        super().__init__()
+
+    def _train(self, x: np.ndarray, y_is_valid: np.ndarray):
+        from scipy.interpolate import RBFInterpolator
+        x_norm = self._normalization.forward(x)
+        self._inter = RBFInterpolator(x_norm, y_is_valid, kernel='linear', degree=-1)
+
+    def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+        x_norm = self._normalization.forward(x)
+        return self._inter(x_norm)
+
+    def __str__(self):
+        return 'RBF Interpolator'
+
+
 if __name__ == '__main__':
-    GPRegressor().get_stats()
-    # GPRegressor().get_stats(AlimoEdge())
+    # GPRegressor().get_stats()
+    # GPRegressor().get_stats(AlimoEdge(), add_close_points=True)
     # GPRegressor().get_stats(HCBranin())
-    # LinearRBFRegressor().get_stats()
+    RBFRegressor().get_stats(show=False)
 
     # RandomForestClassifier(n=500).get_stats()
     # KNNClassifier(k=5).get_stats()
@@ -421,6 +537,18 @@ if __name__ == '__main__':
     # SVMClassifier().get_stats()
 
     # VariationalGP().get_stats()
+    # VariationalGP().get_stats(MDMOMueller08())
+    # VariationalGP().get_stats(MDCarsideHC())
+    # VariationalGP().get_stats(HierAlimo())
 
     # GPClassifier().get_stats(CantileveredBeamHC())
     # RandomForestClassifier(n=500).get_stats(HierarchicalRosenbrockHC())
+
+    # MDGPRegressor().get_stats()
+    # MDGPRegressor().get_stats(MDCarsideHC())
+    # MDGPRegressor().get_stats(HierAlimo())
+    # MDGPRegressor().get_stats(MDCantileveredBeamHC())
+
+    # MOERegressor().get_stats()
+    # LinearInterpolator().get_stats()
+    RBFInterpolator().get_stats()

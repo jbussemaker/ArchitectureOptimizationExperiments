@@ -54,6 +54,7 @@ capture_log()
 _exp_03_01_folder = '03_hc_01_hc_area'
 _exp_03_02_folder = '03_hc_02_hc_test_area'
 _exp_03_03_folder = '03_hc_03_hc_predictors'
+_exp_03_03a_folder = '03_hc_03a_knn_predictor'
 _exp_03_04_folder = '03_hc_04_simple_optimization'
 _exp_03_04a_folder = '03_hc_04a_doe_size_min_pov'
 _exp_03_05_folder = '03_hc_05_optimization'
@@ -238,11 +239,14 @@ def exp_03_02_hc_test_area():
 _predictors: List[PredictorInterface] = [
     RandomForestClassifier(n=100),
     KNNClassifier(k=5),
-    GPClassifier(nu=2.5),
+    GPClassifier(),
     SVMClassifier(),
-    LinearRBFRegressor(),
+    RBFRegressor(),
     GPRegressor(),
+    MDGPRegressor(),
     VariationalGP(),
+    LinearInterpolator(),
+    RBFInterpolator(),
 ]
 
 
@@ -254,36 +258,120 @@ def exp_03_03_hc_predictors():
     Some predictors are well able to capture the hidden constraint areas.
 
     Conclusions:
-    - GP regressor/classifier, Linear RBF and Random Forest Classifier seem most promising
+    - RBF SVM performs badly for all tested problems
+    - RBF Regressor is not able to capture mixed-discrete features
+    - KNN classifier performs average for some of the problems
+    - Linear interpolator performs badly for high-dimensional problems due to sparseness and inability to extrapolate
+    - For Hierarchical Alimo, only the Random Forest, SMT MD-GP, and SMT GP perform acceptably
+    - For the Alimo Edge problem, the GP regressor performs badly
     """
     folder = set_results_folder(_exp_03_03_folder)
+    n = 50
 
-    ref_saved = False
-    for n in [50]:
+    for problem, add_close_points in [
+        (Alimo(), False),
+        (AlimoEdge(), True),
+        (MDCarsideHC(), False),
+        (HierAlimo(), False),
+    ]:
+        name = problem.__class__.__name__
         curves = []
         max_acc = []
         predictor_names = []
+        ref_saved = False
         for i, predictor in enumerate(_predictors):
-            log.info(f'Testing {n} samples for predictor ({i+1}/{len(_predictors)}): {predictor!s}')
+            log.info(f'Testing {name} ({n} samples) for predictor ({i+1}/{len(_predictors)}): {predictor!s}')
             predictor_names.append(str(predictor))
 
-            save_path = f'{folder}/{n}_{i}_{secure_filename(str(predictor))}'
+            save_path = f'{folder}/{name}_{i}_{secure_filename(str(predictor))}'
             fpr, tpr, acc, _ = predictor.get_stats(
-                Alimo(), n=n, plot=True, save_path=save_path, save_ref=not ref_saved, show=False)
+                problem, n=n, plot=True, save_path=save_path, save_ref=not ref_saved,
+                add_close_points=add_close_points, show=False)
             curves.append((fpr, tpr))
             max_acc.append(max(acc))
-            plt.close('all')
+
             ref_saved = True
 
-        plt.figure(figsize=(10, 4)), plt.title(f'ROC Curves ({n} samples)')
-        for i, name in enumerate(predictor_names):
-            label = f'{name} ({max_acc[i]*100:.1f}% acc)'
+        plt.figure(figsize=(10, 4)), plt.title(f'{name} ROC Curves ({n} samples)')
+        for i, pred_name in enumerate(predictor_names):
+            label = f'{pred_name} ({max_acc[i]*100:.1f}% acc)'
             plt.plot(curves[i][0], curves[i][1], linewidth=1, label=label)
         plt.xlim([0, 1]), plt.ylim([0, 1]), plt.xlabel('False Positive Rate'), plt.ylabel('True Positive Rate')
         plt.legend(loc='center left', bbox_to_anchor=(1, .5), frameon=False)
         plt.gca().set_aspect('equal')
         plt.tight_layout()
-        plt.savefig(f'{folder}/{n}_roc.png')
+        plt.savefig(f'{folder}/{name}_roc.png')
+        plt.close('all')
+
+
+def exp_03_03a_knn_predictor():
+    """
+    Test different numbers of nearest neighbors for the KNN predictor.
+
+    Conclusions:
+    - k_dim=2 (i.e. k = 2*n_dim) with no minimum k works best across all problems
+    """
+    folder = set_results_folder(_exp_03_03a_folder)
+    n = 50
+    n_repeat = 20
+    k_dim_test = [-5, -2, -1, .5, 1, 2, 5, 10]
+
+    for problem in [Alimo(), Mueller02(), CarsideHC(), Mueller01(), MDCarsideHC()]:
+        name = problem.__class__.__name__
+        n_dim = problem.n_var
+
+        k_acc = []
+        k_max_acc = []
+        k_max_mp = []
+        curves = []
+        for k_dim in k_dim_test:
+            rep_k_acc = []
+            rep_k_max = []
+            min_pov_max = []
+            for i_repeat in range(n_repeat):
+                log.info(f'Testing {name} ({n_dim} dim) with k_dim = {k_dim} ({i_repeat+1}/{n_repeat})')
+                if k_dim < 0:
+                    predictor = KNNClassifier(k=-k_dim)
+                else:
+                    predictor = KNNClassifier(k=1, k_dim=k_dim)
+
+                fpr, tpr, acc, min_pov = predictor.get_stats(problem, n=n, plot=False, i_repeat=i_repeat)
+                if i_repeat == 0:
+                    curves.append((fpr, tpr))
+                i_sel = np.argmin(np.abs(min_pov-.5))
+                rep_k_acc.append(acc[i_sel])
+                i_max = np.argmax(acc)
+                rep_k_max.append(acc[i_max])
+                min_pov_max.append(min_pov[i_max])
+
+            k_acc.append([np.median(rep_k_acc), np.quantile(rep_k_acc, .25), np.quantile(rep_k_acc, .75)])
+            k_max_acc.append([np.median(rep_k_max), np.quantile(rep_k_max, .25), np.quantile(rep_k_max, .75)])
+            k_max_mp.append([np.median(min_pov_max), np.quantile(min_pov_max, .25), np.quantile(min_pov_max, .75)])
+        k_acc = np.array(k_acc)
+        k_max_acc = np.array(k_max_acc)
+        k_max_mp = np.array(k_max_mp)
+
+        plt.figure(), plt.title(f'{name} ({n_dim} dimensions, {n} samples)')
+        plt.plot(k_dim_test, k_acc[:, 0], 'k', linewidth=2, label='Accuracy')
+        plt.fill_between(k_dim_test, k_acc[:, 1], k_acc[:, 2], alpha=.05, color='k', linewidth=0)
+        plt.plot(k_dim_test, k_max_acc[:, 0], '--b', linewidth=1, label='Max accuracy')
+        plt.fill_between(k_dim_test, k_max_acc[:, 1], k_max_acc[:, 2], alpha=.05, color='b', linewidth=0)
+        plt.plot(k_dim_test, k_max_mp[:, 0], '--g', linewidth=1, label='PoV @ max accuracy')
+        plt.fill_between(k_dim_test, k_max_mp[:, 1], k_max_mp[:, 2], alpha=.05, color='g', linewidth=0)
+        plt.xlabel('$k_{dim}$'), plt.ylabel('Accuracy'), plt.legend()
+        plt.tight_layout()
+        plt.savefig(f'{folder}/{n_dim:02d}_{name}_k_dim_acc.png')
+
+        plt.figure(figsize=(10, 4)), plt.title(f'{name} ROC Curves ({n_dim} dimensions)')
+        for i, k_dim in enumerate(k_dim_test):
+            label = f'$k_{{dim}}$ = {k_dim} ({k_acc[i, 0]*100:.1f}% acc)'
+            plt.plot(curves[i][0], curves[i][1], linewidth=1, label=label)
+        plt.xlim([0, 1]), plt.ylim([0, 1]), plt.xlabel('False Positive Rate'), plt.ylabel('True Positive Rate')
+        plt.legend(loc='center left', bbox_to_anchor=(1, .5), frameon=False)
+        plt.gca().set_aspect('equal')
+        plt.tight_layout()
+        plt.savefig(f'{folder}/{n_dim:02d}_{name}_roc.png')
+        plt.close('all')
 
 
 _strategies: List[HiddenConstraintStrategy] = [
@@ -297,16 +385,27 @@ _strategies: List[HiddenConstraintStrategy] = [
     PredictedWorstReplacement(mul=2.),
 
     PredictionHCStrategy(RandomForestClassifier(n=100)),
+    PredictionHCStrategy(RandomForestClassifier(n=100), min_pov=.75),
     PredictionHCStrategy(RandomForestClassifier(n=100), constraint=False),
-    # PredictionHCStrategy(GPClassifier(nu=2.5)),
-    # PredictionHCStrategy(GPClassifier(nu=2.5), constraint=False),
+    PredictionHCStrategy(GPClassifier()),
+    PredictionHCStrategy(GPClassifier(), min_pov=.75),
+    PredictionHCStrategy(GPClassifier(), constraint=False),
+    PredictionHCStrategy(VariationalGP()),
+    PredictionHCStrategy(VariationalGP(), min_pov=.75),
+    PredictionHCStrategy(VariationalGP(), constraint=False),
     PredictionHCStrategy(KNNClassifier(k_dim=2)),
+    PredictionHCStrategy(KNNClassifier(k_dim=2), min_pov=.75),
     PredictionHCStrategy(KNNClassifier(k_dim=2), constraint=False),
-    PredictionHCStrategy(LinearRBFRegressor()),
-    PredictionHCStrategy(LinearRBFRegressor(), constraint=False),
-    PredictionHCStrategy(GPRegressor()),
-    PredictionHCStrategy(GPRegressor(), min_pov=.75),
-    PredictionHCStrategy(GPRegressor(), constraint=False),
+    # PredictionHCStrategy(LinearInterpolator()),
+    # PredictionHCStrategy(LinearInterpolator(), constraint=False),
+    PredictionHCStrategy(RBFInterpolator()),
+    PredictionHCStrategy(RBFInterpolator(), min_pov=.75),
+    PredictionHCStrategy(RBFInterpolator(), constraint=False),
+    # PredictionHCStrategy(GPRegressor()),
+    # PredictionHCStrategy(GPRegressor(), constraint=False),
+    PredictionHCStrategy(MDGPRegressor()),
+    PredictionHCStrategy(MDGPRegressor(), min_pov=.75),
+    PredictionHCStrategy(MDGPRegressor(), constraint=False),
 ]
 
 
@@ -440,6 +539,8 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         (Alimo(), '01'),
         (AlimoEdge(), '01'),
         (Mueller01(), '02_HFR'),
+        (MDCarsideHC(), '09_MD_MO_G_HFR'),
+        (HierAlimo(), '10_HIER'),
     ]
 
     problem_paths = []
@@ -468,7 +569,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         doe_exp = {}
         for k in k_doe_test:
             for min_pov in min_pov_test:
-                strategy = PredictionHCStrategy(GPRegressor(), constraint=min_pov != -1,
+                strategy = PredictionHCStrategy(MDGPRegressor(), constraint=min_pov != -1,
                                                 min_pov=.5 if min_pov == -1 else min_pov)
                 sbo = _get_sbo(problem, strategy, doe[k][0])
                 algo_name = f'DOE K={k}; min_pov={min_pov}'
@@ -501,6 +602,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     _plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='fail_ratio', y_log=True)
     _plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
     _plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
+    plt.close('all')
 
 
 def _get_metrics(problem):
@@ -567,6 +669,7 @@ def exp_03_05_optimization(post_process=False):
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
                    return_exp=post_process)
         _agg_prob_exp(problem, problem_path, exps)
+        plt.close('all')
 
     def _add_cols(df_agg_):
         df_agg_['strategy'] = [val[1].split(':')[0].lower().split(' ')[0] for val in df_agg_.index]
@@ -589,6 +692,7 @@ def exp_03_05_optimization(post_process=False):
     _plot_problem_bars(df_agg, folder, 'g_f_strat', 'delta_hv_ratio', y_log=True)
     _plot_problem_bars(df_agg, folder, 'g_f_strat', 'fail_rate_ratio')
     _plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_rate_ratio')
+    plt.close('all')
 
 
 def _agg_prob_exp(problem, problem_path, exps):
@@ -764,6 +868,7 @@ if __name__ == '__main__':
     # exp_03_01_hc_area()
     # exp_03_02_hc_test_area()
     # exp_03_03_hc_predictors()
-    exp_03_04_simple_optimization()
-    # exp_03_04a_doe_size_min_pov()
-    # exp_03_05_optimization()
+    # exp_03_03a_knn_predictor()
+    # exp_03_04_simple_optimization()
+    exp_03_04a_doe_size_min_pov()
+    exp_03_05_optimization()
