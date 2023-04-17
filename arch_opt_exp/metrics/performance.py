@@ -120,6 +120,11 @@ class DeltaHVMetric(Metric):
             self.i_iter += 1
             return [passed if passed is not None else np.nan for passed in self.is_passed]
 
+        # If there are no optimal points (e.g. if all points are infeasible or failed)
+        if f_opt.shape[0] == 0:
+            _get_iter_p_passed(1.)
+            return [np.nan]*len(self.value_names)
+
         # If we have only one point, calculate the relative distance to the optimal point instead (because true HV is 0)
         if self.is_one_dim:
             # Update max points

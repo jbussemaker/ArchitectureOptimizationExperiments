@@ -34,9 +34,9 @@ from sb_arch_opt.sampling import *
 from sb_arch_opt.problem import *
 from sb_arch_opt.problems.continuous import *
 from sb_arch_opt.algo.pymoo_interface import *
-from sb_arch_opt.algo.simple_sbo.models import *
+from sb_arch_opt.algo.arch_sbo.models import *
 from sb_arch_opt.problems.turbofan_arch import *
-from sb_arch_opt.algo.simple_sbo.infill import *
+from sb_arch_opt.algo.arch_sbo.infill import *
 from sb_arch_opt.problems.hidden_constraints import *
 
 from arch_opt_exp.experiments.runner import *
@@ -871,4 +871,4 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     exp_03_04a_doe_size_min_pov()
-    exp_03_05_optimization()
+    # exp_03_05_optimization()

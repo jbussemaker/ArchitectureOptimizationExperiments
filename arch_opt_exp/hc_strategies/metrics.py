@@ -17,7 +17,7 @@ Contact: jasper.bussemaker@dlr.de
 import numpy as np
 from typing import *
 from sb_arch_opt.problem import *
-from sb_arch_opt.algo.simple_sbo.algo import *
+from sb_arch_opt.algo.arch_sbo.algo import *
 from arch_opt_exp.experiments.metrics_base import *
 from arch_opt_exp.hc_strategies.prediction import *
 from arch_opt_exp.hc_strategies.sbo_with_hc import *

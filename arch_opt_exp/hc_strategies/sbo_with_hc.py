@@ -17,8 +17,8 @@ Contact: jasper.bussemaker@dlr.de
 import numpy as np
 from typing import *
 from sb_arch_opt.problem import *
-from sb_arch_opt.algo.simple_sbo.algo import *
-from sb_arch_opt.algo.simple_sbo.infill import *
+from sb_arch_opt.algo.arch_sbo.algo import *
+from sb_arch_opt.algo.arch_sbo.infill import *
 
 __all__ = ['HiddenConstraintStrategy', 'HiddenConstraintsSBO', 'HCInfill']
 

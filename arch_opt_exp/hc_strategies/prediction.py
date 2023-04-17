@@ -18,7 +18,7 @@ import numpy as np
 from typing import *
 from sb_arch_opt.problem import *
 from sb_arch_opt.sampling import *
-from sb_arch_opt.algo.simple_sbo.models import *
+from sb_arch_opt.algo.arch_sbo.models import *
 from arch_opt_exp.hc_strategies.sbo_with_hc import *
 from sb_arch_opt.problems.hidden_constraints import *
 from pymoo.util.normalization import Normalization, SimpleZeroToOneNormalization
