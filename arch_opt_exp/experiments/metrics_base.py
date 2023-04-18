@@ -267,7 +267,10 @@ class IndicatorMetric(Metric):
         return ['indicator']
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
-        return [self.indicator.do(self._get_opt_f(algorithm))]
+        f_opt = self._get_opt_f(algorithm)
+        if f_opt.shape[0] == 0 or f_opt.shape[1] == 0:
+            return [np.nan]
+        return [self.indicator.do(f_opt)]
 
 
 class MetricTermination(Termination):

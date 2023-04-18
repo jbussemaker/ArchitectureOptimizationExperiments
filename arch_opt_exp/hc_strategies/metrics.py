@@ -23,7 +23,7 @@ from arch_opt_exp.hc_strategies.prediction import *
 from arch_opt_exp.hc_strategies.sbo_with_hc import *
 from pymoo.core.algorithm import Algorithm
 
-__all__ = ['FailRateMetric', 'PredictorMetric']
+__all__ = ['FailRateMetric', 'PredictorMetric', 'SBOTimesMetric']
 
 
 class FailRateMetric(Metric):
@@ -96,3 +96,34 @@ class PredictorMetric(Metric):
             if isinstance(algorithm.infill_obj, HiddenConstraintsSBO):
                 if isinstance(algorithm.infill_obj.hc_strategy, PredictionHCStrategy):
                     return algorithm.infill_obj.hc_strategy
+
+
+class SBOTimesMetric(Metric):
+    """Measure times for some SBO operations"""
+
+    def __init__(self):
+        self.rate0 = None
+        super().__init__()
+
+    @property
+    def name(self):
+        return 'time'
+
+    @property
+    def value_names(self) -> List[str]:
+        return ['train', 'infill']
+
+    def _calculate_values(self, algorithm: Algorithm) -> List[float]:
+        infill = self._get_infill(algorithm)
+        if infill is None:
+            return [np.nan]*len(self.value_names)
+
+        train_time = infill.time_train or np.nan
+        infill_time = infill.time_infill or np.nan
+        return [train_time, infill_time]
+
+    @staticmethod
+    def _get_infill(algorithm: Algorithm) -> Optional[SBOInfill]:
+        if isinstance(algorithm, InfillAlgorithm):
+            if isinstance(algorithm.infill_obj, SBOInfill):
+                return algorithm.infill_obj

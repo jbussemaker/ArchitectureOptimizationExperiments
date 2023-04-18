@@ -121,7 +121,7 @@ class DeltaHVMetric(Metric):
             return [passed if passed is not None else np.nan for passed in self.is_passed]
 
         # If there are no optimal points (e.g. if all points are infeasible or failed)
-        if f_opt.shape[0] == 0:
+        if len(f_opt) == 0 or f_opt.shape[0] == 0 or f_opt.shape[1] == 0:
             _get_iter_p_passed(1.)
             return [np.nan]*len(self.value_names)
 
@@ -152,7 +152,11 @@ class DeltaHVMetric(Metric):
             return res
 
         # Calculate current hypervolume
-        hv = self._hv.do(f_opt)
+        try:
+            hv = self._hv.do(f_opt)
+        except IndexError:
+            print(f_opt, len(f_opt), repr(f_opt))
+            raise
 
         # Calculate error metric
         delta_hv = (self.hv_true-hv)/self.hv_true
