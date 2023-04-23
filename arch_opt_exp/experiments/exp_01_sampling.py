@@ -23,7 +23,7 @@ import concurrent.futures
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
 from arch_opt_exp.experiments.runner import *
-from arch_opt_exp.experiments.hierarchical_comb import *
+from arch_opt_exp.md_mo_hier.hierarchical_comb import *
 
 from pymoo.problems.multi.omnitest import OmniTest
 from pymoo.core.mixed import MixedVariableSampling
