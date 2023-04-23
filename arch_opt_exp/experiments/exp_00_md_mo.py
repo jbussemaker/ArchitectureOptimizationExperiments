@@ -31,6 +31,7 @@ from sb_arch_opt.algo.arch_sbo.algo import *
 from sb_arch_opt.algo.arch_sbo.models import *
 from sb_arch_opt.algo.arch_sbo.infill import *
 
+from arch_opt_exp.md_mo_hier.infill import *
 from arch_opt_exp.experiments.runner import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.hc_strategies.metrics import *
@@ -41,6 +42,7 @@ log = logging.getLogger('arch_opt_exp.01_md_mo')
 capture_log()
 
 _exp_00_01_folder = '00_md_mo_01_md_gp'
+_exp_00_02_folder = '00_md_mo_02_infill'
 
 
 _test_problems = lambda: [
@@ -72,7 +74,7 @@ def exp_00_01_md_gp(post_process=False):
     n_infill = 30
     n_repeat = 20
 
-    problems = [(prob, category) for prob, category in _test_problems() if '_SO' in category]
+    problems = [(prob, category) for prob, category in _test_problems() if '_SO' in category and '_G' not in category]
     problem_paths = []
     problem_names = []
     problem: Union[ArchOptProblemBase]
@@ -172,5 +174,80 @@ def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat):
     return doe, doe_delta_hvs
 
 
+def exp_00_02_infill(post_process=False):
+    """
+    Test different infill criteria on single- and multi-objective (mixed-discrete) problems.
+    """
+    folder = set_results_folder(_exp_00_02_folder)
+    n_infill = 20
+    n_repeat = 20
+
+    so_ensemble = [ExpectedImprovementInfill(), LowerConfidenceBoundInfill(alpha=2.), ProbabilityOfImprovementInfill()]
+    so_infills = [
+        (FunctionEstimateConstrainedInfill(), 'y', 1),
+        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 1),
+        (ExpectedImprovementInfill(), 'EI', 1),
+        # (ProbabilityOfImprovementInfill(), 'PoI', 1),
+        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 1),
+        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 2),
+        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 5),
+    ]
+
+    mo_ensemble = [MinimumPoIInfill(), MinimumPoIInfill(euclidean=True)]  # , LowerConfidenceBoundInfill(alpha=2.)]
+    mo_infills = [
+        (MinVariancePFInfill(), 'MVPF', 1),
+        (MinVariancePFInfill(), 'MVPF', 2),
+        (MinVariancePFInfill(), 'MVPF', 5),
+        (MinimumPoIInfill(), 'MPoI', 1),
+        (MinimumPoIInfill(euclidean=True), 'EMPoI', 1),
+        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 1),
+        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 2),
+        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 5),
+        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 1),
+        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 2),
+        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 5),
+    ]
+
+    problems = [(prob, category) for prob, category in _test_problems() if '_G' not in category]
+    problem_paths = []
+    problem_names = []
+    problem: Union[ArchOptProblemBase]
+    for i, (problem, category) in enumerate(problems):
+        name = f'{category} {problem.__class__.__name__}'
+        problem_names.append(name)
+        problem_path = f'{folder}/{secure_filename(name)}'
+        problem_paths.append(problem_path)
+
+        n_init = int(np.ceil(2*problem.n_var))
+
+        log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
+        problem.pareto_front()
+
+        doe, doe_delta_hvs = _create_does(problem, n_init, n_repeat)
+        log.info(f'DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
+                 f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
+
+        metrics, additional_plot = _get_metrics(problem)
+
+        algorithms = []
+        algo_names = []
+        for infill, infill_name, n_batch in (so_infills if problem.n_obj == 1 else mo_infills):
+            model, norm = ModelFactory(problem).get_md_kriging_model()
+            sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
+            sbo_algo = sbo.algorithm(infill_size=n_batch, init_size=n_init)
+            algorithms.append(sbo_algo)
+            algo_names.append(f'{infill_name}_{n_batch}')
+
+        do_run = not post_process
+        exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+
+        _plot_for_pub(exps, met_plot_map={
+            'delta_hv': ['ratio'],
+        }, algo_name_map={})
+        plt.close('all')
+
+
 if __name__ == '__main__':
-    exp_00_01_md_gp()
+    # exp_00_01_md_gp()
+    exp_00_02_infill()

@@ -73,7 +73,7 @@ def run(results_key, problems, algorithms, algo_names, doe=None, plot_names=None
         run_effectiveness_multi(exp, n_repeat=n_repeat)
     if do_plot:
         plot_metric_values = {
-            'delta_hv': ['ratio'],
+            'delta_hv': ['ratio', 'regret'],
             'IGD': None,
             'spread': ['delta'],
             'max_cv': None,
