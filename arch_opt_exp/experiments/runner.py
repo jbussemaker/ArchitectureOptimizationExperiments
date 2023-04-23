@@ -175,7 +175,7 @@ def plot_effectiveness_results(experimenters: List[Experimenter], plot_metric_va
     if plot_metric_values is None:
         plot_metric_values = {met.name: None for met in metrics}
 
-    base_plot_path = f'{experimenters[0].results_folder}/{secure_filename(experimenters[0].problem_name)}'
+    base_plot_path = experimenters[0].get_problem_results_path()
     for ii, metric in enumerate(metrics):
         if metric.name not in plot_metric_values:
             continue

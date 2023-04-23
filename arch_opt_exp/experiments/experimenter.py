@@ -553,6 +553,12 @@ class Experimenter:
             problem_algo_path += '/'+sub_path
         return self._get_results_path(problem_algo_path)
 
+    def get_problem_results_path(self, sub_path: str = None) -> str:
+        problem_path = secure_filename(self.problem_name)
+        if sub_path is not None:
+            problem_path += '/'+sub_path
+        return self._get_results_path(problem_path)
+
     def get_problem_algo_metric_results_path(self, metric_termination: MetricTermination, sub_path: str = None) -> str:
         path = secure_filename(metric_termination.metric_name)
         if sub_path is not None:

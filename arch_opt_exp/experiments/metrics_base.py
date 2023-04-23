@@ -65,8 +65,8 @@ class Metric:
 
     @staticmethod
     def plot_multiple(metrics: List['Metric'], titles: List[str] = None, colors: List[str] = None,
-                      plot_value_names: List[str] = None, n_eval: List[List[float]] = None,
-                      save_filename=None, show=True):
+                      styles: List[str] = None, plot_value_names: List[str] = None, n_eval: List[List[float]] = None,
+                      plot_callback=None, save_filename=None, save_svg=False, show=True):
         """Function for plotting multiple metrics of the same kind, but coming from different optimization runs."""
 
         type_ = type(metrics[0])
@@ -75,6 +75,8 @@ class Metric:
 
         if colors is not None and len(colors) != len(metrics):
             raise ValueError('Provide same amount of colors as metrics!')
+        if styles is not None and len(styles) != len(metrics):
+            raise ValueError('Provide same amount of styles as metrics!')
 
         if titles is not None and len(titles) != len(metrics):
             raise ValueError('Provide same amount of titles as metrics!')
@@ -82,11 +84,14 @@ class Metric:
         if plot_value_names is None:
             plot_value_names = metrics[0].value_names
 
-        style = ['-', '-.', ':']
+        if styles is None:
+            styles = ['-']*10 + ['-.']*10 + [':']*10
+
         for value_name in plot_value_names:
-            plt.figure(figsize=(16, 12))
+            fig = plt.figure(figsize=(16, 12))
 
             x_max = None
+            line_handles = []
             for i, metric in enumerate(metrics):
                 if metric.values_agg is not None:
                     y = np.atleast_1d(metric.values_agg[value_name]['median'])
@@ -108,15 +113,12 @@ class Metric:
                     kwargs['color'] = 'k'
                 elif colors is not None:
                     kwargs['color'] = colors[i]
-
-                line_style = '-'
-                if colors is None:
-                    line_style = style[i // 10]
-
+                line_style = styles[i]
                 if titles is not None:
                     kwargs['label'] = titles[i]
 
                 l, = plt.plot(x, y, line_style, **kwargs)
+                line_handles.append(l)
                 color = l.get_color()
                 kwargs['color'] = color
 
@@ -133,13 +135,16 @@ class Metric:
             plt.xlabel('Iterations' if n_eval is None else 'Function evaluations')
             plt.ylabel(value_name)
 
-            if titles is not None:
+            if plot_callback is not None:
+                plot_callback(fig, metrics, metrics[0].name, value_name, line_handles, titles)
+            elif titles is not None:
                 plt.legend()
 
             if save_filename is not None:
                 save_value_filename = '%s_%s' % (save_filename, secure_filename(value_name))
                 plt.savefig(save_value_filename+'.png')
-                # plt.savefig(save_value_filename+'.svg')
+                if save_svg:
+                    plt.savefig(save_value_filename+'.svg')
 
         if show:
             plt.show()
