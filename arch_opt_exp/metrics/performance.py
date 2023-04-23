@@ -92,6 +92,7 @@ class DeltaHVMetric(Metric):
         self.perc_pass = perc_pass if perc_pass is not None else [.1, .2, .5]
         self.i_iter = 0
         self.prev_regret = 0
+        self.prev_ratio = 1
         self.is_passed = None
         self.prev_n_eval = None
 
@@ -123,10 +124,10 @@ class DeltaHVMetric(Metric):
                     n_infill = n_eval-self.prev_n_eval
                 self.prev_n_eval = n_eval
 
-            # The target value is zero delta ratio, so regret is simply the cumulative sum of the ratios times
-            # the nr of infill points
-            new_regret = self.prev_regret + ratio*n_infill
+            # The target value is zero delta ratio, so regret is simply the integral under the ratio curve
+            new_regret = self.prev_regret + .5*(ratio+self.prev_ratio)*n_infill
             self.prev_regret = new_regret
+            self.prev_ratio = ratio
             return new_regret
 
         def _get_iter_p_passed(ratio):
