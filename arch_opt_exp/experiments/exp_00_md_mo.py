@@ -14,8 +14,10 @@ limitations under the License.
 Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
+import pickle
 import logging
 import numpy as np
+import pandas as pd
 from typing import Union, Dict
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
@@ -177,9 +179,20 @@ def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat):
 def exp_00_02_infill(post_process=False):
     """
     Test different infill criteria on single- and multi-objective (mixed-discrete) problems.
+
+    Conclusions:
+    - If evaluations can be run in parallel:
+      - Single-objective: Ensemble of EI, LCB, PoI with n_batch = n_parallel
+      - Multi-objective:  Ensemble of MPoI, MEPoI  with n_batch = n_parallel
+    - If no parallelization possible:
+      - Single-objective
+        - Continuous: Mean function estimate
+        - Mixed-discrete: Ensemble of EI, LCB, PoI with n_batch = 1
+      - Multi-objective:  Ensemble of MPoI, MEPoI  with n_batch = 1
     """
     folder = set_results_folder(_exp_00_02_folder)
     n_infill = 20
+    n_iter_compare_at = 4  # * max(n_batch) = n_infill
     n_repeat = 20
 
     so_ensemble = [ExpectedImprovementInfill(), LowerConfidenceBoundInfill(alpha=2.), ProbabilityOfImprovementInfill()]
@@ -208,6 +221,14 @@ def exp_00_02_infill(post_process=False):
         (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 5),
     ]
 
+    def prob_add_cols(strat_data_, df_strat, algo_name):
+        strat_data_['n_batch'] = n_batch_ = int(algo_name.split('_')[1])
+
+        row_compare = df_strat.iloc[n_iter_compare_at, :]
+        for col_eval_compare, factor in [('delta_hv_ratio', 1), ('delta_hv_regret', n_batch_)]:
+            for col in [col_eval_compare, col_eval_compare+'_q25', col_eval_compare+'_q75']:
+                strat_data_[f'iter_{col}'] = row_compare[col]/factor
+
     problems = [(prob, category) for prob, category in _test_problems() if '_G' not in category]
     problem_paths = []
     problem_names = []
@@ -217,6 +238,8 @@ def exp_00_02_infill(post_process=False):
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
+        if post_process:
+            continue
 
         n_init = int(np.ceil(2*problem.n_var))
 
@@ -242,10 +265,93 @@ def exp_00_02_infill(post_process=False):
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
 
+        _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+
         _plot_for_pub(exps, met_plot_map={
             'delta_hv': ['ratio'],
         }, algo_name_map={})
         plt.close('all')
+
+    def _add_cols(df_agg_):
+        df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
+        return df_agg_
+
+    df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    strategy_map = {}
+    prob_map = {}
+    _make_comparison_df(df_agg[~df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='so', strategy_map=strategy_map, prob_map=prob_map)
+    _make_comparison_df(df_agg[df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
+    _make_comparison_df(df_agg[~df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='so', strategy_map=strategy_map, prob_map=prob_map)
+    _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
+
+
+def _make_comparison_df(df_agg, column, title, folder, key=None, strategy_map=None, prob_map=None):
+    strategy_map = strategy_map or {}
+    prob_map = prob_map or {}
+
+    post = f'_{key}' if key is not None else ''
+    with pd.ExcelWriter(f'{folder}/compare_{column+post}.xlsx') as writer:
+        col_map = {column: title, f'{column}_q25': 'Q1', f'{column}_q75': 'Q3'}
+        df_compare = df_agg[[column, f'{column}_q25', f'{column}_q75']].rename(columns=col_map)
+        df_compare.to_excel(writer, sheet_name='Compare')
+
+        for col in df_compare.columns:
+            df_compare_val = df_compare[col].unstack(level=0)
+            col_rename = {prob: prob.split(' ')[1] for prob in df_compare_val.columns}
+            col_rename = {key: prob_map.get(value, value) for key, value in col_rename.items()}
+            df_compare_val = df_compare_val.rename(columns=col_rename)
+
+            df_compare_val.insert(0, '$n_{batch}$', [int(idx.split('_')[1]) for idx in df_compare_val.index])
+            idx_replace = {idx: idx.split('_')[0] for idx in df_compare_val.index}
+            idx_replace = {key: strategy_map.get(value, value) for key, value in idx_replace.items()}
+            df_compare_val = df_compare_val.rename(index=idx_replace)
+
+            df_compare_val.to_excel(writer, sheet_name=col)
+
+
+def _agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
+    df_data = []
+    for exp in exps:
+        with open(exp.get_problem_algo_results_path('result_agg_df.pkl'), 'rb') as fp:
+            df_strat = pickle.load(fp)
+            strat_data = pd.Series(df_strat.iloc[-1, :], name=exp.algorithm_name)
+            if add_cols_callback is not None:
+                strat_data_ = add_cols_callback(strat_data, df_strat, exp.algorithm_name)
+                if strat_data_ is not None:
+                    strat_data = strat_data_
+            df_data.append(strat_data)
+
+    df_prob = pd.concat(df_data, axis=1).T
+    df_prob.to_pickle(f'{problem_path}/df_problem.pkl')
+    with pd.ExcelWriter(f'{problem_path}/df_problem.xlsx') as writer:
+        df_prob.to_excel(writer)
+
+
+def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
+    df_probs = []
+    for i, problem_name in enumerate(problem_names):
+        problem_path = problem_paths[i]
+        try:
+            with open(f'{problem_path}/df_problem.pkl', 'rb') as fp:
+                df_prob = pickle.load(fp)
+        except FileNotFoundError:
+            continue
+
+        df_prob = df_prob.set_index(pd.MultiIndex.from_tuples([(problem_name, val) for val in df_prob.index]))
+        df_probs.append(df_prob)
+
+    df_agg = pd.concat(df_probs, axis=0)
+    df_agg_ = add_cols_callback(df_agg)
+    if df_agg_ is not None:
+        df_agg = df_agg_
+
+    try:
+        with pd.ExcelWriter(f'{folder}/results.xlsx') as writer:
+            df_agg.to_excel(writer)
+    except PermissionError:
+        pass
+    return df_agg
 
 
 if __name__ == '__main__':
