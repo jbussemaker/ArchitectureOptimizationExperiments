@@ -27,7 +27,8 @@ from pymoo.algorithms.moo.nsga2 import calc_crowding_distance
 from sb_arch_opt.algo.arch_sbo.infill import *
 
 __all__ = ['ProbabilityOfImprovementInfill', 'LowerConfidenceBoundInfill', 'MinimumPoIInfill', 'EnsembleInfill',
-           'IgnoreConstraints', 'FunctionEstimateConstrainedInfill', 'ExpectedImprovementInfill']
+           'IgnoreConstraints', 'FunctionEstimateConstrainedInfill', 'ExpectedImprovementInfill',
+           'MeanConstraintPrediction', 'ProbabilityOfFeasibility', 'UpperTrustBound']
 
 
 class ProbabilityOfImprovementInfill(ConstrainedInfill):
@@ -278,3 +279,33 @@ class IgnoreConstraints(ConstraintStrategy):
 
     def evaluate(self, x: np.ndarray, g: np.ndarray, g_var: np.ndarray) -> np.ndarray:
         return np.zeros((x.shape[0], 0))
+
+
+class UpperTrustBound(ConstraintStrategy):
+    """
+    The Upper Trust Bound (UTB) represents the lowest expected value to be found at some point given its standard
+    deviation.
+
+    UTB(x) = g(x) - tau * sqrt(s(x))
+    where
+    - g(x) the surrogate model estimate
+    - tau is a scaling parameter (typical value is 3) --> higher means less conservative
+    - s(x) the surrogate model variance estimate
+
+    Implementation based on:
+    Priem, R. et al., 2020. Upper trust bound feasibility criterion for mixed constrained Bayesian optimization with
+    application to aircraft design. Aerospace Science and Technology, 105, p.105980.
+    """
+
+    def __init__(self, tau: float = None):
+        if tau is None:
+            tau = 3
+        self.tau = tau
+        super().__init__()
+
+    def get_n_infill_constraints(self) -> int:
+        return self.problem.n_ieq_constr
+
+    def evaluate(self, x: np.ndarray, g: np.ndarray, g_var: np.ndarray) -> np.ndarray:
+        utb = g - self.tau*np.sqrt(g_var)
+        return utb

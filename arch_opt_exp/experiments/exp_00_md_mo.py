@@ -27,11 +27,12 @@ from sb_arch_opt.problem import *
 from sb_arch_opt.problems.md_mo import *
 from sb_arch_opt.problems.discrete import *
 from sb_arch_opt.problems.continuous import *
+from sb_arch_opt.problems.constrained import *
 
 from sb_arch_opt.algo.pymoo_interface import *
 from sb_arch_opt.algo.arch_sbo.algo import *
 from sb_arch_opt.algo.arch_sbo.models import *
-from sb_arch_opt.algo.arch_sbo.infill import *
+from sb_arch_opt.algo.arch_sbo.infill import MinVariancePFInfill, get_default_infill
 
 from arch_opt_exp.md_mo_hier.infill import *
 from arch_opt_exp.experiments.runner import *
@@ -45,6 +46,7 @@ capture_log()
 
 _exp_00_01_folder = '00_md_mo_01_md_gp'
 _exp_00_02_folder = '00_md_mo_02_infill'
+_exp_00_03_folder = '00_md_mo_03_constraints'
 
 
 _test_problems = lambda: [
@@ -57,6 +59,12 @@ _test_problems = lambda: [
     (MORosenbrock(), '02_C_MO'),
     (MDMOGoldstein(), '03_MD_MO'),
     (MDMORosenbrock(), '03_MD_MO'),
+    (ArchCantileveredBeam(), '04_C_SO_G'),
+    (MDCantileveredBeam(), '05_MD_SO_G'),
+    (ArchWeldedBeam(), '06_C_MO_G'),
+    (ArchCarside(), '06_C_MO_G'),
+    (MDWeldedBeam(), '07_MD_MO_G'),
+    (MDCarside(), '07_MD_MO_G'),
 ]
 
 
@@ -286,6 +294,91 @@ def exp_00_02_infill(post_process=False):
     _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
 
 
+def exp_00_03_constraints(post_process=False):
+    """
+    Test different constraint handling strategies on single- and multi-objective (mixed-discrete) problems.
+    """
+    folder = set_results_folder(_exp_00_03_folder)
+    n_infill = 20
+    n_iter_compare_at = 4  # * max(n_batch) = n_infill
+    n_repeat = 20
+
+    strategies = [
+        (MeanConstraintPrediction(), 'g'),
+        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25'),
+        (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50'),
+        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75'),
+        (UpperTrustBound(tau=1.), 'UTB_10'),
+        (UpperTrustBound(tau=2.), 'UTB_20'),
+    ]
+
+    def prob_add_cols(strat_data_, df_strat, algo_name):
+        return
+        # strat_data_['n_batch'] = n_batch_ = int(algo_name.split('_')[1])
+        # row_compare = df_strat.iloc[n_iter_compare_at, :]
+        # for col_eval_compare, factor in [('delta_hv_ratio', 1), ('delta_hv_regret', n_batch_)]:
+        #     for col in [col_eval_compare, col_eval_compare+'_q25', col_eval_compare+'_q75']:
+        #         strat_data_[f'iter_{col}'] = row_compare[col]/factor
+
+    problems = [(prob, category) for prob, category in _test_problems() if '_G' in category]
+    problem_paths = []
+    problem_names = []
+    problem: Union[ArchOptProblemBase]
+    for i, (problem, category) in enumerate(problems):
+        name = f'{category} {problem.__class__.__name__}'
+        problem_names.append(name)
+        problem_path = f'{folder}/{secure_filename(name)}'
+        problem_paths.append(problem_path)
+        if post_process:
+            continue
+
+        n_init = int(np.ceil(2*problem.n_var))
+
+        log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
+        problem.pareto_front()
+
+        doe, doe_delta_hvs = _create_does(problem, n_init, n_repeat)
+        log.info(f'DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
+                 f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
+
+        metrics, additional_plot = _get_metrics(problem)
+
+        algorithms = []
+        algo_names = []
+        for strategy, strategy_name in strategies:
+            infill, n_batch = get_default_infill(problem, n_parallel=1)
+            infill.constraint_strategy = strategy
+            model, norm = ModelFactory(problem).get_md_kriging_model()
+            sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
+            sbo_algo = sbo.algorithm(infill_size=n_batch, init_size=n_init)
+            algorithms.append(sbo_algo)
+            algo_names.append(strategy_name)
+
+        do_run = not post_process
+        exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+
+        _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+
+        _plot_for_pub(exps, met_plot_map={
+            'delta_hv': ['ratio'],
+        }, algo_name_map={})
+        plt.close('all')
+
+    def _add_cols(df_agg_):
+        df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
+        return df_agg_
+
+    df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    strategy_map = {}
+    prob_map = {}
+    _make_comparison_df(df_agg[~df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='so', strategy_map=strategy_map, prob_map=prob_map)
+    _make_comparison_df(df_agg[df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
+    # _make_comparison_df(df_agg[~df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='so', strategy_map=strategy_map, prob_map=prob_map)
+    # _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
+
+
 def _make_comparison_df(df_agg, column, title, folder, key=None, strategy_map=None, prob_map=None):
     strategy_map = strategy_map or {}
     prob_map = prob_map or {}
@@ -356,4 +449,5 @@ def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
 
 if __name__ == '__main__':
     # exp_00_01_md_gp()
-    exp_00_02_infill()
+    # exp_00_02_infill()
+    exp_00_03_constraints()
