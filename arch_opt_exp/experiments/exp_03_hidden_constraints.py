@@ -534,7 +534,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     k_doe_test = [.5, 1, 2, 5]
     min_pov_test = [.1, .25, .5, .75, .9, -1]
     n_infill = 30
-    n_repeat = 20
+    n_repeat = 8
     problems = [
         (Alimo(), '01'),
         (AlimoEdge(), '01'),
@@ -542,6 +542,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         (MDCarsideHC(), '09_MD_MO_G_HFR'),
         (HierAlimo(), '10_HIER'),
     ]
+    # post_process = True
 
     problem_paths = []
     problem_names = []
@@ -593,9 +594,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     for category in ['doe_k', 'min_pov']:
         _plot_problem_bars(df_agg, folder, category, 'delta_hv_ratio', y_log=True)
         _plot_problem_bars(df_agg, folder, category, 'delta_hv_delta_hv', y_log=True)
-        _plot_problem_bars(df_agg, folder, category, 'delta_hv_pass_10')
-        _plot_problem_bars(df_agg, folder, category, 'delta_hv_pass_20')
-        _plot_problem_bars(df_agg, folder, category, 'delta_hv_pass_50')
+        _plot_problem_bars(df_agg, folder, category, 'delta_hv_regret')
         _plot_problem_bars(df_agg, folder, category, 'fail_ratio')
         _plot_problem_bars(df_agg, folder, category, 'hc_pred_acc')
 
@@ -606,10 +605,12 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
 
 
 def _get_metrics(problem):
-    metrics = get_exp_metrics(problem, including_convergence=False)+[FailRateMetric(), PredictorMetric()]
+    metrics = get_exp_metrics(problem, including_convergence=False) +\
+              [FailRateMetric(), PredictorMetric(), SBOTimesMetric()]
     additional_plot = {
         'fail': ['rate', 'ratio'],
         'hc_pred': ['acc', 'max_acc', 'max_acc_pov'],
+        'time': ['train', 'infill'],
     }
     return metrics, additional_plot
 
@@ -630,7 +631,7 @@ def exp_03_05_optimization(post_process=False):
     folder = set_results_folder(_exp_03_05_folder)
     expected_fail_rate = .6
     n_infill = 30
-    n_repeat = 20
+    n_repeat = 8
 
     problems = _test_problems()
     problem_paths = []
@@ -685,6 +686,8 @@ def exp_03_05_optimization(post_process=False):
 
     _plot_scatter(df_agg, folder, 'fail_rate_ratio', 'delta_hv_ratio', y_log=True)
     _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_ratio', y_log=True)
+    _plot_scatter(df_agg, folder, 'fail_rate_ratio', 'delta_hv_regret')
+    _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_regret')
     # _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_ratio', z_col='g_f_strat', y_log=True)
 
     _plot_problem_bars(df_agg, folder, 'strategy', 'delta_hv_ratio', y_log=True)
