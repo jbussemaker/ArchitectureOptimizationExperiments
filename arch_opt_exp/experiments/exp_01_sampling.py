@@ -23,10 +23,10 @@ import concurrent.futures
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
 from arch_opt_exp.experiments.runner import *
+from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.md_mo_hier.hierarchical_comb import *
 
 from pymoo.problems.multi.omnitest import OmniTest
-from pymoo.core.mixed import MixedVariableSampling
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.operators.sampling.lhs import LatinHypercubeSampling
 
@@ -46,7 +46,7 @@ _exp_01_03_folder = '01_sampling_03_doe_accuracy'
 _exp_01_04_folder = '01_sampling_04_activeness_diversity'
 _exp_01_05_folder = '01_sampling_05_perf_influence'
 
-_all_problems = [
+_all_problems = lambda: [
     SimpleTurbofanArch(),  # Realistic hierarchical problem
 
     HierarchicalGoldstein(),  # Hierarchical test problem by Pelamatti
@@ -59,7 +59,7 @@ _all_problems = [
     HierZDT1(),  # More realistic multi-objective hierarchical test problem
     HierDiscreteZDT1(),  # More realistic multi-objective discrete hierarchical test problem
 ]
-_problems = [
+_problems = lambda: [
     SimpleTurbofanArch(),  # Realistic hierarchical problem
     MDZDT1Small(),  # Non-hierarchical mixed-discrete test problem
     HierBranin(),  # More realistic hierarchical test problem
@@ -68,111 +68,14 @@ _problems = [
 ]
 
 
-class HierarchicalActSepRandomSampling(HierarchicalRandomSampling):
-
-    def __init__(self):
-        super().__init__(sobol=False)
-
-    @classmethod
-    def _sample_discrete_x(cls, n_samples: int, is_cont_mask, x_all: np.ndarray, is_act_all: np.ndarray, sobol=False):
-
-        def _choice(n_choose, n_from, replace=True):
-            return cls._choice(n_choose, n_from, replace=replace, sobol=sobol)
-
-        # Separate by nr of active discrete variables
-        x_all_grouped, is_act_all_grouped, i_x_groups = cls.split_by_discrete_n_active(x_all, is_act_all, is_cont_mask)
-
-        # Uniformly choose from which group to sample
-        i_groups = np.sort(_choice(n_samples, len(x_all_grouped)))
-        x = []
-        is_active = []
-        has_x_cont = np.any(is_cont_mask)
-        i_x_sampled = np.ones((x_all.shape[0],), dtype=bool)
-        for i_group in range(len(x_all_grouped)):
-            i_x_group = np.where(i_groups == i_group)[0]
-            if len(i_x_group) == 0:
-                continue
-
-            # Randomly select values within group
-            x_group = x_all_grouped[i_group]
-            if len(i_x_group) < x_group.shape[0]:
-                i_x = _choice(len(i_x_group), x_group.shape[0], replace=False)
-
-            # If there are more samples requested than points available, only repeat points if there are continuous vars
-            elif has_x_cont:
-                i_x_add = _choice(len(i_x_group)-x_group.shape[0], x_group.shape[0])
-                i_x = np.sort(np.concatenate([np.arange(x_group.shape[0]), i_x_add]))
-            else:
-                i_x = np.arange(x_group.shape[0])
-
-            x.append(x_group[i_x, :])
-            is_active.append(is_act_all_grouped[i_group][i_x, :])
-            i_x_sampled[i_x_groups[i_group][i_x]] = True
-
-        x = np.row_stack(x)
-        is_active = np.row_stack(is_active)
-
-        # Uniformly add discrete vectors if there are not enough (can happen if some groups are very small and there
-        # are no continuous dimensions)
-        if x.shape[0] < n_samples:
-            n_add = n_samples-x.shape[0]
-            x_available = x_all[~i_x_sampled, :]
-            is_act_available = is_act_all[~i_x_sampled, :]
-
-            if n_add < x_available.shape[0]:
-                i_x = _choice(n_add, x_available.shape[0], replace=False)
-            else:
-                i_x = np.arange(x_available.shape[0])
-
-            x = np.row_stack([x, x_available[i_x, :]])
-            is_active = np.row_stack([is_active, is_act_available[i_x, :]])
-
-        return x, is_active
-
-    @staticmethod
-    def split_by_discrete_n_active(x_discrete: np.ndarray, is_act_discrete: np.ndarray, is_cont_mask) \
-            -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
-
-        # Calculate nr of active variables for each design vector
-        is_discrete_mask = ~is_cont_mask
-        n_active = np.sum(is_act_discrete[:, is_discrete_mask], axis=1)
-
-        # Sort by nr active
-        i_sorted = np.argsort(n_active)
-        x_discrete = x_discrete[i_sorted, :]
-        is_act_discrete = is_act_discrete[i_sorted, :]
-
-        # Split by nr active
-        # https://stackoverflow.com/a/43094244
-        i_split = np.unique(n_active[i_sorted], return_index=True)[1][1:]
-        x_all_grouped = np.split(x_discrete, i_split, axis=0)
-        is_act_all_grouped = np.split(is_act_discrete, i_split, axis=0)
-        i_x_groups = np.split(np.arange(x_discrete.shape[0]), i_split)
-
-        return x_all_grouped, is_act_all_grouped, i_x_groups
-
-
-class HierarchicalSobolSampling(HierarchicalRandomSampling):
-
-    def __init__(self):
-        super().__init__(sobol=True)
-
-
-class HierarchicalDirectRandomSampling(HierarchicalRandomSampling):
-    """Directly sample from all available discrete design vectors"""
-
-    def __init__(self):
-        super().__init__(sobol=False)
-
-
 _samplers = [
-    (False, FloatRandomSampling()),
-    (False, MixedVariableSampling()),
-    (False, LatinHypercubeSampling()),
-    (True, HierarchicalActSepRandomSampling()),
-    (True, HierarchicalDirectRandomSampling()),
-    (True, HierarchicalSobolSampling()),
-    (True, HierarchicalLatinHypercubeSampling()),
+    RepairedSampler(FloatRandomSampling()),
+    RepairedSampler(LatinHypercubeSampling()),
+    NoGroupingHierarchicalSampling(),
+    NrActiveHierarchicalSampling(),
+    NrActiveHierarchicalSampling(weight_by_nr_active=True),
+    ActiveVarHierarchicalSampling(),
+    ActiveVarHierarchicalSampling(weight_by_nr_active=True),
 ]
 
 
@@ -200,7 +103,7 @@ def exp_01_01_dv_opt_occurrence():
     folder = set_results_folder(_exp_01_01_folder)
     with pd.ExcelWriter(f'{folder}/output.xlsx') as writer:
 
-        for i, problem in enumerate(_all_problems):
+        for i, problem in enumerate(_all_problems()):
             # Exhaustively sample the problem
             log.info(f'Sampling {problem!r}')
 
@@ -208,18 +111,6 @@ def exp_01_01_dv_opt_occurrence():
             df = problem.get_discrete_rates(force=True).iloc[:, problem.is_discrete_mask]
             df.to_excel(writer, sheet_name=repr(problem))
             df.to_pickle(f'{folder}/df_{secure_filename(repr(problem))}.pkl')
-
-
-def _sample_and_repair(problem, sampler, n_samples, is_repaired=True):
-    x = sampler.do(problem, n_samples).get('X')
-
-    if isinstance(sampler, MixedVariableSampling):
-        x = np.array([[row[x_name] for x_name in problem.vars.keys()] for i, row in enumerate(x)])
-
-    if not is_repaired:
-        x = ArchOptRepair().do(problem, x)
-        x = x[~LargeDuplicateElimination.eliminate(x), :]
-    return x
 
 
 def exp_01_02_sampling_similarity():
@@ -245,18 +136,19 @@ def exp_01_02_sampling_similarity():
     folder = set_results_folder(_exp_01_02_folder)
     n_samples = 1000
 
+    problems = _problems()
     df_exhaustive: List[pd.DataFrame] = []
-    for i, problem in enumerate(_problems):
+    for i, problem in enumerate(problems):
         path = f'{exp1_folder}/df_{secure_filename(repr(problem))}.pkl'
         with open(path, 'rb') as fp:
             df_exhaustive.append(pickle.load(fp))
 
-    for i, (is_repaired, sampler) in enumerate(_samplers):
+    for i, sampler in enumerate(_samplers):
         with pd.ExcelWriter(f'{folder}/output_{i}_{sampler.__class__.__name__}.xlsx') as writer:
-            for j, problem in enumerate(_problems):
-                log.info(f'Sampling {problem!r} ({j+1}/{len(_problems)}) '
+            for j, problem in enumerate(problems):
+                log.info(f'Sampling {problem!r} ({j+1}/{len(problems)}) '
                          f'with sampler: {sampler!r} ({i+1}/{len(_samplers)})')
-                x = _sample_and_repair(problem, sampler, n_samples, is_repaired)
+                x = sampler.do(problem, n_samples).get('X')
 
                 # Count appearances of design variable options
                 x_rel = _count_appearance(x, problem.xl, problem.xu)
@@ -328,13 +220,13 @@ def exp_01_03_doe_accuracy():
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for i, problem in enumerate(problems):
             df_samplers = []
-            for j, (is_repaired, sampler) in enumerate(_samplers):
+            for j, sampler in enumerate(_samplers):
                 log.info(f'Sampling {problem!r} ({i+1}/{len(problems)}) '
                          f'with sampler: {sampler!r} ({j+1}/{len(_samplers)})')
 
                 rep = f'prob {i+1}/{len(problems)}; sampler {j+1}/{len(_samplers)}; rep '
                 futures = [executor.submit(_sample_and_train, f'{rep}{k+1}/{n_repeat}', problem, sampler,
-                                           is_repaired, n_train_mult, n_test_factor) for k in range(n_repeat)]
+                                           n_train_mult, n_test_factor) for k in range(n_repeat)]
                 concurrent.futures.wait(futures)
                 sampler_data = [fut.result() for fut in futures]
 
@@ -381,12 +273,12 @@ def exp_01_03_doe_accuracy():
             plt.savefig(f'{folder}/plot_{problem.__class__.__name__}.png')
 
 
-def _sample_and_train(rep, problem, sampler, is_repaired, n_train_mult_factors, n_test_factor):
+def _sample_and_train(rep, problem, sampler, n_train_mult_factors, n_test_factor):
     rmse_values = []
     for n_train_mult_factor in n_train_mult_factors:
         n_train = int(n_train_mult_factor*problem.n_var)
         log.info(f'Repetition {rep}: {n_train_mult_factor:.1f}*{problem.n_var} = {n_train} training points')
-        x_train = _sample_and_repair(problem, sampler, n_train, is_repaired)
+        x_train = sampler.do(problem, n_train).get('X')
         y_train = problem.evaluate(x_train, return_as_dictionary=True)['F']
         y_norm = np.mean(y_train)
         y_train /= y_norm
@@ -395,10 +287,7 @@ def _sample_and_train(rep, problem, sampler, is_repaired, n_train_mult_factors, 
             x_test = n_test_factor
         else:
             n_test = max(1, int(n_test_factor * problem.n_var))
-            # x_test = _sample_and_repair(problem, FloatRandomSampling(), n_test, is_repaired=False)
-            # x_test = _sample_and_repair(problem, HierarchicalRandomSampling(), n_test)
-            # x_test = _sample_and_repair(problem, sampler, n_test, is_repaired)
-            x_test = _sample_and_repair(problem, HierarchicalExhaustiveSampling(n_cont=1), n_test)
+            x_test = HierarchicalExhaustiveSampling(n_cont=1).do(problem, n_test).get('X')
 
         y_test = problem.evaluate(x_test, return_as_dictionary=True)['F']/y_norm
 
@@ -483,14 +372,14 @@ def exp_01_04_activeness_diversity_ratio():
     # return
 
     samplers = [
-        (False, FloatRandomSampling()),
-        (True, HierarchicalDirectRandomSampling()),
-        (True, HierarchicalActSepRandomSampling()),
+        RepairedSampler(FloatRandomSampling()),
+        NoGroupingHierarchicalSampling(),
+        NrActiveHierarchicalSampling(),
     ]
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for set_name, problem_set in problems:
             df_agg = []
-            for i, (is_repaired, sampler) in enumerate(samplers):
+            for i, sampler in enumerate(samplers):
                 df_samplers = []
                 for j, problem in enumerate(problem_set):
                     log.info(f'Sampling {problem!r} ({j+1}/{len(problem_set)}) '
@@ -500,7 +389,7 @@ def exp_01_04_activeness_diversity_ratio():
                     n_train_mult = n_train/problem.n_var
                     n_test_factor = n_test/problem.n_var
                     futures = [executor.submit(_sample_and_train, f'{rep}{k+1}/{n_repeat}', problem, sampler,
-                                               is_repaired, [n_train_mult], n_test_factor) for k in range(n_repeat)]
+                                               [n_train_mult], n_test_factor) for k in range(n_repeat)]
                     concurrent.futures.wait(futures)
                     sampler_data = [fut.result() for fut in futures]
 
@@ -564,8 +453,7 @@ def get_activeness_diversity_ratio(problem: ArchOptProblemBase):
         return 1.
 
     is_cont_mask = HierarchicalExhaustiveSampling.get_is_cont_mask(problem)
-    x_groups, _, _ = HierarchicalActSepRandomSampling.split_by_discrete_n_active(
-        x_discrete, is_act_discrete, is_cont_mask)
+    x_groups = NrActiveHierarchicalSampling().group_design_vectors(x_discrete, is_act_discrete, is_cont_mask)
 
     group_sizes = [len(group) for group in x_groups]
     return max(group_sizes)/min(group_sizes)
@@ -638,9 +526,9 @@ def exp_01_05_performance_influence():
     n_test = 10000
     n_repeat = 100
     samplers = [
-        (False, FloatRandomSampling()),
-        (True, HierarchicalDirectRandomSampling()),
-        (True, HierarchicalActSepRandomSampling()),
+        RepairedSampler(FloatRandomSampling()),
+        NoGroupingHierarchicalSampling(),
+        NrActiveHierarchicalSampling(),
     ]
 
     problems = [
@@ -718,7 +606,7 @@ def exp_01_05_performance_influence():
     for set_name, problem_set in problems:
         for problem in problem_set:
             if np.sum(problem.is_cont_mask) > 0:
-                x_test = HierarchicalDirectRandomSampling().do(problem, n_test).get('X')
+                x_test = NoGroupingHierarchicalSampling().do(problem, n_test).get('X')
             else:
                 x_test = HierarchicalExhaustiveSampling().do(problem, 0).get('X')
 
@@ -727,7 +615,7 @@ def exp_01_05_performance_influence():
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for set_name, problem_set in problems:
             df_agg = []
-            for i, (is_repaired, sampler) in enumerate(samplers):
+            for i, sampler in enumerate(samplers):
                 df_samplers = []
                 for j, problem in enumerate(problem_set):
                     log.info(f'Sampling {problem!r} ({j+1}/{len(problem_set)}) '
@@ -737,7 +625,7 @@ def exp_01_05_performance_influence():
                     n_train_mult = n_train/problem.n_var
                     x_test = x_test_db[set_name, repr(problem)]
                     futures = [executor.submit(_sample_and_train, f'{rep}{k+1}/{n_repeat}', problem, sampler,
-                                               is_repaired, [n_train_mult], x_test) for k in range(n_repeat)]
+                                               [n_train_mult], x_test) for k in range(n_repeat)]
                     concurrent.futures.wait(futures)
                     sampler_data = [fut.result() for fut in futures]
 
@@ -777,12 +665,6 @@ def exp_01_05_performance_influence():
             df['problem', 'imp_ratio_cont'] = [get_cont_imp_ratio(problem) for problem in problem_set]
             df['problem', 'cont_ratio_train'] = [get_cont_sample_ratio(problem, n_train) for problem in problem_set]
             df['problem', 'cont_ratio_test'] = [get_cont_sample_ratio(problem, n_test) for problem in problem_set]
-            df['problem', 'ir_train_float'] = [get_train_cont_act_ratio(problem, lambda: _sample_and_repair(
-                problem, FloatRandomSampling(), n_train, is_repaired=False)) for problem in problem_set]
-            df['problem', 'ir_train_dir'] = [get_train_cont_act_ratio(problem, lambda: _sample_and_repair(
-                problem, HierarchicalDirectRandomSampling(), n_train)) for problem in problem_set]
-            df['problem', 'ir_train_uni'] = [get_train_cont_act_ratio(problem, lambda: _sample_and_repair(
-                problem, HierarchicalActSepRandomSampling(), n_train)) for problem in problem_set]
             df['problem', 'poa_ratio'] = [get_partial_option_activeness_ratio(problem, problem._x_sel.shape[1])
                                           for problem in problem_set]
 
@@ -833,8 +715,8 @@ def exp_01_05_performance_influence():
 
 
 if __name__ == '__main__':
-    exp_01_01_dv_opt_occurrence()
+    # exp_01_01_dv_opt_occurrence()
     # exp_01_02_sampling_similarity()
-    # exp_01_03_doe_accuracy()
+    exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
