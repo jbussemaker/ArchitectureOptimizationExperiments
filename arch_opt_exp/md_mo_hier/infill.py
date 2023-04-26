@@ -28,7 +28,8 @@ from sb_arch_opt.algo.arch_sbo.infill import *
 
 __all__ = ['ProbabilityOfImprovementInfill', 'LowerConfidenceBoundInfill', 'MinimumPoIInfill', 'EnsembleInfill',
            'IgnoreConstraints', 'FunctionEstimateConstrainedInfill', 'ExpectedImprovementInfill',
-           'MeanConstraintPrediction', 'ProbabilityOfFeasibility', 'UpperTrustBound']
+           'MeanConstraintPrediction', 'ProbabilityOfFeasibility', 'UpperTrustBound',
+           'AdaptiveProbabilityOfFeasibility']
 
 
 class ProbabilityOfImprovementInfill(ConstrainedInfill):
@@ -279,6 +280,29 @@ class IgnoreConstraints(ConstraintStrategy):
 
     def evaluate(self, x: np.ndarray, g: np.ndarray, g_var: np.ndarray) -> np.ndarray:
         return np.zeros((x.shape[0], 0))
+
+
+class AdaptiveProbabilityOfFeasibility(ProbabilityOfFeasibility):
+    """
+    Adaptively decreases the PoF (thereby increasing exploration) if there are less feasible points in the database.
+    """
+
+    def __init__(self, min_pof_bounds: Tuple[float, float] = None, feasible_frac_offset: float = .5):
+        self.min_pof_bounds = min_pof_bounds if min_pof_bounds is not None else (.25, .5)
+        self.feasible_frac_offset = feasible_frac_offset
+        super().__init__()
+
+    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
+        g_train = y_train[:, self.problem.n_obj:]
+        g_is_feasible = np.all((g_train <= 0.) & np.isfinite(g_train), axis=1)
+        feasible_frac = np.sum(g_is_feasible)/len(g_is_feasible)
+
+        # A lower feasibility fraction should lead to a lower minimum PoF (less conservative, more exploratory)
+        # At 0% feasible, we should be at the lower bound
+        # At 50% feasible, we trust the model enough to go to the upper bound
+        min_pof_lb, min_pof_ub = self.min_pof_bounds
+        bounds_frac = min(1, feasible_frac/self.feasible_frac_offset)
+        self.min_pof = bounds_frac*(min_pof_ub-min_pof_lb) + min_pof_lb
 
 
 class UpperTrustBound(ConstraintStrategy):

@@ -14,6 +14,7 @@ limitations under the License.
 Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
+import os
 import pickle
 import logging
 import numpy as np
@@ -22,6 +23,7 @@ from typing import Union, Dict
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
 from pymoo.core.population import Population
+from pymoo.core.initialization import Initialization
 
 from sb_arch_opt.problem import *
 from sb_arch_opt.problems.md_mo import *
@@ -38,6 +40,8 @@ from arch_opt_exp.md_mo_hier.infill import *
 from arch_opt_exp.experiments.runner import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.hc_strategies.metrics import *
+from arch_opt_exp.hc_strategies.rejection import *
+from arch_opt_exp.hc_strategies.sbo_with_hc import *
 from arch_opt_exp.experiments.experimenter import *
 from arch_opt_exp.experiments.metrics import get_exp_metrics
 
@@ -46,6 +50,7 @@ capture_log()
 
 _exp_00_01_folder = '00_md_mo_01_md_gp'
 _exp_00_02_folder = '00_md_mo_02_infill'
+_exp_00_03a_folder = '00_md_mo_03a_plot_g'
 _exp_00_03_folder = '00_md_mo_03_constraints'
 
 
@@ -59,6 +64,8 @@ _test_problems = lambda: [
     (MORosenbrock(), '02_C_MO'),
     (MDMOGoldstein(), '03_MD_MO'),
     (MDMORosenbrock(), '03_MD_MO'),
+    (ConBraninProd(), '04_C_SO_G'),
+    (ConBraninGomez(), '04_C_SO_G'),
     (ArchCantileveredBeam(), '04_C_SO_G'),
     (MDCantileveredBeam(), '05_MD_SO_G'),
     (ArchWeldedBeam(), '06_C_MO_G'),
@@ -286,17 +293,107 @@ def exp_00_02_infill(post_process=False):
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
+    def _mod_compare(df_compare_val, col):
+        df_compare_val.insert(0, '$n_{batch}$', [int(idx.split('_')[1]) for idx in df_compare_val.index])
+        idx_replace = {idx: idx.split('_')[0] for idx in df_compare_val.index}
+        idx_replace = {key: strategy_map.get(value, value) for key, value in idx_replace.items()}
+        return df_compare_val.rename(index=idx_replace)
+
     strategy_map = {}
     prob_map = {}
-    _make_comparison_df(df_agg[~df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='so', strategy_map=strategy_map, prob_map=prob_map)
-    _make_comparison_df(df_agg[df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
-    _make_comparison_df(df_agg[~df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='so', strategy_map=strategy_map, prob_map=prob_map)
-    _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
+    kwargs = dict(strategy_map=strategy_map, prob_map=prob_map, mod_compare=_mod_compare)
+    _make_comparison_df(df_agg[~df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='so', **kwargs)
+    _make_comparison_df(df_agg[df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='mo', **kwargs)
+    _make_comparison_df(df_agg[~df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='so', **kwargs)
+    _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', **kwargs)
+
+
+def exp_00_03a_plot_constraints():
+    folder = set_results_folder(_exp_00_03a_folder)
+    n_infill = 10
+
+    strategies = [
+        (AdaptiveProbabilityOfFeasibility(min_pof_bounds=(.1, .5)), 'APoF'),
+        (MeanConstraintPrediction(), 'g'),
+        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25'),
+        (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50'),
+        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75'),
+        (UpperTrustBound(tau=1.), 'UTB_10'),
+        (UpperTrustBound(tau=2.), 'UTB_20'),
+    ]
+
+    for problem in [
+        ConBraninProd(),
+        ConBraninGomez(),
+    ]:
+        prob_name = problem.__class__.__name__
+        n_init = int(2*problem.n_var)
+        doe = get_doe_algo(n_init)
+        doe.setup(problem)
+        doe.run()
+        doe_pop = doe.pop
+        f_doe = doe_pop.get('F')
+        f_doe[doe_pop.get('CV')[:, 0] > 0, :] = np.nan
+
+        pf = problem.pareto_front()
+        f_known_best = pf[0, 0]
+        log.info(f'Best of initial DOE ({n_init}): {np.nanmin(f_doe[:, 0])} (best: {f_known_best})')
+
+        for i, (strategy, strat_name) in enumerate(strategies):
+            log.info(f'Strategy {i+1}/{len(strategies)}: {strat_name}')
+            strategy_folder = f'{folder}/{prob_name}_{i:02d}_{secure_filename(strat_name)}'
+            os.makedirs(strategy_folder, exist_ok=True)
+
+            infill, n_batch = get_default_infill(problem, n_parallel=1)
+            infill.constraint_strategy = strategy
+            model, norm = ModelFactory(problem).get_md_kriging_model()
+            sbo_infill = HiddenConstraintsSBO(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
+            sbo_infill.hc_strategy = RejectionHCStrategy()
+
+            sbo = sbo_infill.algorithm(infill_size=n_batch, init_size=n_init)
+            sbo.initialization = Initialization(doe_pop)
+            sbo.setup(problem)
+            doe_pop = sbo.ask()  # Once to initialize the infill search using the DOE
+            sbo.evaluator.eval(problem, doe_pop)
+            sbo.tell(doe_pop)
+
+            n_pop, n_fail = [len(doe_pop)], [np.sum(ArchOptProblemBase.get_failed_points(doe_pop))]
+            f_best = [np.nanmin(doe_pop.get('F')[:, 0])]
+            for i_infill in range(n_infill):
+                # # Do the last infill using the mean prediction
+                # if i_infill == n_infill-1:
+                #     sbo_infill.infill = inf = FunctionEstimateConstrainedInfill()
+                #     inf.initialize(sbo_infill.problem, sbo_infill.surrogate_model, sbo_infill.normalization)
+
+                log.info(f'Infill {i_infill+1}/{n_infill}')
+                infills = sbo.ask()
+                assert len(infills) == 1
+                sbo.evaluator.eval(problem, infills)
+
+                if i_infill == 0:
+                    sbo_infill.plot_state(save_path=f'{strategy_folder}/doe', plot_g=True, show=False)
+                sbo_infill.plot_state(x_infill=infills.get('X')[0, :], plot_std=False, plot_g=True,
+                                      save_path=f'{strategy_folder}/infill_{i_infill}', show=False)
+
+                sbo.tell(infills=infills)
+
+                n_pop.append(len(sbo.pop))
+                n_fail.append(np.sum(ArchOptProblemBase.get_failed_points(sbo.pop)))
+                f_best.append(sbo.opt.get('F')[0, 0])
+
+            plt.figure(), plt.title(f'{strat_name} on {prob_name}')
+            plt.plot(f_best, 'k', linewidth=2)
+            plt.plot([f_known_best]*len(f_best), '--k', linewidth=.5)
+            plt.xlabel('Iteration'), plt.ylabel('Best $f$')
+            plt.tight_layout()
+            plt.savefig(f'{strategy_folder}/f.png')
 
 
 def exp_00_03_constraints(post_process=False):
     """
     Test different constraint handling strategies on single- and multi-objective (mixed-discrete) problems.
+
+    PoF 50%, PoF 75% and g-mean work best for most problems.
     """
     folder = set_results_folder(_exp_00_03_folder)
     n_infill = 20
@@ -308,6 +405,7 @@ def exp_00_03_constraints(post_process=False):
         (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25'),
         (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50'),
         (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75'),
+        # (AdaptiveProbabilityOfFeasibility(min_pof_bounds=(.1, .5)), 'APoF'),
         (UpperTrustBound(tau=1.), 'UTB_10'),
         (UpperTrustBound(tau=2.), 'UTB_20'),
     ]
@@ -379,7 +477,7 @@ def exp_00_03_constraints(post_process=False):
     # _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
 
 
-def _make_comparison_df(df_agg, column, title, folder, key=None, strategy_map=None, prob_map=None):
+def _make_comparison_df(df_agg, column, title, folder, key=None, strategy_map=None, prob_map=None, mod_compare=None):
     strategy_map = strategy_map or {}
     prob_map = prob_map or {}
 
@@ -395,11 +493,10 @@ def _make_comparison_df(df_agg, column, title, folder, key=None, strategy_map=No
             col_rename = {key: prob_map.get(value, value) for key, value in col_rename.items()}
             df_compare_val = df_compare_val.rename(columns=col_rename)
 
-            df_compare_val.insert(0, '$n_{batch}$', [int(idx.split('_')[1]) for idx in df_compare_val.index])
-            idx_replace = {idx: idx.split('_')[0] for idx in df_compare_val.index}
-            idx_replace = {key: strategy_map.get(value, value) for key, value in idx_replace.items()}
-            df_compare_val = df_compare_val.rename(index=idx_replace)
-
+            if mod_compare is not None:
+                df_compare_val_ = mod_compare(df_compare_val, col)
+                if df_compare_val_ is not None:
+                    df_compare_val = df_compare_val_
             df_compare_val.to_excel(writer, sheet_name=col)
 
 
@@ -450,4 +547,5 @@ def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
 if __name__ == '__main__':
     # exp_00_01_md_gp()
     # exp_00_02_infill()
+    # exp_00_03a_plot_constraints()
     exp_00_03_constraints()

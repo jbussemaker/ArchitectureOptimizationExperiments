@@ -100,13 +100,16 @@ class HiddenConstraintsSBO(SBOInfill):
         hc_infill = HCInfill(self.infill if infill is None else infill, self.hc_strategy)
         return super()._get_infill_problem(hc_infill, force_new_points=force_new_points)
 
-    def plot_state(self, x_infill=None, save_path=None, plot_std=False, show=True):
+    def plot_state(self, x_infill=None, save_path=None, plot_std=False, plot_g=False, show=True):
         import matplotlib.pyplot as plt
         from matplotlib.colors import CenteredNorm
         problem = self.problem
         total_pop = self.total_pop
         x_train = total_pop.get('X')
-        is_failed_train = ArchOptProblemBase.get_failed_points(total_pop)
+        if plot_g:
+            is_failed_train = total_pop.get('CV')[:, 0] > 0.
+        else:
+            is_failed_train = ArchOptProblemBase.get_failed_points(total_pop)
         n_fail = np.sum(is_failed_train)
 
         x1, x2 = np.linspace(problem.xl[0], problem.xu[0], 100), np.linspace(problem.xl[1], problem.xu[1], 100)
@@ -116,7 +119,10 @@ class HiddenConstraintsSBO(SBOInfill):
         x_eval[:, 0] = xx1.ravel()
         x_eval[:, 1] = xx2.ravel()
         out_plot = problem.evaluate(x_eval, return_as_dictionary=True)
-        is_failed_ref = ArchOptProblemBase.get_failed_points(out_plot)
+        if plot_g:
+            is_failed_ref = np.max(out_plot['G'], axis=1) > 0.
+        else:
+            is_failed_ref = ArchOptProblemBase.get_failed_points(out_plot)
         pov_ref = (1-is_failed_ref.astype(float)).reshape(xx1.shape)
 
         def _plot_sfc(z, z_name, path_post, is_g=False):
@@ -151,9 +157,9 @@ class HiddenConstraintsSBO(SBOInfill):
                           is_g=iy >= problem.n_obj)
 
         infill = self.infill
-        f_infill, g_infill = infill.evaluate(x_eval_norm)
+        f_infill, g_infill = infill.evaluate(x_eval)
         if self.hc_strategy.adds_infill_constraint():
-            g_hc = self.hc_strategy.evaluate_infill_constraint(x_eval_norm)
+            g_hc = self.hc_strategy.evaluate_infill_constraint(x_eval)
             g_infill = np.column_stack([g_infill, g_hc])
         for i in range(f_infill.shape[1]):
             _plot_sfc(f_infill[:, i], f'Infill $f_{i}$', f'infill_f{i}')
