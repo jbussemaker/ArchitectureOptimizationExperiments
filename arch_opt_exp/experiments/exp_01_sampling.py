@@ -23,7 +23,10 @@ import concurrent.futures
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
 from arch_opt_exp.experiments.runner import *
+from arch_opt_exp.experiments.metrics import *
 from arch_opt_exp.md_mo_hier.sampling import *
+from arch_opt_exp.hc_strategies.metrics import *
+from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.md_mo_hier.hierarchical_comb import *
 
 from pymoo.problems.multi.omnitest import OmniTest
@@ -36,6 +39,9 @@ from sb_arch_opt.problems.md_mo import *
 from sb_arch_opt.problems.hierarchical import *
 from sb_arch_opt.problems.problems_base import *
 from sb_arch_opt.problems.turbofan_arch import *
+from sb_arch_opt.algo.arch_sbo.algo import *
+from sb_arch_opt.algo.arch_sbo.infill import *
+from sb_arch_opt.algo.arch_sbo.models import *
 
 log = logging.getLogger('arch_opt_exp.01_sampling')
 capture_log()
@@ -45,6 +51,7 @@ _exp_01_02_folder = '01_sampling_02_sampling_similarity'
 _exp_01_03_folder = '01_sampling_03_doe_accuracy'
 _exp_01_04_folder = '01_sampling_04_activeness_diversity'
 _exp_01_05_folder = '01_sampling_05_perf_influence'
+_exp_01_06_folder = '01_sampling_06_optimization'
 
 _all_problems = lambda: [
     SimpleTurbofanArch(),  # Realistic hierarchical problem
@@ -69,13 +76,13 @@ _problems = lambda: [
 
 
 _samplers = [
-    RepairedSampler(FloatRandomSampling()),
-    RepairedSampler(LatinHypercubeSampling()),
-    NoGroupingHierarchicalSampling(),
-    NrActiveHierarchicalSampling(),
-    NrActiveHierarchicalSampling(weight_by_nr_active=True),
-    ActiveVarHierarchicalSampling(),
-    ActiveVarHierarchicalSampling(weight_by_nr_active=True),
+    (RepairedSampler(FloatRandomSampling()), 'Rnd'),
+    (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+    (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
+    (NrActiveHierarchicalSampling(), 'HierNrAct'),
+    (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
+    (ActiveVarHierarchicalSampling(), 'HierAct'),
+    (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
 ]
 
 
@@ -143,11 +150,11 @@ def exp_01_02_sampling_similarity():
         with open(path, 'rb') as fp:
             df_exhaustive.append(pickle.load(fp))
 
-    for i, sampler in enumerate(_samplers):
-        with pd.ExcelWriter(f'{folder}/output_{i}_{sampler.__class__.__name__}.xlsx') as writer:
+    for i, (sampler, sampler_name) in enumerate(_samplers):
+        with pd.ExcelWriter(f'{folder}/output_{i}_{sampler_name}.xlsx') as writer:
             for j, problem in enumerate(problems):
                 log.info(f'Sampling {problem!r} ({j+1}/{len(problems)}) '
-                         f'with sampler: {sampler!r} ({i+1}/{len(_samplers)})')
+                         f'with sampler: {sampler_name} ({i+1}/{len(_samplers)})')
                 x = sampler.do(problem, n_samples).get('X')
 
                 # Count appearances of design variable options
@@ -220,9 +227,9 @@ def exp_01_03_doe_accuracy():
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for i, problem in enumerate(problems):
             df_samplers = []
-            for j, sampler in enumerate(_samplers):
+            for j, (sampler, sampler_name) in enumerate(_samplers):
                 log.info(f'Sampling {problem!r} ({i+1}/{len(problems)}) '
-                         f'with sampler: {sampler!r} ({j+1}/{len(_samplers)})')
+                         f'with sampler: {sampler_name} ({j+1}/{len(_samplers)})')
 
                 rep = f'prob {i+1}/{len(problems)}; sampler {j+1}/{len(_samplers)}; rep '
                 futures = [executor.submit(_sample_and_train, f'{rep}{k+1}/{n_repeat}', problem, sampler,
@@ -237,7 +244,7 @@ def exp_01_03_doe_accuracy():
                 df_sampler = pd.DataFrame(columns=n_train_mult, data=data)
                 df_sampler = df_sampler.agg(['mean', 'std', 'median', q25, q75])
                 df_sampler = df_sampler.set_index(pd.MultiIndex.from_tuples(
-                    [(sampler.__class__.__name__, val) for val in df_sampler.index]))
+                    [(sampler_name, val) for val in df_sampler.index]))
                 df_samplers.append(df_sampler)
 
             df_agg = pd.concat(df_samplers, axis=0).T
@@ -714,9 +721,71 @@ def exp_01_05_performance_influence():
                 plt.savefig(f'{folder}/plot_{set_name.lower()}_{x_col}.png')
 
 
+def _get_metrics(problem):
+    metrics = get_exp_metrics(problem, including_convergence=False)+[SBOTimesMetric()]
+    additional_plot = {
+        'time': ['train', 'infill'],
+    }
+    return metrics, additional_plot
+
+
+def exp_00_06_opt(post_process=False):
+    """
+    Run optimizations with different sampling strategies for different sub-problem optimum locations.
+    """
+    folder = set_results_folder(_exp_01_06_folder)
+    n_infill = 20
+    n_repeat = 12
+    doe_k = 5
+    n_sub = 128
+    i_opt_test = [0, 127]
+
+    problems = [
+        (lambda i_opt_: SelectableTunableBranin(
+            n_sub=n_sub, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER'),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR'),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_), '02_SO_HDR'),  # High diversity range
+        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_opt_), '03_MO_HDR'),
+    ]
+    problem_paths = []
+    problem_names = []
+    i_prob = 0
+    problem: Union[ArchOptProblemBase]
+    for i, (problem_factory, category) in enumerate(problems):
+        for i_opt in i_opt_test:
+            problem = problem_factory(i_opt)
+            name = f'{category} {problem.__class__.__name__} opt={i_opt}'
+            problem_names.append(name)
+            problem_path = f'{folder}/{secure_filename(name)}'
+            problem_paths.append(problem_path)
+
+            n_init = int(np.ceil(doe_k*problem.n_var))
+            i_prob += 1
+            log.info(f'Running optimizations for {i_prob}/{len(problems)*len(i_opt_test)}: {name} (n_init = {n_init})')
+            problem.pareto_front()
+
+            metrics, additional_plot = _get_metrics(problem)
+            model, norm = ModelFactory(problem).get_md_kriging_model()
+            infill, n_batch = get_default_infill(problem)
+
+            algorithms = []
+            algo_names = []
+            for sampler, sampler_name in _samplers:
+                sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
+                sbo_algo = sbo.algorithm(infill_size=1, init_sampling=sampler, init_size=n_init)
+                algorithms.append(sbo_algo)
+                algo_names.append(sampler_name)
+
+            do_run = not post_process
+            exps = run(folder, problem, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_init+n_infill,
+                       metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+            plt.close('all')
+
+
 if __name__ == '__main__':
     # exp_01_01_dv_opt_occurrence()
     # exp_01_02_sampling_similarity()
-    exp_01_03_doe_accuracy()
+    # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
+    exp_00_06_opt()
