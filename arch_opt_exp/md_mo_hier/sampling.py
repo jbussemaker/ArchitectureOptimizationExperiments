@@ -85,8 +85,8 @@ class HierarchicalSamplingTestBase(HierarchicalRandomSampling):
             if len(i_x_tgt) < i_x_group.shape[0]:
                 n_sel = len(i_x_tgt)
                 n_avail = i_x_group.shape[0]
-                n_sel_unit = (np.arange(n_sel)+np.random.random(n_sel))/n_sel
-                i_from_group = np.round(n_sel_unit*(n_avail+.99999)-.5).astype(int)
+                n_sel_unit = (np.arange(n_sel)+np.random.random(n_sel)*.9999)/n_sel
+                i_from_group = np.round(n_sel_unit*n_avail - .5).astype(int)
 
             # If there are more samples requested than points available, only repeat points if there are continuous vars
             elif has_x_cont:
