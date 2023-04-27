@@ -553,9 +553,9 @@ def _build_md_kriging(problem: ArchOptProblemBase, surrogate_factory):
     from smt.applications.mixed_integer import MixedIntegerKrigingModel
     factory = ModelFactory(problem)
     normalization = factory.get_md_normalization()
-    norm_ds_spec = normalization.normalize_design_space(factory.get_smt_design_space_spec())
+    norm_ds_spec = factory.create_smt_design_space_spec(problem.design_space, md_normalize=True)
 
-    surrogate = surrogate_factory(norm_ds_spec.x_specs)
+    surrogate = surrogate_factory(norm_ds_spec.design_space)
     if norm_ds_spec.is_mixed_discrete:
         surrogate = MixedIntegerKrigingModel(surrogate=surrogate)
     return surrogate, normalization
@@ -600,13 +600,13 @@ def exp_00_04_high_dim(post_process=False):
 
         def _factory(ds):
             if kplsk:
-                return KPLSK(xspecs=ds, **kwargs)
+                return KPLSK(design_space=ds, **kwargs)
 
             if n_comp is None:
                 kwargs['eval_n_comp'] = True
             else:
                 kwargs['n_comp'] = n_comp
-            return KPLS(xspecs=ds, **kwargs)
+            return KPLS(design_space=ds, **kwargs)
 
         return _factory
 
@@ -669,4 +669,4 @@ if __name__ == '__main__':
     # exp_00_02_infill()
     # exp_00_03a_plot_constraints()
     # exp_00_03_constraints()
-    exp_00_04_high_dim()
+    exp_00_04_high_dim()  # TODO run

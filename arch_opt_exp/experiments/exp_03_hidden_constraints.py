@@ -410,13 +410,13 @@ _strategies: List[HiddenConstraintStrategy] = [
 
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population):
-    model = ModelFactory.get_kriging_model()
+    model, norm = ModelFactory(problem).get_md_kriging_model()
     if problem.n_obj == 1:
         infill = ExpectedImprovementInfill()
     else:
         infill = MinVariancePFInfill()
 
-    sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy)\
+    sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm)\
         .algorithm(infill_size=1, init_size=len(doe_pop))
     sbo.initialization = Initialization(doe_pop)
     return sbo
@@ -874,4 +874,4 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     exp_03_04a_doe_size_min_pov()
-    # exp_03_05_optimization()
+    exp_03_05_optimization()

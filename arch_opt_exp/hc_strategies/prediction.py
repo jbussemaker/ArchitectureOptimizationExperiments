@@ -462,26 +462,6 @@ class MDGPRegressor(SMTPredictor):
         return 'MD-GP'
 
 
-class MOERegressor(SMTPredictor):
-    """Uses SMT's Mixture-of-Expert surrogate model"""
-
-    def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
-        self._model = model = ModelFactory.get_moe_model(
-            smooth_recombination=False,
-            n_clusters=2,
-            variances_support=False,
-        )
-        model.set_training_values(x_norm, y_is_valid)
-        model.train()
-
-    # def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
-    #     x_norm = self._normalization.forward(x)
-    #     return self._model.moe._proba_cluster(x_norm)[:, 1]
-
-    def __str__(self):
-        return 'MOE'
-
-
 class LinearInterpolator(PredictorInterface):
 
     def __init__(self):
