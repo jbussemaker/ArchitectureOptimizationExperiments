@@ -45,6 +45,10 @@ from arch_opt_exp.hc_strategies.sbo_with_hc import *
 from arch_opt_exp.experiments.experimenter import *
 from arch_opt_exp.experiments.metrics import get_exp_metrics
 
+from smt.surrogate_models.krg_based import MixIntKernelType, MixHrcKernelType
+from smt.surrogate_models.kpls import KPLS
+from smt.surrogate_models.kplsk import KPLSK
+
 log = logging.getLogger('arch_opt_exp.01_md_mo')
 capture_log()
 
@@ -52,6 +56,7 @@ _exp_00_01_folder = '00_md_mo_01_md_gp'
 _exp_00_02_folder = '00_md_mo_02_infill'
 _exp_00_03a_folder = '00_md_mo_03a_plot_g'
 _exp_00_03_folder = '00_md_mo_03_constraints'
+_exp_00_04_folder = '00_md_mo_04_high_dim'
 
 
 _test_problems = lambda: [
@@ -544,8 +549,124 @@ def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
     return df_agg
 
 
+def _build_md_kriging(problem: ArchOptProblemBase, surrogate_factory):
+    from smt.applications.mixed_integer import MixedIntegerKrigingModel
+    factory = ModelFactory(problem)
+    normalization = factory.get_md_normalization()
+    norm_ds_spec = normalization.normalize_design_space(factory.get_smt_design_space_spec())
+
+    surrogate = surrogate_factory(norm_ds_spec.x_specs)
+    if norm_ds_spec.is_mixed_discrete:
+        surrogate = MixedIntegerKrigingModel(surrogate=surrogate)
+    return surrogate, normalization
+
+
+def _patch_kpls():
+    # https://github.com/jbussemaker/smt/tree/kpls-fix
+    estimate_func = KPLS._estimate_number_of_components
+    predict_func = KPLS._predict_values
+
+    def _wrapped_predict(self, x):
+        y_out = predict_func(self, x)
+        return y_out.reshape(x.shape[0], self.ny)
+
+    def _fixed_estimate(self):
+        self._predict_values = lambda x: _wrapped_predict(self, x)
+        estimate_func(self)
+        self._predict_values = lambda x: predict_func(self, x)
+
+    KPLS._estimate_number_of_components = _fixed_estimate
+
+
+_patch_kpls()
+
+
+def exp_00_04_high_dim(post_process=False):
+    """
+    Test different dimension reduction strategies on high-dimensional (mixed-discrete) problems.
+    """
+    folder = set_results_folder(_exp_00_04_folder)
+    n_infill = 20
+    n_repeat = 12
+
+    def _get_kpls_factory(is_md_, n_comp: int = None, kplsk=False):
+        kwargs = {
+            'print_global': False,
+            'categorical_kernel': MixIntKernelType.HOMO_HSPHERE,
+            'hierarchical_kernel': MixHrcKernelType.ALG_KERNEL,
+        }
+        if is_md_:
+            kwargs['n_start'] = 5
+
+        def _factory(ds):
+            if kplsk:
+                return KPLSK(xspecs=ds, **kwargs)
+
+            if n_comp is None:
+                kwargs['eval_n_comp'] = True
+            else:
+                kwargs['n_comp'] = n_comp
+            return KPLS(xspecs=ds, **kwargs)
+
+        return _factory
+
+    problems = [
+        (MOZDT1(), '02_C_MO'),
+        (MDZDT1(), '03_MD_MO'),
+        (DZDT1(), '03_MD_MO'),
+    ]
+    problem_paths = []
+    problem_names = []
+    problem: Union[ArchOptProblemBase]
+    for i, (problem, category) in enumerate(problems):
+        name = f'{category} {problem.__class__.__name__}'
+        problem_names.append(name)
+        problem_path = f'{folder}/{secure_filename(name)}'
+        problem_paths.append(problem_path)
+
+        n_init = int(np.ceil(2*problem.n_var))
+
+        log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
+        problem.pareto_front()
+
+        doe, doe_delta_hvs = _create_does(problem, n_init, n_repeat)
+        log.info(f'DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
+                 f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
+
+        metrics, additional_plot = _get_metrics(problem)
+        infill = ExpectedImprovementInfill() if problem.n_obj == 1 else MinVariancePFInfill()
+
+        is_md = not np.all(problem.is_cont_mask)
+
+        algorithms = []
+        algo_names = []
+        for (model, norm), model_name in [
+            (ModelFactory(problem).get_md_kriging_model(), 'MD-BO'),
+            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=1)), 'KPLS-1'),
+            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=2)), 'KPLS-2'),
+            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=4)), 'KPLS-4'),
+            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=10)), 'KPLS-10'),
+            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=None)), 'KPLS-auto'),
+            (_build_md_kriging(problem, _get_kpls_factory(is_md, kplsk=True)), 'KPLSK'),
+        ]:
+            sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
+            sbo_algo = sbo.algorithm(infill_size=1, init_size=n_init)
+            algorithms.append(sbo_algo)
+            algo_names.append(model_name)
+
+        do_run = not post_process
+        exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+
+        _plot_for_pub(exps, met_plot_map={
+            'delta_hv': ['ratio'],
+        }, algo_name_map={'BO': 'Continuous GP', 'MD-BO': 'Mixed-discrete GP'})
+        plt.close('all')
+
+
 if __name__ == '__main__':
     # exp_00_01_md_gp()
     # exp_00_02_infill()
     # exp_00_03a_plot_constraints()
-    exp_00_03_constraints()
+    # exp_00_03_constraints()
+    exp_00_04_high_dim()
