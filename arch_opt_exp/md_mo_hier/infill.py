@@ -142,8 +142,8 @@ class MinimumPoIInfill(ConstrainedInfill):
     def get_n_infill_objectives(self) -> int:
         return 1
 
-    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
-        super().set_samples(x_train, y_train)
+    def set_samples(self, x_train: np.ndarray, is_active_train: np.ndarray, y_train: np.ndarray):
+        super().set_samples(x_train, is_active_train, y_train)
         self.f_pareto = self.get_pareto_front(y_train[:, :self.problem.n_obj])
 
     def evaluate_f(self, f_predict: np.ndarray, f_var_predict: np.ndarray) -> np.ndarray:
@@ -233,10 +233,10 @@ class EnsembleInfill(ConstrainedInfill):
 
         super()._initialize()
 
-    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
-        super().set_samples(x_train, y_train)
+    def set_samples(self, x_train: np.ndarray, is_active_train: np.ndarray, y_train: np.ndarray):
+        super().set_samples(x_train, is_active_train, y_train)
         for infill in self.infills:
-            infill.set_samples(x_train, y_train)
+            infill.set_samples(x_train, is_active_train, y_train)
 
     def get_n_infill_objectives(self) -> int:
         return sum([infill.get_n_infill_objectives() for infill in self.infills])

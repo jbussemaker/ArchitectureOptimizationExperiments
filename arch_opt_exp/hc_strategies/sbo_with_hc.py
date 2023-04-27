@@ -119,6 +119,7 @@ class HiddenConstraintsSBO(SBOInfill):
         x_eval[:, 0] = xx1.ravel()
         x_eval[:, 1] = xx2.ravel()
         out_plot = problem.evaluate(x_eval, return_as_dictionary=True)
+        is_active_eval = out_plot['is_active']
         if plot_g:
             is_failed_ref = np.max(out_plot['G'], axis=1) > 0.
         else:
@@ -157,7 +158,7 @@ class HiddenConstraintsSBO(SBOInfill):
                           is_g=iy >= problem.n_obj)
 
         infill = self.infill
-        f_infill, g_infill = infill.evaluate(x_eval)
+        f_infill, g_infill = infill.evaluate(x_eval, is_active_eval)
         if self.hc_strategy.adds_infill_constraint():
             g_hc = self.hc_strategy.evaluate_infill_constraint(x_eval)
             g_infill = np.column_stack([g_infill, g_hc])
@@ -183,11 +184,11 @@ class HCInfill(SurrogateInfill):
     def needs_variance(self):
         return self._infill.needs_variance
 
-    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
-        self._infill.set_samples(x_train, y_train)
+    def set_samples(self, x_train: np.ndarray, is_active_train: np.ndarray, y_train: np.ndarray):
+        self._infill.set_samples(x_train, is_active_train, y_train)
 
-    def predict(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        return self._infill.predict(x)
+    def predict(self, x: np.ndarray, is_active: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        return self._infill.predict(x, is_active)
 
     def _initialize(self):
         self._infill.initialize(self.problem, self.surrogate_model, self.normalization)
@@ -199,8 +200,8 @@ class HCInfill(SurrogateInfill):
         super().reset_infill_log()
         self._infill.reset_infill_log()
 
-    def predict_variance(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        return self._infill.predict_variance(x)
+    def predict_variance(self, x: np.ndarray, is_active: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        return self._infill.predict_variance(x, is_active)
 
     def get_n_infill_objectives(self) -> int:
         return self._infill.get_n_infill_objectives()
@@ -211,8 +212,8 @@ class HCInfill(SurrogateInfill):
             n_constr += 1
         return n_constr
 
-    def _evaluate(self, x: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-        f_infill, g_infill = self._infill.evaluate(x)
+    def _evaluate(self, x: np.ndarray, is_active: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        f_infill, g_infill = self._infill.evaluate(x, is_active)
         f_infill = self._hc_strategy.mod_infill_objectives(x, f_infill)
 
         if self._hc_strategy.adds_infill_constraint():
