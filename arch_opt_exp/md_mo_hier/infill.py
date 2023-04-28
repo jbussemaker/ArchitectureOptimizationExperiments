@@ -24,12 +24,26 @@ from pymoo.core.population import Population
 from pymoo.core.algorithm import filter_optimum
 from pymoo.algorithms.moo.nsga2 import calc_crowding_distance
 
+from sb_arch_opt.algo.arch_sbo.algo import *
 from sb_arch_opt.algo.arch_sbo.infill import *
 
 __all__ = ['ProbabilityOfImprovementInfill', 'LowerConfidenceBoundInfill', 'MinimumPoIInfill', 'EnsembleInfill',
            'IgnoreConstraints', 'FunctionEstimateConstrainedInfill', 'ExpectedImprovementInfill',
            'MeanConstraintPrediction', 'ProbabilityOfFeasibility', 'UpperTrustBound',
-           'AdaptiveProbabilityOfFeasibility']
+           'AdaptiveProbabilityOfFeasibility', 'ConstraintAggSBOInfill']
+
+
+class ConstraintAggSBOInfill(SBOInfill):
+
+    def __init__(self, *args, aggregate=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._aggregate_g = aggregate
+
+    def _get_normalize_g(self, g: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        g_ref = g
+        if self._aggregate_g:
+            g_ref = np.array([np.max(g, axis=1)]).T
+        return self._normalize_y(g_ref, keep_centered=True)
 
 
 class ProbabilityOfImprovementInfill(ConstrainedInfill):
@@ -292,7 +306,7 @@ class AdaptiveProbabilityOfFeasibility(ProbabilityOfFeasibility):
         self.feasible_frac_offset = feasible_frac_offset
         super().__init__()
 
-    def set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
+    def _set_samples(self, x_train: np.ndarray, y_train: np.ndarray):
         g_train = y_train[:, self.problem.n_obj:]
         g_is_feasible = np.all((g_train <= 0.) & np.isfinite(g_train), axis=1)
         feasible_frac = np.sum(g_is_feasible)/len(g_is_feasible)
@@ -326,9 +340,6 @@ class UpperTrustBound(ConstraintStrategy):
             tau = 3
         self.tau = tau
         super().__init__()
-
-    def get_n_infill_constraints(self) -> int:
-        return self.problem.n_ieq_constr
 
     def evaluate(self, x: np.ndarray, g: np.ndarray, g_var: np.ndarray) -> np.ndarray:
         utb = g - self.tau*np.sqrt(g_var)

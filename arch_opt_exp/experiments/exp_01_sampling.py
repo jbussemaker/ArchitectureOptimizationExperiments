@@ -734,8 +734,8 @@ def exp_00_06_opt(post_process=False):
     Run optimizations with different sampling strategies for different sub-problem optimum locations.
     """
     folder = set_results_folder(_exp_01_06_folder)
-    n_infill = 20
-    n_repeat = 8
+    n_infill = 30
+    n_repeat = 20
     doe_k = 5
     n_sub = 128
     i_opt_test = [0, 127]

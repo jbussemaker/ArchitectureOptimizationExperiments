@@ -406,13 +406,14 @@ def exp_00_03_constraints(post_process=False):
     n_repeat = 20
 
     strategies = [
-        (MeanConstraintPrediction(), 'g'),
-        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25'),
-        (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50'),
-        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75'),
-        # (AdaptiveProbabilityOfFeasibility(min_pof_bounds=(.1, .5)), 'APoF'),
-        (UpperTrustBound(tau=1.), 'UTB_10'),
-        (UpperTrustBound(tau=2.), 'UTB_20'),
+        (MeanConstraintPrediction(), 'g', False),
+        (MeanConstraintPrediction(), 'g_agg', True),
+        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25', True),
+        (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50', True),
+        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75', True),
+        # (AdaptiveProbabilityOfFeasibility(min_pof_bounds=(.1, .5)), 'APoF', True),
+        (UpperTrustBound(tau=1.), 'UTB_10', True),
+        (UpperTrustBound(tau=2.), 'UTB_20', True),
     ]
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
@@ -448,11 +449,12 @@ def exp_00_03_constraints(post_process=False):
 
         algorithms = []
         algo_names = []
-        for strategy, strategy_name in strategies:
+        for strategy, strategy_name, aggregate in strategies:
             infill, n_batch = get_default_infill(problem, n_parallel=1)
             infill.constraint_strategy = strategy
             model, norm = ModelFactory(problem).get_md_kriging_model()
-            sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
+            sbo = ConstraintAggSBOInfill(
+                model, infill, pop_size=100, termination=100, normalization=norm, aggregate=aggregate, verbose=False)
             sbo_algo = sbo.algorithm(infill_size=n_batch, init_size=n_init)
             algorithms.append(sbo_algo)
             algo_names.append(strategy_name)
@@ -480,6 +482,7 @@ def exp_00_03_constraints(post_process=False):
     _make_comparison_df(df_agg[df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
     # _make_comparison_df(df_agg[~df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='so', strategy_map=strategy_map, prob_map=prob_map)
     # _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
+    plt.close('all')
 
 
 def _make_comparison_df(df_agg, column, title, folder, key=None, strategy_map=None, prob_map=None, mod_compare=None):
@@ -672,5 +675,5 @@ if __name__ == '__main__':
     # exp_00_01_md_gp()
     # exp_00_02_infill()
     # exp_00_03a_plot_constraints()
-    # exp_00_03_constraints()
+    exp_00_03_constraints()
     exp_00_04_high_dim()
