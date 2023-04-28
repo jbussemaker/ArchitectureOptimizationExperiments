@@ -584,6 +584,10 @@ _patch_kpls()
 def exp_00_04_high_dim(post_process=False):
     """
     Test different dimension reduction strategies on high-dimensional (mixed-discrete) problems.
+
+    Conclusions:
+    - Applying KPLS for high-dimensional problems has no influence on optimizer performance, however reduces model
+      training time by a factor of 10 (KPLS with 10 components) to 100 (KPLS with 1 component).
     """
     folder = set_results_folder(_exp_00_04_folder)
     n_infill = 20
@@ -646,8 +650,8 @@ def exp_00_04_high_dim(post_process=False):
             (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=2)), 'KPLS-2'),
             (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=4)), 'KPLS-4'),
             (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=10)), 'KPLS-10'),
-            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=None)), 'KPLS-auto'),
-            (_build_md_kriging(problem, _get_kpls_factory(is_md, kplsk=True)), 'KPLSK'),
+            # (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=None)), 'KPLS-auto'),
+            # (_build_md_kriging(problem, _get_kpls_factory(is_md, kplsk=True)), 'KPLSK'),
         ]:
             sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
             sbo_algo = sbo.algorithm(infill_size=1, init_size=n_init)
@@ -669,4 +673,4 @@ if __name__ == '__main__':
     # exp_00_02_infill()
     # exp_00_03a_plot_constraints()
     # exp_00_03_constraints()
-    exp_00_04_high_dim()  # TODO run
+    exp_00_04_high_dim()
