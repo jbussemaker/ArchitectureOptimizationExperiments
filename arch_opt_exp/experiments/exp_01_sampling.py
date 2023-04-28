@@ -735,10 +735,36 @@ def exp_00_06_opt(post_process=False):
     """
     folder = set_results_folder(_exp_01_06_folder)
     n_infill = 20
-    n_repeat = 12
+    n_repeat = 8
     doe_k = 5
     n_sub = 128
     i_opt_test = [0, 127]
+    prob_data = {}
+
+    def prob_add_cols(strat_data_, df_strat, algo_name):
+        strat_data_['sampler_hier'] = is_hier_sampler = algo_name.startswith('Hier')
+        strat_data_['sampler_strat'] = algo_name[4:].replace('Wt', '') if is_hier_sampler else 'NoHier'
+        strat_data_['sampler_grp_wt'] = 'Wt' in algo_name
+
+        data_key = name
+        if data_key in prob_data:
+            for key, value in prob_data[data_key].items():
+                strat_data_[key] = value
+            return
+
+        discrete_rates = problem.get_discrete_rates(force=True)
+
+        prob_data[data_key] = data = {
+            'is_mo': problem.n_obj > 1,
+            'imp_ratio': problem.get_imputation_ratio(),
+            'n_discr': problem.get_n_valid_discrete(),
+            'n_sub': n_sub,
+            'opt_in_small_sub': i_opt > .5*n_sub,
+            'max_dr': discrete_rates.loc['diversity'].max(),
+            'max_adr': discrete_rates.loc['active-diversity'].max(),
+        }
+        for key, value in data.items():
+            strat_data_[key] = value
 
     problems = [
         (lambda i_opt_: SelectableTunableBranin(
@@ -765,6 +791,7 @@ def exp_00_06_opt(post_process=False):
             problem.pareto_front()
 
             metrics, additional_plot = _get_metrics(problem)
+            additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv']
             model, norm = ModelFactory(problem).get_md_kriging_model()
             infill, n_batch = get_default_infill(problem)
 
@@ -779,7 +806,58 @@ def exp_00_06_opt(post_process=False):
             do_run = not post_process
             exps = run(folder, problem, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_init+n_infill,
                        metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+            _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
             plt.close('all')
+
+    def _add_cols(df_agg_):
+        # df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
+        return df_agg_
+
+    df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+
+def _agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
+    df_data = []
+    for exp in exps:
+        with open(exp.get_problem_algo_results_path('result_agg_df.pkl'), 'rb') as fp:
+            df_strat = pickle.load(fp)
+            strat_data = pd.Series(df_strat.iloc[-1, :], name=exp.algorithm_name)
+            if add_cols_callback is not None:
+                strat_data_ = add_cols_callback(strat_data, df_strat, exp.algorithm_name)
+                if strat_data_ is not None:
+                    strat_data = strat_data_
+            df_data.append(strat_data)
+
+    df_prob = pd.concat(df_data, axis=1).T
+    df_prob.to_pickle(f'{problem_path}/df_problem.pkl')
+    with pd.ExcelWriter(f'{problem_path}/df_problem.xlsx') as writer:
+        df_prob.to_excel(writer)
+
+
+def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
+    df_probs = []
+    for i, problem_name in enumerate(problem_names):
+        problem_path = problem_paths[i]
+        try:
+            with open(f'{problem_path}/df_problem.pkl', 'rb') as fp:
+                df_prob = pickle.load(fp)
+        except FileNotFoundError:
+            continue
+
+        df_prob = df_prob.set_index(pd.MultiIndex.from_tuples([(problem_name, val) for val in df_prob.index]))
+        df_probs.append(df_prob)
+
+    df_agg = pd.concat(df_probs, axis=0)
+    df_agg_ = add_cols_callback(df_agg)
+    if df_agg_ is not None:
+        df_agg = df_agg_
+
+    try:
+        with pd.ExcelWriter(f'{folder}/results.xlsx') as writer:
+            df_agg.to_excel(writer)
+    except PermissionError:
+        pass
+    return df_agg
 
 
 if __name__ == '__main__':

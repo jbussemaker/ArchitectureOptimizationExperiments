@@ -182,7 +182,9 @@ class ExperimenterResult(Result):
     @staticmethod
     def plot_compare_metrics(results: List['ExperimenterResult'], metric_name: str, plot_evaluations=False, **kwargs):
         metrics = [res.metrics[metric_name] for res in results]
-        n_eval = [res.n_eval for res in results] if plot_evaluations else None
+        n_eval = None
+        if plot_evaluations:
+            n_eval = [res.n_eval-res.n_eval[0] for res in results]
         if kwargs.get('titles') is None:
             kwargs['titles'] = [res.plot_name for res in results]
         Metric.plot_multiple(metrics, n_eval=n_eval, **kwargs)
