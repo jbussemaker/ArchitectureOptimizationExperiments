@@ -15,6 +15,7 @@ Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 import os
+import timeit
 import pickle
 import logging
 import numpy as np
@@ -55,6 +56,7 @@ capture_log()
 _exp_00_01_folder = '00_md_mo_01_md_gp'
 _exp_00_02_folder = '00_md_mo_02_infill'
 _exp_00_03a_folder = '00_md_mo_03a_plot_g'
+_exp_00_03b_folder = '00_md_mo_03b_multi_y'
 _exp_00_03_folder = '00_md_mo_03_constraints'
 _exp_00_04_folder = '00_md_mo_04_high_dim'
 
@@ -394,14 +396,92 @@ def exp_00_03a_plot_constraints():
             plt.savefig(f'{strategy_folder}/f.png')
 
 
+def exp_00_03b_multi_y():
+    """
+    Confirm that supplying multiple columns in the training outputs is the same as training multiple independent GP's.
+    """
+    folder = set_results_folder(_exp_00_03b_folder)
+    n_repeat = 4
+    n_doe = 40
+    n_test = 10
+
+    problem = MOZDT1()
+    doe_algo = get_doe_algo(doe_size=n_doe)
+    doe_algo.setup(problem)
+    doe_algo.run()
+    x = doe_algo.pop.get('X')
+    y = doe_algo.pop.get('F')
+    y = np.column_stack([y, -y, y*1.5, y*.25, y+10, y-100])
+    x_test, y_test = x[-n_test:, :], y[-n_test:, :]
+    x, y = x[:-n_test, :], y[:-n_test, :]
+
+    t_train_indep = []
+    t_train_agg = []
+    rmse_indep = []
+    rmse_agg = []
+    for i in range(1, y.shape[1]+1):
+        t_indep = []
+        t_agg = []
+        rmse_i = []
+        rmse_a = []
+        for j in range(n_repeat):
+            log.info(f'Training {j+1}/{n_repeat} for n_y = {i}/{y.shape[1]}')
+
+            model = ModelFactory.get_kriging_model()
+            s = timeit.default_timer()
+            model.set_training_values(x, y[:, :i])
+            model.train()
+            t_agg.append(timeit.default_timer()-s)
+
+            y_pred = model.predict_values(x_test)
+            rmse_a.append(np.sqrt(np.mean((y_pred-y_test[:, :i])**2)))
+
+            models = [ModelFactory.get_kriging_model() for _ in range(i)]
+            s = timeit.default_timer()
+            for k in range(i):
+                models[k].set_training_values(x, y[:, [k]])
+                models[k].train()
+            t_indep.append(timeit.default_timer()-s)
+
+            y_pred = []
+            for k in range(i):
+                y_pred.append(models[k].predict_values(x_test))
+            rmse_i.append(np.sqrt(np.mean((np.column_stack(y_pred)-y_test[:, :i])**2)))
+
+        t_train_indep.append(np.mean(t_indep))
+        t_train_agg.append(np.mean(t_agg))
+        rmse_indep.append(np.mean(rmse_i))
+        rmse_agg.append(np.mean(rmse_a))
+
+    x_plot = np.arange(1, y.shape[1]+1)
+    plt.figure(), plt.title('Training time')
+    plt.plot(x_plot, t_train_indep, '-r', linewidth=1, label='Independent')
+    plt.plot(x_plot, t_train_agg, '-b', linewidth=1, label='Aggregated')
+    plt.xlabel('$n_y$'), plt.ylabel('Training time [s]')
+    plt.legend(), plt.tight_layout()
+    plt.savefig(f'{folder}/t.png')
+
+    plt.figure(), plt.title('Accuracy')
+    plt.plot(x_plot, rmse_indep, '-r', linewidth=1, label='Independent')
+    plt.plot(x_plot, rmse_agg, '-b', linewidth=1, label='Aggregated')
+    plt.xlabel('$n_y$'), plt.ylabel('RMSE')
+    plt.legend(), plt.tight_layout()
+    plt.savefig(f'{folder}/rmse.png')
+
+
 def exp_00_03_constraints(post_process=False):
     """
     Test different constraint handling strategies on single- and multi-objective (mixed-discrete) problems.
 
-    PoF 50%, PoF 75% and g-mean work best for most problems.
+    Conclusions:
+    - UTB (or PoF < 50%) works well for highly-constrained problems
+    - PoF 50%, PoF 75% and non-aggregated g-mean work best for most problems
+    - g-mean aggregation reduces performance slightly (especially for MO) and does not result in a consistent
+      improvement of infill and/or training times
+    - A jump in training time was observed for the Carside and WeldedBeam (only for g) problems @ 34 points in the pop
     """
     folder = set_results_folder(_exp_00_03_folder)
-    n_infill = 20
+    n_infill = 30
     n_iter_compare_at = 4  # * max(n_batch) = n_infill
     n_repeat = 20
 
@@ -417,7 +497,11 @@ def exp_00_03_constraints(post_process=False):
     ]
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
-        return
+        strat_data_['n_doe'] = n_init
+        strat_data_['n_dim'] = problem.n_var
+        strat_data_['n_con'] = problem.n_ieq_constr
+        strat_data_['n_obj'] = problem.n_obj
+        strat_data_['is_mo'] = problem.n_obj > 1
         # strat_data_['n_batch'] = n_batch_ = int(algo_name.split('_')[1])
         # row_compare = df_strat.iloc[n_iter_compare_at, :]
         # for col_eval_compare, factor in [('delta_hv_ratio', 1), ('delta_hv_regret', n_batch_)]:
@@ -589,8 +673,8 @@ def exp_00_04_high_dim(post_process=False):
     Test different dimension reduction strategies on high-dimensional (mixed-discrete) problems.
 
     Conclusions:
-    - Applying KPLS for high-dimensional problems has no influence on optimizer performance, however reduces model
-      training time by a factor of 10 (KPLS with 10 components) to 100 (KPLS with 1 component).
+    - Applying KPLS slightly reduces optimizer performance, more when taking less components
+    - Training time is reduced by a factor of 10 (KPLS with 10 components) to 100 (KPLS with 1 component)
     """
     folder = set_results_folder(_exp_00_04_folder)
     n_infill = 20
@@ -675,5 +759,6 @@ if __name__ == '__main__':
     # exp_00_01_md_gp()
     # exp_00_02_infill()
     # exp_00_03a_plot_constraints()
+    # exp_00_03b_multi_y()
     exp_00_03_constraints()
     exp_00_04_high_dim()
