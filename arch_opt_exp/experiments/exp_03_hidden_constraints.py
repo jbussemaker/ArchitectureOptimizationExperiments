@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from scipy.spatial import distance
 from werkzeug.utils import secure_filename
+from pymoo.optimize import minimize
 from pymoo.core.evaluator import Evaluator
 from pymoo.core.population import Population
 from pymoo.core.initialization import Initialization
@@ -58,6 +59,7 @@ _exp_03_03a_folder = '03_hc_03a_knn_predictor'
 _exp_03_04_folder = '03_hc_04_simple_optimization'
 _exp_03_04a_folder = '03_hc_04a_doe_size_min_pov'
 _exp_03_05_folder = '03_hc_05_optimization'
+_exp_03_06_folder = '03_hc_06_engine_arch_surrogate'
 
 _test_problems = lambda: [
     # HFR = high failure rate; G = constrained
@@ -867,11 +869,44 @@ def _plot_problem_bars(df_agg, folder, cat_col, y_col, y_log=False):
     plt.savefig(filename+'.png')
 
 
+def exp_03_06_engine_arch_surrogate():
+    """
+    Gather enough design points to create a surrogate of the engine architecting problems, and find the "real" Pareto
+    front.
+    """
+    folder = set_results_folder(_exp_03_06_folder)
+    problems = [
+        # problem, n_doe, pop_size, n_gen
+        # (Branin(), 10, 5, 10),
+        (SimpleTurbofanArch(), 1000, 75, 15),
+        (RealisticTurbofanArch(), 2000, 205, 15),
+    ]
+
+    for problem, n_doe, pop_size, n_gen in problems:
+        prob_folder = f'{folder}/{problem.__class__.__name__}'
+        os.makedirs(prob_folder, exist_ok=True)
+
+        if isinstance(problem, (SimpleTurbofanArch, RealisticTurbofanArch)):
+            problem.verbose = True
+            problem.n_parallel = 4
+            problem.set_max_iter(30)
+
+        doe_algo = get_doe_algo(doe_size=n_doe, results_folder=prob_folder)
+        doe_algo.setup(problem)
+        doe_algo.run()
+
+        nsga2 = get_nsga2(pop_size=pop_size, results_folder=prob_folder)
+        initialize_from_previous_results(nsga2, problem, prob_folder)
+        nsga2.advance_after_initial_infill = True
+        minimize(problem, nsga2, termination=('n_gen', n_gen), copy_algorithm=False, verbose=True)
+
+
 if __name__ == '__main__':
     # exp_03_01_hc_area()
     # exp_03_02_hc_test_area()
     # exp_03_03_hc_predictors()
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
-    exp_03_04a_doe_size_min_pov()
-    exp_03_05_optimization()
+    # exp_03_04a_doe_size_min_pov()
+    # exp_03_05_optimization()
+    exp_03_06_engine_arch_surrogate()
