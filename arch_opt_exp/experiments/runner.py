@@ -74,8 +74,8 @@ def run(results_key, problems, algorithms, algo_names, doe=None, plot_names=None
     if do_plot:
         plot_metric_values = {
             'delta_hv': ['ratio', 'regret'],
-            'IGD': None,
-            'spread': ['delta'],
+            # 'IGD': None,
+            # 'spread': ['delta'],
             'max_cv': None,
             # 'sm_quality': ['rmse', 'loo_cv'] if include_loo_cv else ['rmse'],
             # 'training': ['n_train', 'n_samples', 'time_train'],

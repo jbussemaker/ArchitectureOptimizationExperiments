@@ -277,7 +277,7 @@ def exp_00_02_infill(post_process=False):
         algorithms = []
         algo_names = []
         for infill, infill_name, n_batch in (so_infills if problem.n_obj == 1 else mo_infills):
-            model, norm = ModelFactory(problem).get_md_kriging_model()
+            model, norm = ModelFactory(problem).get_md_kriging_model(multi=True)
             sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
             sbo_algo = sbo.algorithm(infill_size=n_batch, init_size=n_init)
             algorithms.append(sbo_algo)
@@ -313,6 +313,7 @@ def exp_00_02_infill(post_process=False):
     _make_comparison_df(df_agg[df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='mo', **kwargs)
     _make_comparison_df(df_agg[~df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='so', **kwargs)
     _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', **kwargs)
+    plt.close('all')
 
 
 def exp_00_03a_plot_constraints():
@@ -476,9 +477,9 @@ def exp_00_03_constraints(post_process=False):
     Conclusions:
     - UTB (or PoF < 50%) works well for highly-constrained problems
     - PoF 50%, PoF 75% and non-aggregated g-mean work best for most problems
-    - g-mean aggregation reduces performance slightly (especially for MO) and does not result in a consistent
-      improvement of infill and/or training times
-    - A jump in training time was observed for the Carside and WeldedBeam (only for g) problems @ 34 points in the pop
+    - g-mean aggregation reduces performance slightly, however at a training time reduction of up to 40%
+    - Recommendation: use g-mean prediction, except if more or less conservatism is needed, or aggregation if training
+      time should be reduced
     """
     folder = set_results_folder(_exp_00_03_folder)
     n_infill = 30
@@ -536,7 +537,7 @@ def exp_00_03_constraints(post_process=False):
         for strategy, strategy_name, aggregate in strategies:
             infill, n_batch = get_default_infill(problem, n_parallel=1)
             infill.constraint_strategy = strategy
-            model, norm = ModelFactory(problem).get_md_kriging_model()
+            model, norm = ModelFactory(problem).get_md_kriging_model(multi=True)
             sbo = ConstraintAggSBOInfill(
                 model, infill, pop_size=100, termination=100, normalization=norm, aggregate=aggregate, verbose=False)
             sbo_algo = sbo.algorithm(infill_size=n_batch, init_size=n_init)
