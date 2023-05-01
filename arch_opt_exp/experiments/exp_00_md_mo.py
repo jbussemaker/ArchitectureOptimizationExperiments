@@ -352,10 +352,11 @@ def exp_00_03a_plot_constraints():
             strategy_folder = f'{folder}/{prob_name}_{i:02d}_{secure_filename(strat_name)}'
             os.makedirs(strategy_folder, exist_ok=True)
 
-            infill, n_batch = get_default_infill(problem, n_parallel=1)
+            infill, n_batch, agg_g = get_default_infill(problem, n_parallel=1)
             infill.constraint_strategy = strategy
             model, norm = ModelFactory(problem).get_md_kriging_model()
-            sbo_infill = HiddenConstraintsSBO(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
+            sbo_infill = HiddenConstraintsSBO(model, infill, pop_size=100, termination=100, normalization=norm,
+                                              aggregate_g=agg_g, verbose=False)
             sbo_infill.hc_strategy = RejectionHCStrategy()
 
             sbo = sbo_infill.algorithm(infill_size=n_batch, init_size=n_init)
@@ -535,11 +536,11 @@ def exp_00_03_constraints(post_process=False):
         algorithms = []
         algo_names = []
         for strategy, strategy_name, aggregate in strategies:
-            infill, n_batch = get_default_infill(problem, n_parallel=1)
+            infill, n_batch, _ = get_default_infill(problem, n_parallel=1)
             infill.constraint_strategy = strategy
             model, norm = ModelFactory(problem).get_md_kriging_model(multi=True)
-            sbo = ConstraintAggSBOInfill(
-                model, infill, pop_size=100, termination=100, normalization=norm, aggregate=aggregate, verbose=False)
+            sbo = SBOInfill(
+                model, infill, pop_size=100, termination=100, normalization=norm, aggregate_g=aggregate, verbose=False)
             sbo_algo = sbo.algorithm(infill_size=n_batch, init_size=n_init)
             algorithms.append(sbo_algo)
             algo_names.append(strategy_name)
