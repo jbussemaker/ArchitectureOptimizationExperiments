@@ -571,6 +571,32 @@ def exp_00_03_constraints(post_process=False):
     plt.close('all')
 
 
+def plot_pof_utb():
+    sigma_limits = [-3, 3]
+    plot_pof = [.25, .5, .75]
+    plot_utb = [0, 1, 2]
+
+    from scipy.stats import norm
+    n = norm(0, 1)
+    sigma = np.linspace(sigma_limits[0], sigma_limits[1], 100)
+
+    plt.figure(), plt.title('PoF vs UTB')
+    plt.plot(sigma, n.cdf(sigma), '-k', linewidth=1, label='CDF')
+
+    for pof in plot_pof:
+        sigma = n.ppf(pof)
+        plt.plot([sigma_limits[0], sigma, sigma], [pof, pof, 0], '--', linewidth=1,
+                 label=f'PoF {pof*100:.0f} = UTB {-sigma:.1f}')
+
+    for utb in plot_utb:
+        cdf_utb = n.cdf(-utb)
+        plt.plot([sigma_limits[0], -utb, -utb], [cdf_utb, cdf_utb, 0], '-.', linewidth=1,
+                 label=f'UTB {utb:.1f} = PoF {cdf_utb*100:.0f}')
+
+    plt.xlabel('$\sigma$'), plt.ylabel('CDF'), plt.ylim([0, 1]), plt.xlim(sigma_limits), plt.legend()
+    plt.show()
+
+
 def _make_comparison_df(df_agg, column, title, folder, key=None, strategy_map=None, prob_map=None, mod_compare=None):
     strategy_map = strategy_map or {}
     prob_map = prob_map or {}
