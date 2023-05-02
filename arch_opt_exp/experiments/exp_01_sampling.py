@@ -731,12 +731,30 @@ def _get_metrics(problem):
 
 def exp_00_06_opt(post_process=False):
     """
-    Run optimizations with different sampling strategies for different sub-problem optimum locations.
+    Run optimizations with different sampling strategies for different sub-problem properties and optimum locations:
+    - Single-objective, no hierarchy
+    - Single-objective, imputation ratio ~= 8, no activeness diversity ratio
+    - Single-objective, imputation ratio ~= 8, high activeness diversity ratio
+    - Multi-objective, imputation ratio ~= 8, high activeness diversity ratio
+
+    Each is tested for two scenarios:
+    - The optimum lies in the largest subproblem
+    - The optimum lies in the smallest subproblem
+
+    Conclusions:
+    - For non-hierarchical and low-adr problems, the sampler choice is not relevant
+    - For high-adr hierarchical problems:
+      - The non-hierarchical samplers act as an extreme version of the hierarchical by-active-var samplers, because
+        there's a high change that subproblems with low occurrence rates are sampled
+      - For the problem where the optimum is in the smallest subproblem this is beneficial, however not for the others
+      - The hierarchical no-grouping sampler performs badly; it has a low chance of sampling relevant subproblems
+      - The hierarchical grouping samplers perform well for both the optimum-location cases; the non-weighted versions
+        slightly better
     """
     folder = set_results_folder(_exp_01_06_folder)
     n_infill = 30
-    n_repeat = 20
-    doe_k = 5
+    n_repeat = 8
+    doe_k = 10
     n_sub = 128
     i_opt_test = [0, 127]
     prob_data = {}
@@ -759,6 +777,7 @@ def exp_00_06_opt(post_process=False):
             'imp_ratio': problem.get_imputation_ratio(),
             'n_discr': problem.get_n_valid_discrete(),
             'n_sub': n_sub,
+            'n_doe': n_init,
             'opt_in_small_sub': i_opt > .5*n_sub,
             'max_dr': discrete_rates.loc['diversity'].max(),
             'max_adr': discrete_rates.loc['active-diversity'].max(),
@@ -776,7 +795,7 @@ def exp_00_06_opt(post_process=False):
     problem_paths = []
     problem_names = []
     i_prob = 0
-    problem: Union[ArchOptProblemBase]
+    problem: ArchOptProblemBase
     for i, (problem_factory, category) in enumerate(problems):
         for i_opt in i_opt_test:
             problem = problem_factory(i_opt)
@@ -798,6 +817,9 @@ def exp_00_06_opt(post_process=False):
             algorithms = []
             algo_names = []
             for sampler, sampler_name in _samplers:
+                # if isinstance(sampler, HierarchicalSamplingTestBase):
+                #     xm = sampler.get_merged_x(problem)
+                # continue
                 sbo = SBOInfill(
                     model, infill, pop_size=100, termination=100, normalization=norm, aggregate_g=agg_g, verbose=False)
                 sbo_algo = sbo.algorithm(infill_size=1, init_sampling=sampler, init_size=n_init)

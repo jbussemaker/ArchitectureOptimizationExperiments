@@ -89,7 +89,7 @@ class DeltaHVMetric(Metric):
         self.hv_true = hv.do(pf)
         self.delta_hv0 = None
 
-        self.perc_pass = perc_pass if perc_pass is not None else [.1, .2, .5]
+        self.perc_pass = perc_pass if perc_pass is not None else []
         self.i_iter = 0
         self.prev_regret = 0
         self.prev_ratio = 1

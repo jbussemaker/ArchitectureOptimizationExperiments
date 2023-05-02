@@ -18,12 +18,12 @@ import random
 import numpy as np
 from typing import *
 from pymoo.core.sampling import Sampling
-from sb_arch_opt.problem import ArchOptRepair
+from sb_arch_opt.problem import *
 from sb_arch_opt.sampling import *
 
 __all__ = ['HierarchicalSamplingTestBase', 'NoGroupingHierarchicalSampling', 'NrActiveHierarchicalSampling',
            'ActiveVarHierarchicalSampling', 'RepairedSampler',
-           'HierarchicalActSepRandomSampling', 'HierarchicalSobolSampling', 'HierarchicalDirectRandomSampling']
+           'HierarchicalActSepSampling', 'HierarchicalSobolSampling', 'HierarchicalDirectSampling']
 
 
 class RepairedSampler(Sampling):
@@ -41,84 +41,12 @@ class RepairedSampler(Sampling):
         return x
 
 
-class HierarchicalSamplingTestBase(HierarchicalRandomSampling):
+class HierarchicalSamplingTestBase(HierarchicalSampling):
     """Base class for testing random sampling: groups and weights discrete vectors"""
 
     def __init__(self, weight_by_nr_active=False, sobol=True):
         self.weight_by_nr_active = weight_by_nr_active
         super().__init__(sobol=sobol)
-
-    def _sample_discrete_x(self, n_samples: int, is_cont_mask, x_all: np.ndarray, is_act_all: np.ndarray, sobol=False):
-        if x_all.shape[0] == 0:
-            raise ValueError('Set of discrete vectors cannot be empty!')
-
-        def _choice(n_choose, n_from, replace=True):
-            return self._choice(n_choose, n_from, replace=replace, sobol=sobol)
-
-        # Separate design vectors into groups
-        groups = self.group_design_vectors(x_all, is_act_all, is_cont_mask)
-
-        # Apply weights to the different groups
-        weights = np.array(self._get_group_weights(groups, is_act_all))
-
-        # Uniformly choose from which group to sample
-        if len(groups) == 1:
-            selected_groups = np.zeros((n_samples,), dtype=int)
-        else:
-            unit_weights = weights/np.sum(weights)
-            selected_groups = np.zeros((n_samples,), dtype=int)
-            selected_pos = np.linspace(0, 1, n_samples)
-            for cum_weight in np.cumsum(unit_weights)[:-1]:
-                selected_groups[selected_pos > cum_weight] += 1
-
-        x = []
-        is_active = []
-        has_x_cont = np.any(is_cont_mask)
-        i_x_sampled = np.ones((x_all.shape[0],), dtype=bool)
-        for i_grp in range(len(groups)):
-            i_x_tgt = np.where(selected_groups == i_grp)[0]
-            if len(i_x_tgt) == 0:
-                continue
-
-            # Uniformly-randomly select values within group
-            i_x_group = groups[i_grp]
-            if len(i_x_tgt) < i_x_group.shape[0]:
-                n_sel = len(i_x_tgt)
-                n_avail = i_x_group.shape[0]
-                n_sel_unit = (np.arange(n_sel)+np.random.random(n_sel)*.9999)/n_sel
-                i_from_group = np.round(n_sel_unit*n_avail - .5).astype(int)
-
-            # If there are more samples requested than points available, only repeat points if there are continuous vars
-            elif has_x_cont:
-                i_x_add = _choice(len(i_x_tgt)-i_x_group.shape[0], i_x_group.shape[0])
-                i_from_group = np.sort(np.concatenate([np.arange(i_x_group.shape[0]), i_x_add]))
-            else:
-                i_from_group = np.arange(i_x_group.shape[0])
-
-            x_all_choose = i_x_group[i_from_group]
-            x.append(x_all[x_all_choose, :])
-            is_active.append(is_act_all[x_all_choose, :])
-            i_x_sampled[x_all_choose] = True
-
-        x = np.row_stack(x)
-        is_active = np.row_stack(is_active)
-
-        # Uniformly add discrete vectors if there are not enough (can happen if some groups are very small and there
-        # are no continuous dimensions)
-        if x.shape[0] < n_samples:
-            n_add = n_samples-x.shape[0]
-            x_available = x_all[~i_x_sampled, :]
-            is_act_available = is_act_all[~i_x_sampled, :]
-
-            if n_add < x_available.shape[0]:
-                i_from_group = _choice(n_add, x_available.shape[0], replace=False)
-            else:
-                i_from_group = np.arange(x_available.shape[0])
-
-            x = np.row_stack([x, x_available[i_from_group, :]])
-            is_active = np.row_stack([is_active, is_act_available[i_from_group, :]])
-
-        return x, is_active
 
     def _get_group_weights(self, groups: List[np.ndarray], is_act_all: np.ndarray) -> List[float]:
 
@@ -133,6 +61,23 @@ class HierarchicalSamplingTestBase(HierarchicalRandomSampling):
     def group_design_vectors(self, x_all: np.ndarray, is_act_all: np.ndarray, is_cont_mask) -> List[np.ndarray]:
         """Separate design vectors into subproblem groups; should return a list of indices"""
         raise NotImplementedError
+
+    def get_merged_x(self, problem: ArchOptProblemBase):
+        is_cont_mask = problem.is_cont_mask
+        x_all, is_act_all = self.get_hierarchical_cartesian_product(problem, self._repair)
+
+        groups = self.group_design_vectors(x_all, is_act_all, is_cont_mask)
+        weights = np.array(self._get_group_weights(groups, is_act_all))
+
+        x_groups = np.zeros((x_all.shape[0],))
+        x_weights = np.zeros((x_all.shape[0],))
+        for i, i_grp in enumerate(groups):
+            x_groups[i_grp] = i
+            x_weights[i_grp] = weights[i]
+
+        x_merged = x_all.copy()
+        x_merged[~is_act_all] = -1
+        return np.column_stack([x_groups, x_weights, x_merged])
 
 
 class NoGroupingHierarchicalSampling(HierarchicalSamplingTestBase):
@@ -159,7 +104,7 @@ class ActiveVarHierarchicalSampling(HierarchicalSamplingTestBase):
         return [np.where(unique_indices == i)[0] for i in range(len(is_active_unique))]
 
 
-class HierarchicalActSepRandomSampling(HierarchicalRandomSampling):
+class HierarchicalActSepSampling(HierarchicalSampling):
 
     def __init__(self):
         super().__init__(sobol=False)
@@ -242,14 +187,32 @@ class HierarchicalActSepRandomSampling(HierarchicalRandomSampling):
         return x_all_grouped, is_act_all_grouped, i_x_groups
 
 
-class HierarchicalSobolSampling(HierarchicalRandomSampling):
+class HierarchicalSobolSampling(HierarchicalSampling):
 
     def __init__(self):
         super().__init__(sobol=True)
 
+    def _sample_discrete_x(self, n_samples: int, is_cont_mask, x_all: np.ndarray, is_act_all: np.ndarray, sobol=False):
+        has_x_cont = np.any(is_cont_mask)
 
-class HierarchicalDirectRandomSampling(HierarchicalRandomSampling):
+        x = x_all
+        if n_samples < x.shape[0]:
+            i_x = self._choice(n_samples, x.shape[0], replace=False, sobol=sobol)
+        elif has_x_cont:
+            # If there are more samples requested than points available, only repeat points if there are continuous vars
+            i_x_add = self._choice(n_samples - x.shape[0], x.shape[0], sobol=sobol)
+            i_x = np.sort(np.concatenate([np.arange(x.shape[0]), i_x_add]))
+        else:
+            i_x = np.arange(x.shape[0])
+
+        x = x[i_x, :]
+        is_active = is_act_all[i_x, :]
+        return x, is_active
+
+
+class HierarchicalDirectSampling(HierarchicalSobolSampling):
     """Directly sample from all available discrete design vectors"""
 
     def __init__(self):
-        super().__init__(sobol=False)
+        super().__init__()
+        self.sobol = False

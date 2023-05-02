@@ -170,7 +170,7 @@ def exp_03_01_hc_area():
 
 def plot_distance_distributions(problem: ArchOptProblemBase, save_path: str, name: str, pop: Population = None, n=500):
     if pop is None:
-        pop = HierarchicalRandomSampling().do(problem, n)
+        pop = HierarchicalSampling().do(problem, n)
         pop = Evaluator().eval(problem, pop)
 
     # Get Pareto front

@@ -43,7 +43,7 @@ warnings.filterwarnings("ignore")
 
 
 def calc_initial_hv(problem: ArchOptProblemBase):
-    pop = Initialization(HierarchicalRandomSampling(repair=problem.get_repair())).do(problem, 1000)
+    pop = Initialization(HierarchicalSampling(repair=problem.get_repair())).do(problem, 1000)
     Evaluator().eval(problem, pop)
     f = pop.get('F')
 

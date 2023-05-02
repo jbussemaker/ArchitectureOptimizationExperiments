@@ -60,7 +60,7 @@ class PredictorInterface:
             if cache_key in self._training_doe:
                 x_train = self._training_doe[cache_key]
             else:
-                x_train = HierarchicalRandomSampling().do(problem, n).get('X')
+                x_train = HierarchicalSampling().do(problem, n).get('X')
                 if add_close_points:
                     x_opt = problem.pareto_set()[[0], :]
                     scale = .025
@@ -97,7 +97,7 @@ class PredictorInterface:
 
         # For the ROC curve, ensure we sufficiently cover the design space
         if x_train.shape[1] > 2:
-            x_eval_roc_abs = HierarchicalRandomSampling().do(problem, 10000).get('X')
+            x_eval_roc_abs = HierarchicalSampling().do(problem, 10000).get('X')
             is_failed_ref = problem.get_failed_points(problem.evaluate(x_eval_roc_abs, return_as_dictionary=True))
             pov_predicted_roc = np.clip(self.evaluate_probability_of_validity(x_eval_roc_abs), 0, 1)
 
