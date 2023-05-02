@@ -729,7 +729,7 @@ def _get_metrics(problem):
     return metrics, additional_plot
 
 
-def exp_00_06_opt(post_process=False):
+def exp_01_06_opt(post_process=False):
     """
     Run optimizations with different sampling strategies for different sub-problem properties and optimum locations:
     - Single-objective, no hierarchy
@@ -775,6 +775,8 @@ def exp_00_06_opt(post_process=False):
         prob_data[data_key] = data = {
             'is_mo': problem.n_obj > 1,
             'imp_ratio': problem.get_imputation_ratio(),
+            'imp_ratio_d': problem.get_discrete_imputation_ratio(),
+            'imp_ratio_c': problem.get_continuous_imputation_ratio(),
             'n_discr': problem.get_n_valid_discrete(),
             'n_sub': n_sub,
             'n_doe': n_init,
