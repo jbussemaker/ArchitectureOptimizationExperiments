@@ -45,10 +45,14 @@ Prediction models and evasion strategies used (in an SBO context):
 - Gaussian Process Classifier (GPC); constraint-weighted acquisition function (EFI) [Snoek2013,Gelbart2014]
 - Gaussian Process Classifier (GPC) conditioned on signs (-1 or 1) with mean at 0 (not failed); EFI [Bachoc2020]
 - Least Squares SVM; EFI or PoF constraint [Sacher2018] (they show that using a probability threshold to 0.5 works best)
+- K-nearest neighbors classifier [Audet2020]
+- kNN3, SVM-RBF classifiers; feasibility-enhanced expected improvement [Tfaily2023]
 
 References:
 - [Alimo2018](https://link.springer.com/chapter/10.1007/978-3-319-89890-2_17):
   Alimo, Shahrouz Ryan, Pooriya Beyhaghi, and Thomas R. Bewley. "Delaunay-based global optimization in nonconvex domains defined by hidden constraints." In Evolutionary and Deterministic Methods for Design Optimization and Control With Applications to Industrial and Societal Problems, pp. 261-271. Cham: Springer International Publishing, 2018.
+- [Audet2020](https://www.sciencedirect.com/science/article/pii/S016763772030078X):
+  Audet, C., Caporossi, G. and Jacquet, S., 2020. Binary, unrelaxable and hidden constraints in blackbox optimization. Operations Research Letters, 48(4), pp.467-471.
 - [Forrester2006](https://royalsocietypublishing.org/doi/full/10.1098/rspa.2005.1608):
   Forrester, Alexander IJ, András Sóbester, and Andy J. Keane. "Optimization with missing data." Proceedings of the Royal Society A: Mathematical, Physical and Engineering Sciences 462, no. 2067 (2006): 935-945.
 - [Bachoc2020](https://link.springer.com/article/10.1007/s10898-020-00920-0):
@@ -67,6 +71,8 @@ References:
   Sacher, Matthieu, Régis Duvigneau, Olivier Le Maitre, Mathieu Durand, Elisa Berrini, Frédéric Hauville, and Jacques-André Astolfi. "A classification approach to efficient global optimization in presence of non-computable domains." Structural and Multidisciplinary Optimization 58 (2018): 1537-1557.
 - [Snoek2013](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=2e079604c7a00c43f06e214280cea18a89dcecef):
   Snoek, Jasper Roland. "Bayesian optimization and semiparametric models with applications to assistive technology." PhD diss., University of Toronto, 2013.
+- [Tfaily2023]:
+  Tfaily, Ali, et al. "Efficient Acquisition Functions for Bayesian Optimization in the Presence of Hidden Constraints." AIAA Aviation 2023 Forum, San Diego.
 
 ## Experiments
 
