@@ -14,7 +14,7 @@ limitations under the License.
 Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
-import random
+import itertools
 import numpy as np
 from typing import *
 from pymoo.core.sampling import Sampling
@@ -22,7 +22,7 @@ from sb_arch_opt.problem import *
 from sb_arch_opt.sampling import *
 
 __all__ = ['HierarchicalSamplingTestBase', 'NoGroupingHierarchicalSampling', 'NrActiveHierarchicalSampling',
-           'ActiveVarHierarchicalSampling', 'RepairedSampler',
+           'ActiveVarHierarchicalSampling', 'RepairedSampler', 'HierarchicalCoveringSampling',
            'HierarchicalActSepSampling', 'HierarchicalSobolSampling', 'HierarchicalDirectSampling']
 
 
@@ -216,3 +216,70 @@ class HierarchicalDirectSampling(HierarchicalSobolSampling):
     def __init__(self):
         super().__init__()
         self.sobol = False
+
+
+class HierarchicalCoveringSampling(ActiveVarHierarchicalSampling):
+    """
+    Sampler that generates covering arrays for sampling design vectors with as many pairwise combinations as
+    possible. Introduction to covering arrays:
+    http://hardlog.udl.cat/static/doc/ctlog/html/index.html
+    """
+
+    def _sample_discrete_x(self, n_samples: int, is_cont_mask, x_all: np.ndarray, is_act_all: np.ndarray, sobol=False):
+        if n_samples > x_all.shape[0]:
+            return super()._sample_discrete_x(n_samples, is_cont_mask, x_all, is_act_all, sobol=sobol)
+
+        # Get optimally-covering samples
+        i_covering = self._get_covering_samples(n_samples, is_cont_mask, x_all)
+        if len(i_covering) > n_samples:
+            i_covering = np.random.choice(i_covering, n_samples, replace=False)
+        x_sampled, is_act_sampled = x_all[i_covering, :], is_act_all[i_covering, :]
+
+        # Sample additional design vectors from non-sampled vectors
+        if x_sampled.shape[0] < n_samples:
+            n_extra = n_samples-x_sampled.shape[0]
+            i_not_sampled = np.delete(np.arange(x_all.shape[0]), i_covering)
+            x_extra, is_act_extra = super()._sample_discrete_x(
+                n_extra, is_cont_mask, x_all[i_not_sampled, :], is_act_all[i_not_sampled, :], sobol=sobol)
+
+            x_sampled = np.row_stack([x_sampled, x_extra])
+            is_act_sampled = np.row_stack([is_act_sampled, is_act_extra])
+
+        return x_sampled, is_act_sampled
+
+    @staticmethod
+    def _get_covering_samples(n_samples_target: int, is_cont_mask, x_all: np.ndarray) -> np.ndarray:
+
+        ix_discr = np.where(~is_cont_mask)[0]
+        x_all_discr = x_all[:, ix_discr].astype(np.int)
+        if len(ix_discr) == 1:
+            _, comb_idx = np.unique(x_all_discr, axis=0, return_index=True)
+            return comb_idx
+
+        comb_tuples = {}
+        for i, j in itertools.combinations(range(x_all_discr.shape[1]), 2):
+            unique_combs, comb_idx = np.unique(x_all_discr[:, [i, j]], axis=0, return_inverse=True)
+            comb_tuples_ij = {tuple(comb): i_unique for i_unique, comb in enumerate(unique_combs)}
+            comb_tuples[i, j] = (comb_tuples_ij, comb_idx)
+
+        n_best = i_sampled_best = None
+        for _ in range(50):
+            i_sampled = np.random.choice(x_all_discr.shape[0], n_samples_target, replace=False)
+            x_discr_sampled = x_all_discr[i_sampled, :]
+
+            i_combs = np.zeros((i_sampled.shape[0], len(comb_tuples)), dtype=int)
+            for i_comb, ((i, j), (comb_tuples_ij, _)) in enumerate(comb_tuples.items()):
+                for i_sample, x_ij_sampled in enumerate(x_discr_sampled[:, [i, j]]):
+                    i_combs[i_sample, i_comb] = comb_tuples_ij[tuple(x_ij_sampled)]
+
+            n_combinations = sum([len(set(i_combs[:, i_comb])) for i_comb in range(i_combs.shape[1])])
+            if n_best is None or n_combinations > n_best:
+                n_best = n_combinations
+                i_sampled_best = i_sampled
+
+        return i_sampled_best
+
+
+if __name__ == '__main__':
+    from sb_arch_opt.problems.hierarchical import *
+    HierarchicalCoveringSampling().do(HierCarside(), 20)
