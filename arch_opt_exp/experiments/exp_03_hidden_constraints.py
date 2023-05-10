@@ -892,13 +892,14 @@ def exp_03_06_engine_arch_surrogate():
             problem.set_max_iter(30)
 
         doe_algo = get_doe_algo(doe_size=n_doe, results_folder=prob_folder)
+        initialize_from_previous_results(doe_algo, problem, prob_folder)
         doe_algo.setup(problem)
         doe_algo.run()
 
         nsga2 = get_nsga2(pop_size=pop_size, results_folder=prob_folder)
         initialize_from_previous_results(nsga2, problem, prob_folder)
         nsga2.advance_after_initial_infill = True
-        minimize(problem, nsga2, termination=('n_gen', n_gen), copy_algorithm=False, verbose=True)
+        minimize(problem, nsga2, termination=('n_eval', n_doe+n_gen*pop_size), copy_algorithm=False, verbose=True)
 
 
 if __name__ == '__main__':
