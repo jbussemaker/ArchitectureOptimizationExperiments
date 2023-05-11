@@ -32,6 +32,7 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
     def __init__(self, *args, i_sub_opt: int = None, **kwargs):
         super().__init__(*args, **kwargs)
         self._mod_transform(i_sub_opt or 0)
+        self._i_sub_opt = i_sub_opt
 
     def _mod_transform(self, i_sub_opt):
         ref_dirs = RieszEnergyReferenceDirectionFactory(n_dim=self.n_obj, n_points=10)()
@@ -53,6 +54,11 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
         swapped_transform[i_sub_opt, :] = self._transform[i_hv_max, :]
         swapped_transform[i_hv_max, :] = self._transform[i_sub_opt, :]
         self._transform = swapped_transform
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(imp_ratio={self._imp_ratio}, n_sub={self._n_subproblem}, ' \
+               f'div_range={self._diversity_range}, n_opts={self._n_opts}, cont_ratio={self._cont_ratio}, ' \
+               f'i_sub_opt={self._i_sub_opt})'
 
 
 class SelectableTunableBranin(SelectableTunableMetaProblem):
