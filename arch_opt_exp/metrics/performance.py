@@ -92,7 +92,9 @@ class DeltaHVMetric(Metric):
         self.perc_pass = perc_pass if perc_pass is not None else []
         self.i_iter = 0
         self.prev_regret = 0
+        self.prev_regret_abs = 0
         self.prev_ratio = 1
+        self.prev_abs = None
         self.is_passed = None
         self.prev_n_eval = None
 
@@ -105,7 +107,7 @@ class DeltaHVMetric(Metric):
     @property
     def value_names(self) -> List[str]:
         pp_names = [f'pass_{pp*100:.0f}' for pp in self.perc_pass]
-        return ['delta_hv', 'hv', 'true_hv', 'ratio', 'regret']+pp_names
+        return ['delta_hv', 'hv', 'true_hv', 'ratio', 'regret', 'abs_regret']+pp_names
 
     def _calculate_values(self, algorithm: Algorithm) -> List[float]:
         f_opt = self._get_opt_f(algorithm, feasible_only=True)
@@ -113,7 +115,7 @@ class DeltaHVMetric(Metric):
         return self.calculate_delta_hv(f_opt, f_all, algorithm=algorithm)
 
     def calculate_delta_hv(self, f_opt: np.ndarray, f_all: np.ndarray, algorithm=None) -> List[float]:
-        def _get_regret(ratio):
+        def _get_regret(abs_rel_dist, ratio):
             if algorithm is None:
                 n_infill = 1
             else:
@@ -128,7 +130,14 @@ class DeltaHVMetric(Metric):
             new_regret = self.prev_regret + .5*(ratio+self.prev_ratio)*n_infill
             self.prev_regret = new_regret
             self.prev_ratio = ratio
-            return new_regret
+
+            if self.prev_abs is None:
+                self.prev_abs = abs_rel_dist
+            new_abs_regret = self.prev_regret_abs + .5*(abs_rel_dist+self.prev_abs)*n_infill
+            self.prev_regret_abs = new_abs_regret
+            self.prev_abs = abs_rel_dist
+
+            return new_regret, new_abs_regret
 
         def _get_iter_p_passed(ratio):
             if self.is_passed is None:
@@ -168,8 +177,8 @@ class DeltaHVMetric(Metric):
                 self.delta_hv0 = f_rel_min_dist
             f_ratio = f_rel_min_dist/self.delta_hv0
 
-            regret = _get_regret(f_ratio)
-            res = [f_rel_min_dist, f_rel_min_dist*true_dist_m, true_dist_m, f_ratio, regret]+_get_iter_p_passed(f_ratio)
+            regret, abs_regret = _get_regret(f_rel_min_dist, f_ratio)
+            res = [f_rel_min_dist, f_rel_min_dist*true_dist_m, true_dist_m, f_ratio, regret, abs_regret]+_get_iter_p_passed(f_ratio)
             return res
 
         # Calculate current hypervolume
@@ -186,8 +195,8 @@ class DeltaHVMetric(Metric):
             self.delta_hv0 = delta_hv
         delta_hv_ratio = delta_hv/self.delta_hv0
 
-        regret = _get_regret(delta_hv_ratio)
-        return [delta_hv, hv, self.hv_true, delta_hv_ratio, regret]+_get_iter_p_passed(delta_hv_ratio)
+        regret, abs_regret = _get_regret(delta_hv, delta_hv_ratio)
+        return [delta_hv, hv, self.hv_true, delta_hv_ratio, regret, abs_regret]+_get_iter_p_passed(delta_hv_ratio)
 
 
 class IGDMetric(IndicatorMetric):

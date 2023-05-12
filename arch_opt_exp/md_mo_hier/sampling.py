@@ -17,6 +17,7 @@ Contact: jasper.bussemaker@dlr.de
 import itertools
 import numpy as np
 from typing import *
+from scipy.spatial.distance import cdist
 from pymoo.core.sampling import Sampling
 from sb_arch_opt.problem import *
 from sb_arch_opt.sampling import *
@@ -46,6 +47,7 @@ class HierarchicalSamplingTestBase(HierarchicalSampling):
 
     def __init__(self, weight_by_nr_active=False, sobol=True):
         self.weight_by_nr_active = weight_by_nr_active
+        self.n_iter = 10
         super().__init__(sobol=sobol)
 
     def _get_group_weights(self, groups: List[np.ndarray], is_act_all: np.ndarray) -> List[float]:
@@ -57,6 +59,35 @@ class HierarchicalSamplingTestBase(HierarchicalSampling):
 
         # Uniform sampling
         return [1.]*len(groups)
+
+    def _sample_discrete_from_group(self, x_group: np.ndarray, is_act_group: np.ndarray, n_sel: int, choice_func,
+                                    has_x_cont: bool) -> np.ndarray:
+        n_in_group = x_group.shape[0]
+        n_sel = n_sel
+        i_x_selected = np.array([], dtype=int)
+        while n_sel >= n_in_group:
+            if n_sel == n_in_group or not has_x_cont:
+                return np.concatenate([i_x_selected, np.arange(n_in_group)])
+
+            i_x_selected = np.concatenate([i_x_selected, np.arange(n_in_group)])
+            n_sel = n_sel-n_in_group
+
+        i_x_tries = []
+        metrics = []
+        for _ in range(self.n_iter):
+            i_x_try = choice_func(n_sel, n_in_group)
+            i_x_tries.append(i_x_try)
+
+            x_try = x_group[i_x_try, :]
+            dist = cdist(x_try, x_try, metric='cityblock')
+            np.fill_diagonal(dist, np.nan)
+
+            min_dist = np.nanmin(dist)
+            median_dist = np.nanmean(dist)
+            metrics.append((min_dist, median_dist))
+
+        i_best = sorted(range(len(metrics)), key=metrics.__getitem__)[-1]
+        return np.concatenate([i_x_selected, i_x_tries[i_best]])
 
     def group_design_vectors(self, x_all: np.ndarray, is_act_all: np.ndarray, is_cont_mask) -> List[np.ndarray]:
         """Separate design vectors into subproblem groups; should return a list of indices"""

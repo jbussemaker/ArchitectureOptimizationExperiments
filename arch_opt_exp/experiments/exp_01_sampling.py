@@ -83,6 +83,7 @@ _samplers = [
     (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
     (ActiveVarHierarchicalSampling(), 'HierAct'),
     (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
+    # (HierarchicalCoveringSampling(), 'Covering'),
 ]
 
 
@@ -752,11 +753,11 @@ def exp_01_06_opt(post_process=False):
         slightly better
     """
     folder = set_results_folder(_exp_01_06_folder)
-    n_infill = 30
-    n_repeat = 8
-    doe_k = 10
-    n_sub = 128
-    i_opt_test = [0, 127]
+    n_infill = 100
+    n_repeat = 20
+    doe_k = 2
+    n_sub = 8
+    i_opt_test = [0, n_sub-1]
     prob_data = {}
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
@@ -794,6 +795,9 @@ def exp_01_06_opt(post_process=False):
         (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_), '02_SO_HDR'),  # High diversity range
         (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_opt_), '03_MO_HDR'),
     ]
+    # for i, (problem_factory, category) in enumerate(problems):
+    #     problem_factory(0).print_stats()
+    # exit()
     problem_paths = []
     problem_names = []
     i_prob = 0
@@ -807,13 +811,16 @@ def exp_01_06_opt(post_process=False):
             problem_paths.append(problem_path)
 
             n_init = int(np.ceil(doe_k*problem.n_var))
+            n_kpls = None
+            # n_kpls = n_kpls if problem.n_var > n_kpls else None
             i_prob += 1
-            log.info(f'Running optimizations for {i_prob}/{len(problems)*len(i_opt_test)}: {name} (n_init = {n_init})')
+            log.info(f'Running optimizations for {i_prob}/{len(problems)*len(i_opt_test)}: {name} '
+                     f'(n_init = {n_init}, n_kpls = {n_kpls})')
             problem.pareto_front()
 
             metrics, additional_plot = _get_metrics(problem)
-            additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv']
-            model, norm = ModelFactory(problem).get_md_kriging_model()
+            additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
+            model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=n_kpls)
             infill, n_batch, agg_g = get_default_infill(problem)
 
             algorithms = []
@@ -823,7 +830,7 @@ def exp_01_06_opt(post_process=False):
                 #     xm = sampler.get_merged_x(problem)
                 # continue
                 sbo = SBOInfill(
-                    model, infill, pop_size=100, termination=100, normalization=norm, aggregate_g=agg_g, verbose=False)
+                    model, infill, pop_size=100, termination=100, normalization=norm, aggregate_g=agg_g, verbose=True)
                 sbo_algo = sbo.algorithm(infill_size=1, init_sampling=sampler, init_size=n_init)
                 algorithms.append(sbo_algo)
                 algo_names.append(sampler_name)
@@ -891,4 +898,4 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
-    exp_00_06_opt()
+    exp_01_06_opt()
