@@ -15,6 +15,7 @@ Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 import os
+import json
 import pickle
 import logging
 import itertools
@@ -820,13 +821,15 @@ def exp_03_06_engine_arch_surrogate():
     problems = [
         # problem, n_doe, pop_size, n_gen
         # (Branin(), 10, 5, 10),
-        (SimpleTurbofanArch(), 1000, 75, 15),
-        (RealisticTurbofanArch(), 2000, 205, 15),
+        (SimpleTurbofanArch(), 1000, 75, 30),
+        (RealisticTurbofanArch(), 2000, 205, 20),
     ]
 
+    prob_folders = []
     for problem, n_doe, pop_size, n_gen in problems:
         prob_folder = f'{folder}/{problem.__class__.__name__}'
         os.makedirs(prob_folder, exist_ok=True)
+        prob_folders.append(prob_folder)
 
         if isinstance(problem, (SimpleTurbofanArch, RealisticTurbofanArch)):
             problem.verbose = True
@@ -842,6 +845,39 @@ def exp_03_06_engine_arch_surrogate():
         initialize_from_previous_results(nsga2, problem, prob_folder)
         nsga2.advance_after_initial_infill = True
         minimize(problem, nsga2, termination=('n_eval', n_doe+n_gen*pop_size), copy_algorithm=False, verbose=True)
+
+    for i, (problem, _, _, _) in enumerate(problems):
+        prob_folder = prob_folders[i]
+        pop = load_from_previous_results(problem, prob_folder)
+        n_failed = np.sum(ArchOptProblemBase.get_failed_points(pop))
+        n_viable = len(pop)-n_failed
+        is_feas = pop.get('feas')
+        n_feasible = np.sum(is_feas)
+
+        f_feas = pop.get('F')[is_feas, :]
+        i_pf = NonDominatedSorting().do(f_feas, only_non_dominated_front=True)
+        pop_pf = pop[is_feas][i_pf]
+
+        log.info(f'Loaded {problem.__class__.__name__}: {len(pop)} points, {n_failed} failed '
+                 f'({100*n_failed/len(pop):.1f}%), {n_viable} viable, '
+                 f'{n_feasible} feasible ({100*n_feasible/len(pop):.1f}%), {len(pop_pf)} in PF')
+
+        if isinstance(problem, SimpleTurbofanArch):
+            log.info(f'Best: {pop_pf.get("F")[0, 0]:.3g}')
+        if isinstance(problem, RealisticTurbofanArch):
+            pf_orig = problem.pareto_front()
+            plt.figure(), plt.title('Realistic turbofan problem PF')
+            plt.scatter(pf_orig[:, 0], pf_orig[:, 1], s=5, c='k', label='Original')
+            plt.scatter(pop_pf.get('F')[:, 0], pop_pf.get('F')[:, 1], s=5, c='r', label='New')
+            plt.legend()
+            plt.savefig(f'{prob_folder}/compare_pf.png')
+
+        eval_data = {
+            'x': pop.get('X'), 'f': pop.get('F'), 'g': pop.get('G'),
+            'x_pf': pop_pf.get('X'), 'f_pf': pop_pf.get('F'), 'g_pf': pop_pf.get('G'),
+        }
+        for key, arr in eval_data.items():
+            np.save(f'{prob_folder}/eval_{key}.npy', arr)
 
 
 def exp_03_07_engine_arch(post_process=False):
