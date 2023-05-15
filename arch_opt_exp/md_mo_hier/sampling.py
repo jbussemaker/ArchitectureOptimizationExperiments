@@ -75,7 +75,7 @@ class HierarchicalSamplingTestBase(HierarchicalSampling):
         i_x_tries = []
         metrics = []
         for _ in range(self.n_iter):
-            i_x_try = choice_func(n_sel, n_in_group)
+            i_x_try = choice_func(n_sel, n_in_group, replace=False)
             i_x_tries.append(i_x_try)
 
             x_try = x_group[i_x_try, :]

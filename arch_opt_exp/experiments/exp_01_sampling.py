@@ -745,12 +745,8 @@ def exp_01_06_opt(post_process=False):
     Conclusions:
     - For non-hierarchical and low-adr problems, the sampler choice is not relevant
     - For high-adr hierarchical problems:
-      - The non-hierarchical samplers act as an extreme version of the hierarchical by-active-var samplers, because
-        there's a high change that subproblems with low occurrence rates are sampled
-      - For the problem where the optimum is in the smallest subproblem this is beneficial, however not for the others
-      - The hierarchical no-grouping sampler performs badly; it has a low chance of sampling relevant subproblems
-      - The hierarchical grouping samplers perform well for both the optimum-location cases; the non-weighted versions
-        slightly better
+      - The hierarchical samplers have better starting points due to higher chances of sampling smaller subproblems
+      - The hierarchical grouped-by-active weighted sampler performs best, most consistently
     """
     folder = set_results_folder(_exp_01_06_folder)
     n_infill = 100
