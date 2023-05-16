@@ -24,7 +24,22 @@ from pymoo.indicators.hv import Hypervolume
 from pymoo.problems.multi.zdt import ZDT1
 from pymoo.util.ref_dirs.energy import RieszEnergyReferenceDirectionFactory
 
-__all__ = ['SelectableTunableMetaProblem', 'SelectableTunableBranin', 'SelectableTunableZDT1']
+__all__ = ['SelectableTunableMetaProblem', 'SelectableTunableBranin', 'SelectableTunableZDT1',
+           'TunableBranin', 'TunableZDT1']
+
+
+class TunableBranin(TunableHierarchicalMetaProblem):
+
+    def __init__(self, n_sub=8, diversity_range=.8, imp_ratio=10.):
+        factory = lambda n: MDBranin()
+        super().__init__(factory, imp_ratio=imp_ratio, n_subproblem=n_sub, diversity_range=diversity_range, n_opts=2)
+
+
+class TunableZDT1(TunableHierarchicalMetaProblem):
+
+    def __init__(self, n_sub=8):
+        factory = lambda n: NoHierarchyWrappedProblem(ZDT1(n_var=n))
+        super().__init__(factory, imp_ratio=10., n_subproblem=n_sub, diversity_range=.8, n_opts=2, cont_ratio=1)
 
 
 class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):

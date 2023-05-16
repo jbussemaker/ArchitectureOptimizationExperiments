@@ -834,17 +834,17 @@ def exp_01_06_opt(post_process=False):
             do_run = not post_process
             exps = run(folder, problem, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_init+n_infill,
                        metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
-            _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+            agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
             plt.close('all')
 
     def _add_cols(df_agg_):
         # df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
         return df_agg_
 
-    df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+    df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
 
-def _agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
+def agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
     df_data = []
     for exp in exps:
         with open(exp.get_problem_algo_results_path('result_agg_df.pkl'), 'rb') as fp:
@@ -862,7 +862,7 @@ def _agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
         df_prob.to_excel(writer)
 
 
-def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
+def agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
     df_probs = []
     for i, problem_name in enumerate(problem_names):
         problem_path = problem_paths[i]

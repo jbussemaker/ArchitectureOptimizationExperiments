@@ -30,14 +30,14 @@ __all__ = ['HierarchicalSamplingTestBase', 'NoGroupingHierarchicalSampling', 'Nr
 class RepairedSampler(Sampling):
     """Wraps another sampler and repairs generated samples"""
 
-    def __init__(self, sampler: Sampling):
+    def __init__(self, sampler: Sampling, repair=None):
         self._sampler = sampler
-        self.repair = ArchOptRepair()
         super().__init__()
+        self.repair = ArchOptRepair() if repair is None else repair
 
     def _do(self, problem, n_samples, **kwargs):
         x = self._sampler.do(problem, n_samples, **kwargs).get('X')
-        x = ArchOptRepair().do(problem, x)
+        x = self.repair.do(problem, x)
         x = x[~LargeDuplicateElimination.eliminate(x), :]
         return x
 
