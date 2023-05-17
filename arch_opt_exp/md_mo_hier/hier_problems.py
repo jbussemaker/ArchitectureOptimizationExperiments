@@ -78,10 +78,10 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
 
 class SelectableTunableBranin(SelectableTunableMetaProblem):
 
-    def __init__(self, n_sub=128, i_sub_opt=0, diversity_range=.95, imp_ratio=10.):
+    def __init__(self, n_sub=128, i_sub_opt=0, diversity_range=.95, imp_ratio=10., n_opts=2):
         factory = lambda n: MDBranin()
-        super().__init__(factory, imp_ratio=imp_ratio, n_subproblem=n_sub, diversity_range=diversity_range, n_opts=2,
-                         i_sub_opt=i_sub_opt)
+        super().__init__(factory, imp_ratio=imp_ratio, n_subproblem=n_sub, diversity_range=diversity_range,
+                         n_opts=n_opts, i_sub_opt=i_sub_opt)
 
 
 class SelectableTunableZDT1(SelectableTunableMetaProblem):
