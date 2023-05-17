@@ -822,7 +822,7 @@ def exp_03_06_engine_arch_surrogate():
         # problem, n_doe, pop_size, n_gen
         # (Branin(), 10, 5, 10),
         (SimpleTurbofanArch(), 1000, 75, 30),
-        (RealisticTurbofanArch(), 2000, 205, 20),
+        (RealisticTurbofanArch(), 2000, 205, 25),
     ]
 
     prob_folders = []
@@ -865,7 +865,7 @@ def exp_03_06_engine_arch_surrogate():
         if isinstance(problem, SimpleTurbofanArch):
             log.info(f'Best: {pop_pf.get("F")[0, 0]:.3g}')
         if isinstance(problem, RealisticTurbofanArch):
-            pf_orig = problem.pareto_front()
+            _, pf_orig, _ = problem.get_original_pf()
             plt.figure(), plt.title('Realistic turbofan problem PF')
             plt.scatter(pf_orig[:, 0], pf_orig[:, 1], s=5, c='k', label='Original')
             plt.scatter(pop_pf.get('F')[:, 0], pop_pf.get('F')[:, 1], s=5, c='r', label='New')
