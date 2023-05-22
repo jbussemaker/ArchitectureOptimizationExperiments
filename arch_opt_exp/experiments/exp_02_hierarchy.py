@@ -260,6 +260,11 @@ def exp_02_02_hier_strategies(sbo=False):
 def exp_02_03_sensitivities(sbo=False, mrd=False):
     """
     Investigate sensitivity of imputation ratio and max rate diversity on optimizer performance.
+
+    Conclusions:
+    - More integration is better, especially for higher imputation ratios or rate diversities
+    - For NSGA2 more integration is always better, for SBO it is more apparent for higher values
+    - Adding activeness does not seem to affect the results much
     """
     post_process = False
     folder_post = 'rate_div' if mrd else 'imp_ratio'
