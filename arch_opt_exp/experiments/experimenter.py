@@ -36,6 +36,7 @@ from pymoo.optimize import minimize
 from pymoo.core.result import Result
 from pymoo.core.problem import Problem
 from pymoo.core.algorithm import Algorithm
+from pymoo.core.population import Population
 from pymoo.core.initialization import Initialization
 from pymoo.termination.max_eval import MaximumFunctionCallTermination
 
@@ -307,8 +308,8 @@ class Experimenter:
 
     # ## EFFECTIVENESS EXPERIMENTATION ## #
 
-    def run_effectiveness_parallel(self, n_repeat: int, keep_history=False):
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+    def run_effectiveness_parallel(self, n_repeat: int, keep_history=False, n_parallel=None):
+        with concurrent.futures.ProcessPoolExecutor(max_workers=n_parallel) as executor:
             futures = [executor.submit(self.run_effectiveness, i, keep_history=keep_history) for i in range(n_repeat)]
             concurrent.futures.wait(futures)
 
@@ -326,7 +327,9 @@ class Experimenter:
 
         algorithm = copy.deepcopy(self.algorithm)
         if self.doe is not None:
-            if repeat_idx in self.doe:
+            if isinstance(self.doe, Population):
+                doe_pop = self.doe
+            elif repeat_idx in self.doe:
                 doe_pop = self.doe[repeat_idx]
             elif self.algorithm_name in self.doe and repeat_idx in self.doe[self.algorithm_name]:
                 doe_pop = self.doe[self.algorithm_name][repeat_idx]

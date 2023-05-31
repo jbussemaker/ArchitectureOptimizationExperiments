@@ -60,6 +60,7 @@ _exp_03_04_folder = '03_hc_04_simple_optimization'
 _exp_03_04a_folder = '03_hc_04a_doe_size_min_pov'
 _exp_03_05_folder = '03_hc_05_optimization'
 _exp_03_06_folder = '03_hc_06_engine_arch_surrogate'
+_exp_03_07_folder = '03_hc_07_engine_arch'
 
 _test_problems = lambda: [
     # HFR = high failure rate; G = constrained
@@ -968,6 +969,89 @@ def exp_03_06_engine_arch_surrogate():
         minimize(problem, nsga2, termination=('n_eval', n_doe+n_gen*pop_size), copy_algorithm=False, verbose=True)
 
 
+def exp_03_07_engine_arch(post_process=False):
+    """
+    Compare strategies for solving the engine architecture optimization problems.
+    """
+    folder = set_results_folder(_exp_03_07_folder)
+    expected_fail_rate = .6
+    n_repeat = 4
+    k_doe = 2
+
+    problems = [
+        # problem, n_budget
+        (SimpleTurbofanArch(), 150),
+        (RealisticTurbofanArch(), 400),
+    ]
+    strategies: List[HiddenConstraintStrategy] = [
+        # RejectionHCStrategy(),
+        LocalReplacement(n=5, mean=True),
+        PredictionHCStrategy(RandomForestClassifier(n=100)),
+        PredictionHCStrategy(MDGPRegressor()),
+    ]
+
+    problem_paths = []
+    problem_names = []
+    doe_folders = []
+    problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
+    for i, (problem, n_budget) in enumerate(problems):
+        name = f'{problem.__class__.__name__}'
+        problem_names.append(name)
+        problem_path = f'{folder}/{secure_filename(name)}'
+        problem_paths.append(problem_path)
+        prob_doe_folder = f'{folder}/doe_{problem.__class__.__name__}'
+        doe_folders.append(prob_doe_folder)
+        if post_process:
+            continue
+
+        if isinstance(problem, (SimpleTurbofanArch, RealisticTurbofanArch)):
+            problem.verbose = True
+            problem.n_parallel = 4
+            problem.set_max_iter(30)
+
+        # Rule of thumb: k*n_dim --> corrected for expected fail rate (unknown before running a problem, of course)
+        n_init = int(np.ceil(k_doe*problem.n_var/(1-expected_fail_rate)))
+
+        log.info(f'Running DOE for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
+        os.makedirs(prob_doe_folder, exist_ok=True)
+        doe_algo = get_doe_algo(doe_size=n_init, results_folder=prob_doe_folder)
+        initialize_from_previous_results(doe_algo, problem, prob_doe_folder)
+        doe_algo.setup(problem)
+        doe_algo.run()
+
+    for i, (problem, n_budget) in enumerate(problems):
+        name = problem_names[i]
+        prob_doe_folder = doe_folders[i]
+        problem_path = problem_paths[i]
+
+        doe = load_from_previous_results(problem, prob_doe_folder)
+        n_init = len(doe)
+        log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
+
+        metrics, additional_plot = _get_metrics(problem)
+        # additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
+
+        algorithms = []
+        algo_names = []
+        for j, strategy in enumerate(strategies):
+            sbo = _get_sbo(problem, strategy, doe)
+            algorithms.append(sbo)
+            algo_names.append(str(strategy))
+
+        do_run = not post_process
+        exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_budget-n_init,
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                   return_exp=post_process, n_parallel=1)
+        _agg_prob_exp(problem, problem_path, exps)
+        plt.close('all')
+
+    def _add_cols(df_agg_):
+        return df_agg_
+
+    df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+    plt.close('all')
+
+
 if __name__ == '__main__':
     # exp_03_01_hc_area()
     # exp_03_02_hc_test_area()
@@ -975,5 +1059,6 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     # exp_03_04a_doe_size_min_pov()
-    exp_03_05_optimization(post_process=True)
+    # exp_03_05_optimization(post_process=True)
     # exp_03_06_engine_arch_surrogate()
+    exp_03_07_engine_arch()
