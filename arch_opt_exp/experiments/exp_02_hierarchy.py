@@ -125,7 +125,7 @@ def exp_02_01_tpe():
         algorithms.append(TPEAlgorithm(n_init=n_init))
         algo_names.append('TPE')
 
-        algorithms.append(get_arch_sbo_krg(init_size=n_init, use_ei=True))
+        algorithms.append(get_arch_sbo_gp(problem, init_size=n_init))
         algo_names.append('SBO')
 
         do_run = not post_process

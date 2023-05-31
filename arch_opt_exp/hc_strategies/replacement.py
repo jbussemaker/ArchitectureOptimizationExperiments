@@ -15,78 +15,11 @@ Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 import numpy as np
-from typing import *
 from scipy.spatial import distance
 from smt.surrogate_models.krg import KRG
-from sb_arch_opt.problem import ArchOptProblemBase
-from arch_opt_exp.hc_strategies.sbo_with_hc import *
-from pymoo.util.normalization import SimpleZeroToOneNormalization
+from sb_arch_opt.algo.arch_sbo.hc_strategy import *
 
 __all__ = ['ReplacementHCStrategyBase', 'GlobalWorstReplacement', 'LocalReplacement', 'PredictedWorstReplacement']
-
-
-class ReplacementHCStrategyBase(HiddenConstraintStrategy):
-    """Base class for a strategy that replaces failed outputs by some value"""
-
-    def __init__(self):
-        self._normalization: Optional[SimpleZeroToOneNormalization] = None
-        super().__init__()
-
-    def initialize(self, problem: ArchOptProblemBase):
-        self._normalization = SimpleZeroToOneNormalization(xl=problem.xl, xu=problem.xu)
-
-    def mod_xy_train(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        # Separate into failed and valid (non-failed) set
-        is_failed = self.is_failed(y)
-        x_valid = x[~is_failed, :]
-        y_valid = y[~is_failed, :]
-        x_failed = x[is_failed, :]
-        y_failed = y[is_failed, :]
-
-        # If there are no failed points, no need to replace
-        if x_failed.shape[0] == 0:
-            return x, y
-
-        # If there are no valid points, replace with 1
-        if y_valid.shape[0] == 0:
-            y_failed_replace = np.ones(y_failed.shape)
-        else:
-            y_failed_replace = self._replace_y(x_failed, y_failed, x_valid, y_valid)
-
-        # Replace values
-        y = y.copy()
-        y[is_failed, :] = y_failed_replace
-        return x, y
-
-    def _replace_y(self, x_failed: np.ndarray, y_failed: np.ndarray, x_valid: np.ndarray, y_valid: np.ndarray) \
-            -> np.ndarray:
-        """Return values for replacing y_failed (x values are normalized)"""
-        raise NotImplementedError
-
-    def get_replacement_strategy_name(self) -> str:
-        raise NotImplementedError
-
-    def __str__(self):
-        return f'Replacement: {self.get_replacement_strategy_name()}'
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}()'
-
-
-class GlobalWorstReplacement(ReplacementHCStrategyBase):
-    """Replace failed values with the worst values known for these outputs"""
-
-    def _replace_y(self, x_failed: np.ndarray, y_failed: np.ndarray, x_valid: np.ndarray, y_valid: np.ndarray) \
-            -> np.ndarray:
-        # Get global worst values
-        y_worst = np.max(y_valid, axis=0)
-
-        # Replace
-        y_replace = np.zeros(y_failed.shape)+y_worst
-        return y_replace
-
-    def get_replacement_strategy_name(self) -> str:
-        return 'Global Worst'
 
 
 class LocalReplacement(ReplacementHCStrategyBase):

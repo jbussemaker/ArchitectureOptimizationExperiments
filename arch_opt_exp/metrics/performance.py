@@ -151,8 +151,13 @@ class DeltaHVMetric(Metric):
 
         # If there are no optimal points (e.g. if all points are infeasible or failed)
         if len(f_opt) == 0 or f_opt.shape[0] == 0 or f_opt.shape[1] == 0:
+            if self.prev_n_eval is None and algorithm is not None:
+                self.prev_n_eval = algorithm.evaluator.n_eval
+
             _get_iter_p_passed(1.)
-            return [np.nan]*len(self.value_names)
+            res = [np.nan for _ in range(len(self.value_names))]
+            res[3] = 1.
+            return res
 
         # If we have only one point, calculate the relative distance to the optimal point instead (because true HV is 0)
         if self.is_one_dim:

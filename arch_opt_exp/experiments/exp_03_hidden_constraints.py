@@ -63,30 +63,30 @@ _exp_03_06_folder = '03_hc_06_engine_arch_surrogate'
 
 _test_problems = lambda: [
     # HFR = high failure rate; G = constrained
-    (Branin(), '00_no_HC'),
-    (HCBranin(), '00_far'),
-    (Alimo(), '01'),
-    (AlimoEdge(), '01'),
-    (Mueller02(), '01'),
-    (HCSphere(), '01'),
-    (Mueller01(), '02_HFR'),
-    (Mueller08(), '02_HFR'),
-    (CantileveredBeamHC(), '03_G_HFR'),
-    (MOMueller08(), '04_MO_HFR'),
-    (CarsideHCLess(), '05_MO_G'),
-    (CarsideHC(), '05_MO_G_HFR'),
-    (MDMueller02(), '06_MD'),
-    (MDMueller08(), '06_MD_HFR'),
-    (MDCantileveredBeamHC(), '07_MD_G_HFR'),
-    (MDMOMueller08(), '08_MD_MO_HFR'),
-    (MDCarsideHC(), '09_MD_MO_G_HFR'),
-    (HierAlimo(), '10_HIER'),
-    (HierAlimoEdge(), '10_HIER'),
-    (HierMueller02(), '10_HIER'),
-    (HierMueller08(), '10_HIER_HFR'),
-    (HierarchicalRosenbrockHC(), '11_HIER_G'),
-    (MOHierMueller08(), '12_HIER_MO_HFR'),
-    (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR'),
+    (Branin(), '00_no_HC', 1),  # n_doe multiplier
+    (HCBranin(), '00_far', 1),
+    (Alimo(), '01', 1),
+    (AlimoEdge(), '01', 1),
+    (Mueller02(), '01', 1),
+    (HCSphere(), '01', 1),
+    (Mueller01(), '02_HFR', 1),
+    # (Mueller08(), '02_HFR', 2),
+    (CantileveredBeamHC(), '03_G_HFR', 1),
+    # (MOMueller08(), '04_MO_HFR', 2),
+    (CarsideHCLess(), '05_MO_G', 1),
+    (CarsideHC(), '05_MO_G_HFR', 1),
+    # (MDMueller02(), '06_MD', 1),
+    # (MDMueller08(), '06_MD_HFR', 2),
+    (MDCantileveredBeamHC(), '07_MD_G_HFR', 1),
+    # (MDMOMueller08(), '08_MD_MO_HFR', 2),
+    (MDCarsideHC(), '09_MD_MO_G_HFR', 1),
+    (HierAlimo(), '10_HIER', 2),
+    (HierAlimoEdge(), '10_HIER', 2),
+    (HierMueller02(), '10_HIER', 1),
+    # (HierMueller08(), '10_HIER_HFR', 2),
+    (HierarchicalRosenbrockHC(), '11_HIER_G', 1),
+    # (MOHierMueller08(), '12_HIER_MO_HFR', 2),
+    (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 1),
 ]
 
 
@@ -232,7 +232,7 @@ def exp_03_02_hc_test_area():
     Conclusions: hypothesis confirmed
     """
     folder = set_results_folder(_exp_03_02_folder)
-    for problem, category in _test_problems():
+    for problem, category, _ in _test_problems():
         name = f'{category} {problem.__class__.__name__}'
         log.info(f'Plotting {problem.__class__.__name__}')
         plot_distance_distributions(problem, f'{folder}/plot_{category}_{problem.__class__.__name__}', name)
@@ -386,7 +386,7 @@ _strategies: List[HiddenConstraintStrategy] = [
     PredictedWorstReplacement(mul=1.),
     PredictedWorstReplacement(mul=2.),
 
-    PredictionHCStrategy(RandomForestClassifier(n=100)),
+    PredictionHCStrategy(RandomForestClassifier(n=100)),  # 7
     PredictionHCStrategy(RandomForestClassifier(n=100), min_pov=.75),
     PredictionHCStrategy(RandomForestClassifier(n=100), constraint=False),
     PredictionHCStrategy(GPClassifier()),
@@ -413,13 +413,10 @@ _strategies: List[HiddenConstraintStrategy] = [
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population):
     model, norm = ModelFactory(problem).get_md_kriging_model()
-    if problem.n_obj == 1:
-        infill = ExpectedImprovementInfill()
-    else:
-        infill = MinVariancePFInfill()
+    infill, n_batch, agg_g = get_default_infill(problem)
 
-    sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm)\
-        .algorithm(infill_size=1, init_size=len(doe_pop))
+    sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm,
+                               aggregate_g=agg_g).algorithm(infill_size=n_batch, init_size=len(doe_pop))
     sbo.initialization = Initialization(doe_pop)
     return sbo
 
@@ -629,6 +626,12 @@ def exp_03_05_optimization(post_process=False):
     Some predictors are well able to capture the hidden constraint areas.
 
     Conclusions:
+    - Rejection performs worst
+    - Prediction performs better than replacement
+    - For replacement, local mean and predicted-worst (mul=2) perform best
+    - For prediction:
+      - Random forest classifier performs best, with G (min_pov=.5) performing best
+      - MD-GP (SMT) is a good second option, with G (min_pov=.5) performing best
     """
     folder = set_results_folder(_exp_03_05_folder)
     expected_fail_rate = .6
@@ -639,7 +642,7 @@ def exp_03_05_optimization(post_process=False):
     problem_paths = []
     problem_names = []
     problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
-    for i, (problem, category) in enumerate(problems):
+    for i, (problem, category, infill_mult) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
@@ -658,6 +661,7 @@ def exp_03_05_optimization(post_process=False):
                  f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
 
         metrics, additional_plot = _get_metrics(problem)
+        # additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
 
         algorithms = []
         algo_names = []
@@ -668,9 +672,9 @@ def exp_03_05_optimization(post_process=False):
 
         do_run = not post_process
         # do_run = False
-        exps = run(_exp_03_05_folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
-                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   return_exp=post_process)
+        exps = run(_exp_03_05_folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat,
+                   n_eval_max=n_infill*infill_mult, metrics=metrics, additional_plot=additional_plot, problem_name=name,
+                   do_run=do_run, return_exp=post_process)
         _agg_prob_exp(problem, problem_path, exps)
         plt.close('all')
 
@@ -682,22 +686,67 @@ def exp_03_05_optimization(post_process=False):
                                 for val in df_agg_.index]
         df_agg_['pw_strat'] = [val[1].split(':')[1].strip() if 'Predicted Worst' in val[1] else None
                                for val in df_agg_.index]
+
+        df_agg_['perf_rank'] = df_agg_.groupby(level=0, axis=0, group_keys=False).apply(lambda x: _get_ranks(x, 'delta_hv_regret', n_repeat))
+        df_agg_['is_best'] = df_agg_['perf_rank'] == 1
+        df_agg_['n_is_best'] = df_agg_.groupby(level=1, axis=0, group_keys=False).apply(lambda x: _count_bool(x, 'is_best'))
+
+        df_agg_['is_good'] = df_agg_['perf_rank'] <= 2
+        df_agg_['n_is_good'] = df_agg_.groupby(level=1, axis=0, group_keys=False).apply(lambda x: _count_bool(x, 'is_good'))
+
+        df_agg_['is_bad'] = df_agg_['perf_rank'] >= 4
+        df_agg_['n_is_bad'] = df_agg_.groupby(level=1, axis=0, group_keys=False).apply(lambda x: _count_bool(x, 'is_bad'))
+
         return df_agg_
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
-    _plot_scatter(df_agg, folder, 'fail_rate_ratio', 'delta_hv_ratio', y_log=True)
+    _plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', y_log=True)
     _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_ratio', y_log=True)
-    _plot_scatter(df_agg, folder, 'fail_rate_ratio', 'delta_hv_regret')
+    _plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_regret')
     _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_regret')
     # _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_ratio', z_col='g_f_strat', y_log=True)
 
     _plot_problem_bars(df_agg, folder, 'strategy', 'delta_hv_ratio', y_log=True)
     _plot_problem_bars(df_agg, folder, 'rep_strat', 'delta_hv_ratio', y_log=True)
     _plot_problem_bars(df_agg, folder, 'g_f_strat', 'delta_hv_ratio', y_log=True)
-    _plot_problem_bars(df_agg, folder, 'g_f_strat', 'fail_rate_ratio')
-    _plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_rate_ratio')
+    _plot_problem_bars(df_agg, folder, 'g_f_strat', 'fail_ratio')
+    _plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_ratio')
     plt.close('all')
+
+
+def _get_ranks(df: pd.DataFrame, col: str, n_samples: int):
+    from scipy.stats.distributions import norm
+    from scipy.stats import ttest_ind_from_stats
+
+    mean_val = df[col].values
+    n = norm(0, 1)
+    std_val = (df[col+'_q75'].values-df[col+'_q25'].values)/(n.ppf(.75)-n.ppf(.25))
+
+    ranks = np.zeros((len(df),), dtype=int)
+    i_compare = np.argmin(mean_val)
+    ranks[i_compare] = 1
+
+    while np.any(ranks == 0):
+        not_compared = np.where(ranks == 0)[0]
+        j_compare = not_compared[np.argmin(mean_val[not_compared])]
+
+        p = ttest_ind_from_stats(mean_val[i_compare], std_val[i_compare], n_samples,
+                                 mean_val[j_compare], std_val[j_compare], n_samples,
+                                 equal_var=False).pvalue
+
+        if p <= .10:  # Means are not the same: increase rank count
+            ranks[j_compare] = ranks[i_compare]+1
+            i_compare = j_compare
+        else:
+            ranks[j_compare] = ranks[i_compare]
+
+    return pd.Series(index=df.index, data=ranks)
+
+
+def _count_bool(df: pd.DataFrame, col: str):
+    n = df[col].sum()
+    return pd.Series(index=df.index, data=[n]*len(df))
 
 
 def _agg_prob_exp(problem, problem_path, exps):
@@ -769,6 +818,7 @@ _col_names = {
     'fail_rate_ratio': 'Fail rate ratio',
     'fail_ratio': 'Fail rate ratio',
     'delta_hv_ratio': 'Delta HV ratio',
+    'delta_hv_regret': 'Delta HV regret',
     'delta_hv_delta_hv': 'Delta HV',
     'hc_pred_acc': 'Predictor Accuracy',
     'hc_pred_max_acc': 'Predictor Max Accuracy',
@@ -909,5 +959,5 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     # exp_03_04a_doe_size_min_pov()
-    # exp_03_05_optimization()
-    exp_03_06_engine_arch_surrogate()
+    exp_03_05_optimization(post_process=True)
+    # exp_03_06_engine_arch_surrogate()

@@ -19,9 +19,9 @@ from typing import *
 from sb_arch_opt.problem import *
 from sb_arch_opt.sampling import *
 from sb_arch_opt.algo.arch_sbo.models import *
-from arch_opt_exp.hc_strategies.sbo_with_hc import *
+from sb_arch_opt.algo.arch_sbo.hc_strategy import *
 from sb_arch_opt.problems.hidden_constraints import *
-from pymoo.util.normalization import Normalization, SimpleZeroToOneNormalization
+from pymoo.util.normalization import Normalization
 
 from smt.surrogate_models.surrogate_model import SurrogateModel
 
@@ -30,22 +30,8 @@ __all__ = ['PredictionHCStrategy', 'PredictorInterface',
            'GPRegressor', 'MDGPRegressor', 'VariationalGP', 'LinearInterpolator', 'RBFInterpolator']
 
 
-class PredictorInterface:
+class ExtPredictorInterface(PredictorInterface):
     """Interface class for some validity predictor"""
-    _training_doe = {}
-    _reset_pickle_keys = []
-
-    def __init__(self):
-        self.training_set = None
-        self._normalization: Optional[Normalization] = None
-        self._trained_single_class = None
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        for key in self._reset_pickle_keys:
-            if key in state:
-                state[key] = None
-        return state
 
     def get_stats(self, problem: ArchOptProblemBase = None, min_pov=.5, n=50, train=True, plot=True, save_ref=True,
                   save_path=None, add_close_points=False, show=True, i_repeat=None):
@@ -166,95 +152,17 @@ class PredictorInterface:
             plt.show()
         return fpr, tpr, acc, thr_values
 
-    def initialize(self, problem: ArchOptProblemBase):
-        self._normalization = self._get_normalization(problem)
-        self._initialize(problem)
-
-    def _get_normalization(self, problem: ArchOptProblemBase) -> Normalization:
-        return SimpleZeroToOneNormalization(xl=problem.xl, xu=problem.xu, estimate_bounds=False)
-
-    def _initialize(self, problem: ArchOptProblemBase):
-        pass
-
-    def train(self, x: np.ndarray, y_is_valid: np.ndarray):
-        # Check if we are training a classifier with only 1 class
-        self._trained_single_class = single_class = y_is_valid[0] if len(set(y_is_valid)) == 1 else None
-
-        if single_class is None:
-            self._train(x, y_is_valid)
-
-    def evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
-        if self._trained_single_class is not None:
-            return np.ones((x.shape[0],))*self._trained_single_class
-
-        return self._evaluate_probability_of_validity(x)
-
     def _train(self, x: np.ndarray, y_is_valid: np.ndarray):
-        """Train the model (x's are not normalized), y_is_valid is a vector"""
         raise NotImplementedError
 
     def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
-        """Get the probability of validity (0 to 1) at nx points (x is not normalized); should return a vector!"""
         raise NotImplementedError
 
     def __str__(self):
         raise NotImplementedError
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}()'
 
-
-class PredictionHCStrategy(HiddenConstraintStrategy):
-    """Base class for a strategy that predictions where failed regions occur"""
-
-    def __init__(self, predictor: PredictorInterface, constraint=True, min_pov=.5):
-        self.predictor = predictor
-        self.constraint = constraint
-        self.min_pov = min_pov
-        super().__init__()
-
-    def initialize(self, problem: ArchOptProblemBase):
-        self.predictor.initialize(problem)
-
-    def mod_xy_train(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        # Remove failed points form the training set
-        is_not_failed = ~self.is_failed(y)
-        return x[is_not_failed, :], y[is_not_failed, :]
-
-    def prepare_infill_search(self, x: np.ndarray, y: np.ndarray):
-        is_failed = self.is_failed(y)
-        y_is_valid = (~is_failed).astype(float)
-        self.predictor.train(x, y_is_valid)
-        self.predictor.training_set = (x, y_is_valid)
-
-    def adds_infill_constraint(self) -> bool:
-        return self.constraint
-
-    def evaluate_infill_constraint(self, x: np.ndarray) -> np.ndarray:
-        pov = self.predictor.evaluate_probability_of_validity(x)
-        pov = np.clip(pov, 0, 1)
-        return self.min_pov-pov
-
-    def mod_infill_objectives(self, x: np.ndarray, f_infill: np.ndarray) -> np.ndarray:
-        pov = self.predictor.evaluate_probability_of_validity(x)
-        pov = np.clip(pov, 0, 1)
-
-        # The infill objectives are a minimization of some value between 0 and 1:
-        # - The function-based infills (prediction mean), the underlying surrogates are trained on normalized y values
-        # - The expected improvement is normalized between 0 and 1, where 1 corresponds to no expected improvement
-        return 1-((1-f_infill).T*pov).T
-
-    def __str__(self):
-        type_str = 'G' if self.constraint else 'F'
-        type_str += f' min_pov={self.min_pov}' if self.constraint and self.min_pov != .5 else ''
-        return f'Prediction {type_str}: {self.predictor!s}'
-
-    def __repr__(self):
-        min_pov_str = f', min_pov={self.min_pov}' if self.constraint else ''
-        return f'{self.__class__.__name__}({self.predictor!r}, constraint={self.constraint}{min_pov_str})'
-
-
-class SKLearnClassifier(PredictorInterface):
+class SKLearnClassifier(ExtPredictorInterface):
     _reset_pickle_keys = ['_predictor']
 
     def __init__(self):
@@ -353,7 +261,7 @@ class SVMClassifier(SKLearnClassifier):
         return f'RBF SVM'
 
 
-class VariationalGP(PredictorInterface):
+class VariationalGP(ExtPredictorInterface):
     """
     Implementation based on:
     - https://secondmind-labs.github.io/trieste/1.1.2/notebooks/failure_ego.html
@@ -363,10 +271,12 @@ class VariationalGP(PredictorInterface):
 
     def __init__(self):
         self._model = None
+        self._trained = True
         super().__init__()
 
     def _train(self, x: np.ndarray, y_is_valid: np.ndarray):
         import tensorflow as tf
+        from tensorflow.python.framework.errors_impl import InvalidArgumentError
         from trieste.models.gpflow import build_vgp_classifier, VariationalGaussianProcess
         from trieste.models.optimizer import BatchOptimizer
         from trieste.observer import Dataset
@@ -380,11 +290,18 @@ class VariationalGP(PredictorInterface):
 
         self._model = model = VariationalGaussianProcess(
             classifier, BatchOptimizer(tf.optimizers.Adam(1e-3)), use_natgrads=True)
-        model.optimize(dataset)
+        try:
+            model.optimize(dataset)
+            self._trained = True
+        except InvalidArgumentError:
+            self._trained = False
         # from gpflow.utilities import print_summary
         # print_summary(model.model)
 
     def _evaluate_probability_of_validity(self, x: np.ndarray) -> np.ndarray:
+        if not self._trained:
+            return np.ones((x.shape[0],))
+
         import tensorflow as tf
         x_norm = self._normalization.forward(x)
         pov, _ = self._model.predict_y(tf.constant(x_norm, dtype=tf.float64))
@@ -394,7 +311,7 @@ class VariationalGP(PredictorInterface):
         return 'Variational GP'
 
 
-class SMTPredictor(PredictorInterface):
+class SMTPredictor(ExtPredictorInterface):
     _reset_pickle_keys = ['_model']
 
     def __init__(self):
@@ -405,7 +322,7 @@ class SMTPredictor(PredictorInterface):
         return self._model.predict_values(self._normalization.forward(x))[:, 0]
 
     def _train(self, x: np.ndarray, y_is_valid: np.ndarray):
-        self._do_train(self._normalization.forward(x), y_is_valid)
+        self._do_train(self._normalization.forward(x), np.array([y_is_valid]).T)
 
     def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         raise NotImplementedError
@@ -462,7 +379,7 @@ class MDGPRegressor(SMTPredictor):
         return 'MD-GP'
 
 
-class LinearInterpolator(PredictorInterface):
+class LinearInterpolator(ExtPredictorInterface):
 
     def __init__(self):
         self._inter = None
@@ -486,7 +403,7 @@ class LinearInterpolator(PredictorInterface):
         return 'Linear Interpolator'
 
 
-class RBFInterpolator(PredictorInterface):
+class RBFInterpolator(ExtPredictorInterface):
 
     def __init__(self):
         self._inter = None

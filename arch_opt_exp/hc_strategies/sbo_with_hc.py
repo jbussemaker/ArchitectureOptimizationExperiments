@@ -15,90 +15,16 @@ Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 import numpy as np
-from typing import *
 from sb_arch_opt.problem import *
 from sb_arch_opt.algo.arch_sbo.algo import *
 from sb_arch_opt.algo.arch_sbo.infill import *
+from sb_arch_opt.algo.arch_sbo.hc_strategy import *
 
 __all__ = ['HiddenConstraintStrategy', 'HiddenConstraintsSBO', 'HCInfill']
 
 
-class HiddenConstraintStrategy:
-    """
-    Base class for implementing a strategy for dealing with hidden constraints.
-    """
-
-    @staticmethod
-    def is_failed(y: np.ndarray):
-        return np.any(~np.isfinite(y), axis=1)
-
-    def needs_variance(self) -> bool:
-        """Whether the strategy needs a surrogate model that also provides variance estimates"""
-        return False
-
-    def initialize(self, problem: ArchOptProblemBase):
-        pass
-
-    def mod_xy_train(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Modify inputs and outputs for the surrogate model used for the main infill function"""
-        return x, y
-
-    def prepare_infill_search(self, x: np.ndarray, y: np.ndarray):
-        """Prepare infill search given the (non-modified) normalized inputs and outputs"""
-
-    def adds_infill_constraint(self) -> bool:
-        """Whether the strategy adds an inequality constraint to the infill search problem"""
-        return False
-
-    def evaluate_infill_constraint(self, x: np.ndarray) -> np.ndarray:
-        """If the problem added an infill constraint, evaluate it here, returning an nx-length vector"""
-
-    def mod_infill_objectives(self, x: np.ndarray, f_infill: np.ndarray) -> np.ndarray:
-        """Modify the infill objectives (in-place)"""
-        return f_infill
-
-    def __str__(self):
-        raise NotImplementedError
-
-    def __repr__(self):
-        raise NotImplementedError
-
-
 class HiddenConstraintsSBO(SBOInfill):
     """SBO algorithm with hidden constraint strategy"""
-
-    def __init__(self, *args, hc_strategy: HiddenConstraintStrategy = None, **kwargs):
-        self.hc_strategy = hc_strategy
-        super().__init__(*args, **kwargs)
-
-    @property
-    def surrogate_model(self):
-        model = super().surrogate_model
-        if self.hc_strategy is None:
-            raise ValueError('HC strategy not set!')
-        if self.hc_strategy.needs_variance() and not self.supports_variances:
-            raise ValueError(f'HC {self.hc_strategy!r} needs variance which is not provided by the surrogate model')
-        return model
-
-    def _get_xy_train(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        return self.hc_strategy.mod_xy_train(x, y)
-
-    def _build_model(self):
-        if self.hc_strategy is None:
-            raise ValueError('HC strategy not set!')
-        self.hc_strategy.initialize(self.problem)
-        super()._build_model()
-
-        x = self.total_pop.get('X')
-        y = self.total_pop.get('F')
-        if self.problem.n_ieq_constr > 0:
-            y = np.column_stack([y, self.total_pop.get('G')])
-
-        self.hc_strategy.prepare_infill_search(x, y)
-
-    def _get_infill_problem(self, infill: SurrogateInfill = None, force_new_points=None):
-        hc_infill = HCInfill(self.infill if infill is None else infill, self.hc_strategy)
-        return super()._get_infill_problem(hc_infill, force_new_points=force_new_points)
 
     def plot_state(self, x_infill=None, save_path=None, plot_std=False, plot_g=False, show=True):
         import matplotlib.pyplot as plt
@@ -170,54 +96,3 @@ class HiddenConstraintsSBO(SBOInfill):
         if show:
             plt.show()
         plt.close('all')
-
-
-class HCInfill(SurrogateInfill):
-    """Infill that wraps another infill and modifies it for dealing with hidden constraints"""
-
-    def __init__(self, infill: SurrogateInfill, hc_strategy: HiddenConstraintStrategy):
-        self._infill = infill
-        self._hc_strategy = hc_strategy
-        super().__init__()
-
-    @property
-    def needs_variance(self):
-        return self._infill.needs_variance
-
-    def set_samples(self, x_train: np.ndarray, is_active_train: np.ndarray, y_train: np.ndarray):
-        self._infill.set_samples(x_train, is_active_train, y_train)
-
-    def predict(self, x: np.ndarray, is_active: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        return self._infill.predict(x, is_active)
-
-    def _initialize(self):
-        self._infill.initialize(self.problem, self.surrogate_model, self.normalization)
-
-    def select_infill_solutions(self, population, infill_problem, n_infill):
-        return self._infill.select_infill_solutions(population, infill_problem, n_infill)
-
-    def reset_infill_log(self):
-        super().reset_infill_log()
-        self._infill.reset_infill_log()
-
-    def predict_variance(self, x: np.ndarray, is_active: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        return self._infill.predict_variance(x, is_active)
-
-    def get_n_infill_objectives(self) -> int:
-        return self._infill.get_n_infill_objectives()
-
-    def get_n_infill_constraints(self) -> int:
-        n_constr = self._infill.get_n_infill_constraints()
-        if self._hc_strategy.adds_infill_constraint():
-            n_constr += 1
-        return n_constr
-
-    def _evaluate(self, x: np.ndarray, is_active: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-        f_infill, g_infill = self._infill.evaluate(x, is_active)
-        f_infill = self._hc_strategy.mod_infill_objectives(x, f_infill)
-
-        if self._hc_strategy.adds_infill_constraint():
-            g_hc = self._hc_strategy.evaluate_infill_constraint(x)
-            g_infill = np.column_stack([g_infill, g_hc]) if g_infill is not None else np.array([g_hc]).T
-
-        return f_infill, g_infill
