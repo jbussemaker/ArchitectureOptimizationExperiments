@@ -632,6 +632,13 @@ def exp_03_05_optimization(post_process=False):
     - For prediction:
       - Random forest classifier performs best, with G (min_pov=.5) performing best
       - MD-GP (SMT) is a good second option, with G (min_pov=.5) performing best
+    - Compared to rejection, training times and infill times are slightly increased:
+      - Replacement:
+        - Training time is increased by about 75% due to the larger training set of the main models
+        - Infill time is increased by about 60%
+      - Prediction:
+        - Training time is increased by about 30% (20% for KNN)
+        - Infill time is doubled; 3x for Variational GP; +20% for KNN
     """
     folder = set_results_folder(_exp_03_05_folder)
     expected_fail_rate = .6
@@ -696,6 +703,15 @@ def exp_03_05_optimization(post_process=False):
 
         df_agg_['is_bad'] = df_agg_['perf_rank'] >= 4
         df_agg_['n_is_bad'] = df_agg_.groupby(level=1, axis=0, group_keys=False).apply(lambda x: _count_bool(x, 'is_bad'))
+
+        for t_col in ['time_train', 'time_infill']:
+            for c in [t_col, t_col+'_q25', t_col+'_q75']:
+                df_agg_[f'inc_{c}'] = df_agg_.groupby(level=0, axis=0, group_keys=False).apply(lambda df: df[c]/df[c][0])
+
+        df_agg_['med_inc_t_train'] = df_agg_.groupby(level=1, axis=0, group_keys=False).apply(
+            lambda df: pd.Series(index=df.index, data=[df['inc_time_train'].median()]*len(df)))
+        df_agg_['med_inc_t_infill'] = df_agg_.groupby(level=1, axis=0, group_keys=False).apply(
+            lambda df: pd.Series(index=df.index, data=[df['inc_time_infill'].median()]*len(df)))
 
         return df_agg_
 
