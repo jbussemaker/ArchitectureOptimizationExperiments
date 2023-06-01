@@ -190,6 +190,7 @@ def exp_02_02_hier_strategies(sbo=False):
         (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER'),
         (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, diversity_range=0), '01_SO_LDR'),
         (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt), '02_SO_HDR'),  # High diversity range
+        (lambda: HierarchicalGoldstein(), '02_SO_HDR'),
         (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt), '03_MO_HDR'),
     ]
     # for i, (problem_factory, category) in enumerate(problems):
@@ -405,9 +406,9 @@ def _plot_comparison_df(df_agg, column, title, folder, x_column, x_label, x_log=
 
 if __name__ == '__main__':
     # exp_02_01_tpe()
-    # exp_02_02_hier_strategies()
-    # exp_02_02_hier_strategies(sbo=True)
-    exp_02_03_sensitivities()
-    exp_02_03_sensitivities(mrd=True)
-    exp_02_03_sensitivities(sbo=True)
-    exp_02_03_sensitivities(sbo=True, mrd=True)
+    exp_02_02_hier_strategies()
+    exp_02_02_hier_strategies(sbo=True)
+    # exp_02_03_sensitivities()
+    # exp_02_03_sensitivities(mrd=True)
+    # exp_02_03_sensitivities(sbo=True)
+    # exp_02_03_sensitivities(sbo=True, mrd=True)
