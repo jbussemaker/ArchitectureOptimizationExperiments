@@ -42,6 +42,7 @@ from sb_arch_opt.problems.hidden_constraints import *
 
 from arch_opt_exp.experiments.runner import *
 from arch_opt_exp.metrics.performance import *
+from arch_opt_exp.experiments.plotting import *
 from arch_opt_exp.hc_strategies.metrics import *
 from arch_opt_exp.hc_strategies.rejection import *
 from arch_opt_exp.hc_strategies.prediction import *
@@ -592,15 +593,15 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
     for category in ['doe_k', 'min_pov']:
-        _plot_problem_bars(df_agg, folder, category, 'delta_hv_ratio', y_log=True)
-        _plot_problem_bars(df_agg, folder, category, 'delta_hv_delta_hv', y_log=True)
-        _plot_problem_bars(df_agg, folder, category, 'delta_hv_regret')
-        _plot_problem_bars(df_agg, folder, category, 'fail_ratio')
-        _plot_problem_bars(df_agg, folder, category, 'hc_pred_acc')
+        plot_problem_bars(df_agg, folder, category, 'delta_hv_ratio', y_log=True)
+        plot_problem_bars(df_agg, folder, category, 'delta_hv_delta_hv', y_log=True)
+        plot_problem_bars(df_agg, folder, category, 'delta_hv_regret')
+        plot_problem_bars(df_agg, folder, category, 'fail_ratio')
+        plot_problem_bars(df_agg, folder, category, 'hc_pred_acc')
 
-    _plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='fail_ratio', y_log=True)
-    _plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
-    _plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
+    plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='fail_ratio', y_log=True)
+    plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
+    plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
     plt.close('all')
 
 
@@ -718,17 +719,17 @@ def exp_03_05_optimization(post_process=False):
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
-    _plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', y_log=True)
-    _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_ratio', y_log=True)
-    _plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_regret')
-    _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_regret')
+    plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', y_log=True)
+    plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_ratio', y_log=True)
+    plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_regret')
+    plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_regret')
     # _plot_scatter(df_agg, folder, 'hc_pred_acc', 'delta_hv_ratio', z_col='g_f_strat', y_log=True)
 
-    _plot_problem_bars(df_agg, folder, 'strategy', 'delta_hv_ratio', y_log=True)
-    _plot_problem_bars(df_agg, folder, 'rep_strat', 'delta_hv_ratio', y_log=True)
-    _plot_problem_bars(df_agg, folder, 'g_f_strat', 'delta_hv_ratio', y_log=True)
-    _plot_problem_bars(df_agg, folder, 'g_f_strat', 'fail_ratio')
-    _plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_ratio')
+    plot_problem_bars(df_agg, folder, 'strategy', 'delta_hv_ratio', y_log=True)
+    plot_problem_bars(df_agg, folder, 'rep_strat', 'delta_hv_ratio', y_log=True)
+    plot_problem_bars(df_agg, folder, 'g_f_strat', 'delta_hv_ratio', y_log=True)
+    plot_problem_bars(df_agg, folder, 'g_f_strat', 'fail_ratio')
+    plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_ratio')
     plt.close('all')
 
 
@@ -850,90 +851,6 @@ _col_names = {
     'delta_hv_pass_20': 'Delta HV pass 20%',
     'delta_hv_pass_50': 'Delta HV pass 50%',
 }
-
-
-def _plot_scatter(df_agg, folder, x_col, y_col, z_col=None, x_log=False, y_log=False, z_log=False, cmap='inferno'):
-    x_name, y_name = _col_names[x_col], _col_names[y_col]
-    z_name = _col_names[z_col] if z_col is not None else None
-    plt.figure(figsize=(8, 4)), plt.title(f'{x_name} vs {y_name}')
-
-    x_all, y_all, z_all = [], [], []
-    x, y = df_agg[x_col].values, df_agg[y_col].values
-    x_all += list(x)
-    y_all += list(y)
-    if z_col is not None:
-        z = df_agg[z_col].values
-        if z.dtype == np.object:
-            values = {val for val in z if val is not None}
-            z_num = np.zeros((len(z),))*np.nan
-            for i_val, value in enumerate(sorted(values)):
-                if value or value == 0.:
-                    z_num[z == value] = i_val
-            z = z_num
-        z_all += list(np.log10(z) if z_log else z)
-        size = 50
-    else:
-        z_all = 'k'
-        size = 10
-
-    c = plt.scatter(x_all, y_all, s=size, c=z_all, cmap=cmap)
-    plt.colorbar(c).set_label((z_name + ' (log)') if z_log else z_name)
-
-    if x_log:
-        plt.gca().set_xscale('log')
-    if y_log:
-        plt.gca().set_yscale('log')
-    plt.xlabel(x_name), plt.ylabel(y_name)
-
-    plt.tight_layout()
-    filename = f'{folder}/{x_col}_{y_col}{f"_{z_col}" if z_col is not None else ""}'
-    plt.savefig(filename+'.png')
-
-
-def _plot_problem_bars(df_agg, folder, cat_col, y_col, y_log=False):
-    col_name, y_col_name = _col_names[cat_col], _col_names[y_col]
-    plt.figure(figsize=(8, 6)), plt.title(col_name)
-
-    categories = df_agg[cat_col].unique()
-    categories = np.array([val for val in categories if val and val != 0.])
-    if len(categories) <= 3:
-        cat_colors = ['r', 'b'] if len(categories) == 2 else ['r', 'g', 'b']
-    else:
-        cat_colors = plt.cm.plasma(np.linspace(0, 1, len(categories)))
-    x, w0 = 0, .8
-    w = w0/len(categories)
-    x_bars, y_bars, y_lower, y_upper, colors, labels = [], [], [], [], [], []
-    for prob_name, df_group in df_agg.groupby(level=0):
-        for i_cat, cat_value in enumerate(categories):
-            cat_mask = df_group[cat_col] == cat_value
-            medians = list(df_group[y_col].values[cat_mask])
-            for q_post in ['q25', 'q75']:
-                if f'{y_col}_{q_post}' in df_group.columns:
-                    medians += list(df_group[f'{y_col}_{q_post}'].values[cat_mask])
-            if len(medians) == 0:
-                continue
-
-            x_bars.append(x-.5*w0+w*i_cat)
-            labels.append(prob_name if i_cat == 0 else '')
-            medians = sorted(medians)
-            y_bars.append(np.nanmedian(medians))
-            y_lower.append(y_bars[-1]-np.nanquantile(medians, .25))
-            y_upper.append(np.nanquantile(medians, .75)-y_bars[-1])
-            colors.append(cat_colors[i_cat])
-        x += 1
-
-    plt.bar(x_bars, y_bars, w, color=colors, tick_label=labels, yerr=np.array([y_lower, y_upper]), capsize=2,
-            edgecolor='k', linewidth=.5, error_kw={'linewidth': .5})
-    plt.xticks(rotation=80, fontsize=8)
-    if y_log:
-        plt.yscale('log')
-    plt.gca().legend([Line2D([0], [0], color=cat_colors[i_cat], lw=4) for i_cat, label in enumerate(categories)],
-                     categories, loc='center left', bbox_to_anchor=(1, .5), frameon=False)
-    plt.ylabel(y_col_name)
-    plt.tight_layout()
-
-    filename = f'{folder}/{cat_col}_{y_col}'
-    plt.savefig(filename+'.png')
 
 
 def exp_03_06_engine_arch_surrogate():

@@ -21,6 +21,7 @@ import logging
 import numpy as np
 import pandas as pd
 from typing import Union, Dict
+import matplotlib
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
 from pymoo.core.population import Population
@@ -40,10 +41,10 @@ from sb_arch_opt.algo.arch_sbo.infill import MinVariancePFInfill, get_default_in
 from arch_opt_exp.md_mo_hier.infill import *
 from arch_opt_exp.experiments.runner import *
 from arch_opt_exp.metrics.performance import *
+from arch_opt_exp.experiments.plotting import *
 from arch_opt_exp.hc_strategies.metrics import *
 from arch_opt_exp.hc_strategies.rejection import *
 from arch_opt_exp.hc_strategies.sbo_with_hc import *
-from arch_opt_exp.experiments.experimenter import *
 from arch_opt_exp.experiments.metrics import get_exp_metrics
 
 from smt.surrogate_models.krg_based import MixIntKernelType, MixHrcKernelType
@@ -62,23 +63,23 @@ _exp_00_04_folder = '00_md_mo_04_high_dim'
 
 
 _test_problems = lambda: [
-    (Branin(), '00_C_SO'),
-    (Rosenbrock(), '00_C_SO'),
-    (MDBranin(), '01_MD_SO'),
-    (AugmentedMDBranin(), '01_MD_SO'),
-    (MunozZunigaToy(), '01_MD_SO'),
-    (MOGoldstein(), '02_C_MO'),
-    (MORosenbrock(), '02_C_MO'),
-    (MDMOGoldstein(), '03_MD_MO'),
-    (MDMORosenbrock(), '03_MD_MO'),
-    (ConBraninProd(), '04_C_SO_G'),
-    (ConBraninGomez(), '04_C_SO_G'),
-    (ArchCantileveredBeam(), '04_C_SO_G'),
-    (MDCantileveredBeam(), '05_MD_SO_G'),
-    (ArchWeldedBeam(), '06_C_MO_G'),
-    (ArchCarside(), '06_C_MO_G'),
-    (MDWeldedBeam(), '07_MD_MO_G'),
-    (MDCarside(), '07_MD_MO_G'),
+    (Branin(), '00_C_SO', 'Branin'),
+    (Rosenbrock(), '00_C_SO', 'Rosenbrock'),
+    (MDBranin(), '01_MD_SO', 'MD Branin'),
+    (AugmentedMDBranin(), '01_MD_SO', 'Aug. MD Branin'),
+    (MunozZunigaToy(), '01_MD_SO', 'MZ-Toy'),
+    (MOGoldstein(), '02_C_MO', 'MD Goldstein'),
+    (MORosenbrock(), '02_C_MO', 'MO Rosenbrock'),
+    (MDMOGoldstein(), '03_MD_MO', 'MD-MO Goldstein'),
+    (MDMORosenbrock(), '03_MD_MO', 'MD-MO Rosenbrock'),
+    (ConBraninProd(), '04_C_SO_G', 'Constr. Branin'),
+    (ConBraninGomez(), '04_C_SO_G', 'Constr. Branin (Gomez)'),
+    (ArchCantileveredBeam(), '04_C_SO_G', 'Cant. Beam'),
+    (MDCantileveredBeam(), '05_MD_SO_G', 'MD Cant. Beam'),
+    (ArchWeldedBeam(), '06_C_MO_G', 'Welded Beam'),
+    (ArchCarside(), '06_C_MO_G', 'Carside'),
+    (MDWeldedBeam(), '07_MD_MO_G', 'MD Welded Beam'),
+    (MDCarside(), '07_MD_MO_G', 'MD Carside'),
 ]
 
 
@@ -98,12 +99,15 @@ def exp_00_01_md_gp(post_process=False):
     n_infill = 30
     n_repeat = 20
 
-    problems = [(prob, category) for prob, category in _test_problems() if '_SO' in category and '_G' not in category]
+    problems = [(prob, category, title) for prob, category, title in _test_problems()
+                if '_SO' in category and '_G' not in category]
     problem_paths = []
     problem_names = []
+    problem_name_map = {}
     problem: Union[ArchOptProblemBase]
-    for i, (problem, category) in enumerate(problems):
+    for i, (problem, category, title) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
+        problem_name_map[name] = title
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
@@ -136,45 +140,10 @@ def exp_00_01_md_gp(post_process=False):
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
                    return_exp=post_process)
 
-        _plot_for_pub(exps, met_plot_map={
+        plot_for_pub(exps, met_plot_map={
             'delta_hv': ['ratio'],
         }, algo_name_map={'BO': 'Continuous GP', 'MD-BO': 'Mixed-discrete GP'})
         plt.close('all')
-
-
-def _plot_for_pub(exps, met_plot_map, algo_name_map=None, colors=None, styles=None):
-
-    metric_names = {
-        ('delta_hv', 'ratio'): '$\\Delta$HV Ratio',
-    }
-    if algo_name_map is None:
-        algo_name_map = {}
-
-    def _plot_callback(fig, metric_objs, metric_name, value_name, handles, line_titles):
-        font = 'Times New Roman'
-        fig.set_size_inches(4, 3)
-        ax = plt.gca()
-        ax.spines[['right', 'top']].set_visible(False)
-        ax.set_title('')
-
-        ax.set_xlabel('Infills', fontname=font)
-        ax.set_ylabel(metric_names.get((metric_name, value_name), f'{metric_name}.{value_name}'), fontname=font)
-        ax.tick_params(axis='both', labelsize=7)
-        plt.xticks(fontname=font)
-        plt.yticks(fontname=font)
-
-        labels = [algo_name_map.get(title, title) for title in line_titles]
-        plt.legend(loc='lower center', bbox_to_anchor=(.5, 1), frameon=False, ncol=len(line_titles), handles=handles,
-                   labels=labels, prop={'family': font})
-        plt.tight_layout()
-
-    results = [exp.get_aggregate_effectiveness_results() for exp in exps]
-    base_path = exps[0].get_problem_results_path()
-    for metric, metric_values in met_plot_map.items():
-        save_filename = f'{base_path}/{secure_filename("pub_"+ metric)}'
-        ExperimenterResult.plot_compare_metrics(
-            results, metric, plot_value_names=metric_values, plot_evaluations=True, save_filename=save_filename,
-            plot_callback=_plot_callback, save_svg=True, colors=colors, styles=styles, show=False)
 
 
 def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat):
@@ -213,34 +182,34 @@ def exp_00_02_infill(post_process=False):
       - Multi-objective:  Ensemble of MPoI, MEPoI  with n_batch = 1
     """
     folder = set_results_folder(_exp_00_02_folder)
-    n_infill = 20
+    n_infill = 40
     n_iter_compare_at = 4  # * max(n_batch) = n_infill
     n_repeat = 20
 
     so_ensemble = [ExpectedImprovementInfill(), LowerConfidenceBoundInfill(alpha=2.), ProbabilityOfImprovementInfill()]
     so_infills = [
-        (FunctionEstimateConstrainedInfill(), 'y', 1),
-        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 1),
-        (ExpectedImprovementInfill(), 'EI', 1),
-        # (ProbabilityOfImprovementInfill(), 'PoI', 1),
-        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 1),
-        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 2),
-        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 5),
+        (FunctionEstimateConstrainedInfill(), 'y', 1, 'y-mean'),
+        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 1, 'LCB),
+        (ExpectedImprovementInfill(), 'EI', 1, 'EI'),
+        # (ProbabilityOfImprovementInfill(), 'PoI', 1, 'PoI'),
+        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 1, 'Ensemble'),
+        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 2, 'Ensemble (2)'),
+        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 5, 'Ensemble (5)'),
     ]
 
     mo_ensemble = [MinimumPoIInfill(), MinimumPoIInfill(euclidean=True)]  # , LowerConfidenceBoundInfill(alpha=2.)]
     mo_infills = [
-        (MinVariancePFInfill(), 'MVPF', 1),
-        (MinVariancePFInfill(), 'MVPF', 2),
-        (MinVariancePFInfill(), 'MVPF', 5),
-        (MinimumPoIInfill(), 'MPoI', 1),
-        (MinimumPoIInfill(euclidean=True), 'EMPoI', 1),
-        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 1),
-        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 2),
-        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 5),
-        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 1),
-        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 2),
-        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 5),
+        (MinVariancePFInfill(), 'MVPF', 1, 'MVPF'),
+        (MinVariancePFInfill(), 'MVPF', 2, 'MVPF (2)'),
+        (MinVariancePFInfill(), 'MVPF', 5, 'MVPF (5)'),
+        (MinimumPoIInfill(), 'MPoI', 1, 'MPoI'),
+        (MinimumPoIInfill(euclidean=True), 'EMPoI', 1, 'EMPoI'),
+        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 1, 'LCB'),
+        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 2, 'LCB (2)'),
+        # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 5, 'LCB (5)'),
+        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 1, 'Ensemble'),
+        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 2, 'Ensemble (2)'),
+        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 5, 'Ensemble (5)'),
     ]
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
@@ -251,12 +220,14 @@ def exp_00_02_infill(post_process=False):
             for col in [col_eval_compare, col_eval_compare+'_q25', col_eval_compare+'_q75']:
                 strat_data_[f'iter_{col}'] = row_compare[col]/factor
 
-    problems = [(prob, category) for prob, category in _test_problems() if '_G' not in category]
+    problems = [(prob, category, title) for prob, category, title in _test_problems() if '_G' not in category]
     problem_paths = []
     problem_names = []
+    p_name_map = {}
     problem: Union[ArchOptProblemBase]
-    for i, (problem, category) in enumerate(problems):
+    for i, (problem, category, title) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
+        p_name_map[name] = title
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
@@ -276,7 +247,7 @@ def exp_00_02_infill(post_process=False):
 
         algorithms = []
         algo_names = []
-        for infill, infill_name, n_batch in (so_infills if problem.n_obj == 1 else mo_infills):
+        for infill, infill_name, n_batch, _ in (so_infills if problem.n_obj == 1 else mo_infills):
             model, norm = ModelFactory(problem).get_md_kriging_model(multi=True)
             sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
             sbo_algo = sbo.algorithm(infill_size=n_batch, init_size=n_init)
@@ -289,13 +260,14 @@ def exp_00_02_infill(post_process=False):
 
         _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
-        _plot_for_pub(exps, met_plot_map={
+        plot_for_pub(exps, met_plot_map={
             'delta_hv': ['ratio'],
         }, algo_name_map={})
         plt.close('all')
 
     def _add_cols(df_agg_):
         df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
+        df_agg_['infill'] = [val[1] for val in df_agg_.index]
         return df_agg_
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
@@ -313,6 +285,32 @@ def exp_00_02_infill(post_process=False):
     _make_comparison_df(df_agg[df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='mo', **kwargs)
     _make_comparison_df(df_agg[~df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='so', **kwargs)
     _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', **kwargs)
+
+    green = matplotlib.cm.get_cmap('Greens')
+    blue = matplotlib.cm.get_cmap('Blues')
+    orange = matplotlib.cm.get_cmap('Oranges')
+
+    so_cat_names = [inf_data[3] for inf_data in so_infills]
+    so_cat_colors = [
+        green(.5), orange(.5),
+        blue(.25), blue(.5), blue(.75),
+    ]
+    plot_problem_bars(df_agg[~df_agg.is_mo], folder, 'infill', 'delta_hv_regret', prefix='so', prob_name_map=p_name_map,
+                      cat_colors=so_cat_colors, label_rot=0, label_i=2, cat_names=so_cat_names)
+    plot_problem_bars(df_agg[~df_agg.is_mo], folder, 'infill', 'iter_delta_hv_regret', prefix='so_iter', prob_name_map=p_name_map,
+                      cat_colors=so_cat_colors, label_rot=0, label_i=2, cat_names=so_cat_names)
+
+    mo_cat_names = [inf_data[3] for inf_data in mo_infills]
+    mo_cat_colors = [
+        green(.25), green(.5), green(.75),
+        orange(.33), orange(.66),
+        blue(.25), blue(.5), blue(.75),
+    ]
+    plot_problem_bars(df_agg[df_agg.is_mo], folder, 'infill', 'delta_hv_regret', prefix='mo', prob_name_map=p_name_map,
+                      cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names)
+    plot_problem_bars(df_agg[df_agg.is_mo], folder, 'infill', 'iter_delta_hv_regret', prefix='mo_iter', prob_name_map=p_name_map,
+                      cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names)
+
     plt.close('all')
 
 
@@ -510,12 +508,14 @@ def exp_00_03_constraints(post_process=False):
         #     for col in [col_eval_compare, col_eval_compare+'_q25', col_eval_compare+'_q75']:
         #         strat_data_[f'iter_{col}'] = row_compare[col]/factor
 
-    problems = [(prob, category) for prob, category in _test_problems() if '_G' in category]
+    problems = [(prob, category, title) for prob, category, title in _test_problems() if '_G' in category]
     problem_paths = []
     problem_names = []
+    problem_name_map = {}
     problem: Union[ArchOptProblemBase]
-    for i, (problem, category) in enumerate(problems):
+    for i, (problem, category, title) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
+        problem_name_map[name] = title
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
@@ -551,7 +551,7 @@ def exp_00_03_constraints(post_process=False):
 
         _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
-        _plot_for_pub(exps, met_plot_map={
+        plot_for_pub(exps, met_plot_map={
             'delta_hv': ['ratio'],
         }, algo_name_map={})
         plt.close('all')
@@ -777,7 +777,7 @@ def exp_00_04_high_dim(post_process=False):
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
 
-        _plot_for_pub(exps, met_plot_map={
+        plot_for_pub(exps, met_plot_map={
             'delta_hv': ['ratio'],
         }, algo_name_map={'BO': 'Continuous GP', 'MD-BO': 'Mixed-discrete GP'})
         plt.close('all')
@@ -785,8 +785,8 @@ def exp_00_04_high_dim(post_process=False):
 
 if __name__ == '__main__':
     # exp_00_01_md_gp()
-    # exp_00_02_infill()
+    exp_00_02_infill()
     # exp_00_03a_plot_constraints()
     # exp_00_03b_multi_y()
-    exp_00_03_constraints()
-    exp_00_04_high_dim()
+    # exp_00_03_constraints()
+    # exp_00_04_high_dim()
