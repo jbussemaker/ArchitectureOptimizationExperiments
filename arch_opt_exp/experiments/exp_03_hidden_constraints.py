@@ -414,12 +414,20 @@ _strategies: List[HiddenConstraintStrategy] = [
 ]
 
 
-def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population):
-    model, norm = ModelFactory(problem).get_md_kriging_model()
+def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population, verbose=False,
+             aggregate_g=None, kpls_n_dim: int = None, cont=False):
+    kpls_n_comp = kpls_n_dim if kpls_n_dim is not None and problem.n_var > kpls_n_dim else None
+    if cont:
+        model = ModelFactory.get_kriging_model(kpls_n_comp=kpls_n_comp)
+        norm = ModelFactory.get_continuous_normalization(problem)
+    else:
+        model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=kpls_n_comp)
     infill, n_batch, agg_g = get_default_infill(problem)
+    if aggregate_g is not None:
+        agg_g = aggregate_g
 
     sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm,
-                               aggregate_g=agg_g).algorithm(infill_size=n_batch, init_size=len(doe_pop))
+                               aggregate_g=agg_g, verbose=verbose).algorithm(infill_size=n_batch, init_size=len(doe_pop))
     sbo.initialization = Initialization(doe_pop)
     return sbo
 
@@ -606,14 +614,16 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     plt.close('all')
 
 
-def _get_metrics(problem):
+def _get_metrics(problem, allow_evaluate=True):
     metrics = get_exp_metrics(problem, including_convergence=False) +\
-              [FailRateMetric(), PredictorMetric(), SBOTimesMetric()]
+              [FailRateMetric(), SBOTimesMetric()]
     additional_plot = {
         'fail': ['rate', 'ratio'],
-        'hc_pred': ['acc', 'max_acc', 'max_acc_pov'],
         'time': ['train', 'infill'],
     }
+    if allow_evaluate:
+        metrics.append(PredictorMetric())
+        additional_plot['hc_pred'] = ['acc', 'max_acc', 'max_acc_pov']
     return metrics, additional_plot
 
 
@@ -890,9 +900,9 @@ def exp_03_07_engine_arch(post_process=False):
     k_doe = 2
 
     problems = [
-        # problem, n_budget
-        (SimpleTurbofanArch(), 150),
-        (RealisticTurbofanArch(), 400),
+        # problem, n_budget, heavy
+        (SimpleTurbofanArch(), 200, False),
+        # (RealisticTurbofanArch(), 400, True),
     ]
     strategies: List[HiddenConstraintStrategy] = [
         # RejectionHCStrategy(),
@@ -905,7 +915,7 @@ def exp_03_07_engine_arch(post_process=False):
     problem_names = []
     doe_folders = []
     problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
-    for i, (problem, n_budget) in enumerate(problems):
+    for i, (problem, _, _) in enumerate(problems):
         name = f'{problem.__class__.__name__}'
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
@@ -930,7 +940,7 @@ def exp_03_07_engine_arch(post_process=False):
         doe_algo.setup(problem)
         doe_algo.run()
 
-    for i, (problem, n_budget) in enumerate(problems):
+    for i, (problem, n_budget, is_heavy) in enumerate(problems):
         name = problem_names[i]
         prob_doe_folder = doe_folders[i]
         problem_path = problem_paths[i]
@@ -939,20 +949,23 @@ def exp_03_07_engine_arch(post_process=False):
         n_init = len(doe)
         log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
 
-        metrics, additional_plot = _get_metrics(problem)
+        metrics, additional_plot = _get_metrics(problem, allow_evaluate=False)
         # additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
 
         algorithms = []
         algo_names = []
         for j, strategy in enumerate(strategies):
-            sbo = _get_sbo(problem, strategy, doe)
+            agg_g = is_heavy
+            cont = is_heavy
+            kpls_n_dim = 10 if is_heavy else None
+            sbo = _get_sbo(problem, strategy, doe, verbose=True, aggregate_g=agg_g, kpls_n_dim=kpls_n_dim, cont=cont)
             algorithms.append(sbo)
             algo_names.append(str(strategy))
 
         do_run = not post_process
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_budget-n_init,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   return_exp=post_process, n_parallel=1)
+                   return_exp=False, n_parallel=1)
         _agg_prob_exp(problem, problem_path, exps)
         plt.close('all')
 
