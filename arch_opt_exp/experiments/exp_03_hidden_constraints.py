@@ -696,15 +696,7 @@ def exp_03_05_optimization(post_process=False):
         df_agg_['pw_strat'] = [val[1].split(':')[1].strip() if 'Predicted Worst' in val[1] else None
                                for val in df_agg_.index]
 
-        df_agg_['perf_rank'] = df_agg_.groupby(level=0, axis=0, group_keys=False).apply(lambda x: _get_ranks(x, 'delta_hv_regret', n_repeat))
-        df_agg_['is_best'] = df_agg_['perf_rank'] == 1
-        df_agg_['n_is_best'] = df_agg_.groupby(level=1, axis=0, group_keys=False).apply(lambda x: _count_bool(x, 'is_best'))
-
-        df_agg_['is_good'] = df_agg_['perf_rank'] <= 2
-        df_agg_['n_is_good'] = df_agg_.groupby(level=1, axis=0, group_keys=False).apply(lambda x: _count_bool(x, 'is_good'))
-
-        df_agg_['is_bad'] = df_agg_['perf_rank'] >= 4
-        df_agg_['n_is_bad'] = df_agg_.groupby(level=1, axis=0, group_keys=False).apply(lambda x: _count_bool(x, 'is_bad'))
+        analyze_perf_rank(df_agg_, 'delta_hv_regret', n_repeat)
 
         for t_col in ['time_train', 'time_infill']:
             for c in [t_col, t_col+'_q25', t_col+'_q75']:
@@ -731,40 +723,6 @@ def exp_03_05_optimization(post_process=False):
     plot_problem_bars(df_agg, folder, 'g_f_strat', 'fail_ratio')
     plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_ratio')
     plt.close('all')
-
-
-def _get_ranks(df: pd.DataFrame, col: str, n_samples: int):
-    from scipy.stats.distributions import norm
-    from scipy.stats import ttest_ind_from_stats
-
-    mean_val = df[col].values
-    n = norm(0, 1)
-    std_val = (df[col+'_q75'].values-df[col+'_q25'].values)/(n.ppf(.75)-n.ppf(.25))
-
-    ranks = np.zeros((len(df),), dtype=int)
-    i_compare = np.argmin(mean_val)
-    ranks[i_compare] = 1
-
-    while np.any(ranks == 0):
-        not_compared = np.where(ranks == 0)[0]
-        j_compare = not_compared[np.argmin(mean_val[not_compared])]
-
-        p = ttest_ind_from_stats(mean_val[i_compare], std_val[i_compare], n_samples,
-                                 mean_val[j_compare], std_val[j_compare], n_samples,
-                                 equal_var=False).pvalue
-
-        if p <= .10:  # Means are not the same: increase rank count
-            ranks[j_compare] = ranks[i_compare]+1
-            i_compare = j_compare
-        else:
-            ranks[j_compare] = ranks[i_compare]
-
-    return pd.Series(index=df.index, data=ranks)
-
-
-def _count_bool(df: pd.DataFrame, col: str):
-    n = df[col].sum()
-    return pd.Series(index=df.index, data=[n]*len(df))
 
 
 def _agg_prob_exp(problem, problem_path, exps):

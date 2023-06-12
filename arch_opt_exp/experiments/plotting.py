@@ -15,13 +15,14 @@ Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from werkzeug.utils import secure_filename
 
 from arch_opt_exp.experiments.experimenter import *
 
-__all__ = ['plot_scatter', 'plot_problem_bars', 'plot_for_pub']
+__all__ = ['plot_scatter', 'plot_problem_bars', 'plot_for_pub', 'analyze_perf_rank']
 
 
 _col_names = {
@@ -177,3 +178,55 @@ def plot_for_pub(exps, met_plot_map, algo_name_map=None, colors=None, styles=Non
         ExperimenterResult.plot_compare_metrics(
             results, metric, plot_value_names=metric_values, plot_evaluations=True, save_filename=save_filename,
             plot_callback=_plot_callback, save_svg=True, colors=colors, styles=styles, show=False)
+
+
+def analyze_perf_rank(df: pd.DataFrame, perf_col: str, n_repeat: int, perf_min=True, prefix=None):
+    prefix = '' if prefix is None else f'{prefix}_'
+    df[prefix+'perf_rank'] = df.groupby(level=0, axis=0, group_keys=False).apply(
+        lambda x: get_ranks(x, perf_col, n_repeat, perf_min=perf_min))
+    df[prefix+'is_best'] = df[prefix+'perf_rank'] == 1
+    df[prefix+'n_is_best'] = df.groupby(level=1, axis=0, group_keys=False).apply(
+        lambda x: count_bool(x, prefix+'is_best'))
+
+    df[prefix+'is_good'] = df[prefix+'perf_rank'] <= 2
+    df[prefix+'n_is_good'] = df.groupby(level=1, axis=0, group_keys=False).apply(
+        lambda x: count_bool(x, prefix+'is_good'))
+
+    df[prefix+'is_bad'] = df[prefix+'perf_rank'] >= 4
+    df[prefix+'n_is_bad'] = df.groupby(level=1, axis=0, group_keys=False).apply(
+        lambda x: count_bool(x, prefix+'is_bad'))
+    return df
+
+
+def get_ranks(df: pd.DataFrame, col: str, n_samples: int, perf_min=True):
+    from scipy.stats.distributions import norm
+    from scipy.stats import ttest_ind_from_stats
+
+    mean_val = df[col].values
+    n = norm(0, 1)
+    std_val = (df[col+'_q75'].values-df[col+'_q25'].values)/(n.ppf(.75)-n.ppf(.25))
+
+    ranks = np.zeros((len(df),), dtype=int)
+    i_compare = np.argmin(mean_val) if perf_min else np.argmax(mean_val)
+    ranks[i_compare] = 1
+
+    while np.any(ranks == 0):
+        not_compared = np.where(ranks == 0)[0]
+        j_compare = not_compared[np.argmin(mean_val[not_compared]) if perf_min else np.argmax(mean_val[not_compared])]
+
+        p = ttest_ind_from_stats(mean_val[i_compare], std_val[i_compare], n_samples,
+                                 mean_val[j_compare], std_val[j_compare], n_samples,
+                                 equal_var=False).pvalue
+
+        if p <= .10:  # Means are not the same: increase rank count
+            ranks[j_compare] = ranks[i_compare]+1
+            i_compare = j_compare
+        else:
+            ranks[j_compare] = ranks[i_compare]
+
+    return pd.Series(index=df.index, data=ranks)
+
+
+def count_bool(df: pd.DataFrame, col: str):
+    n = df[col].sum()
+    return pd.Series(index=df.index, data=[n]*len(df))

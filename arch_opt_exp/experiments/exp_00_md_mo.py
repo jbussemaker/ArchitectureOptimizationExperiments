@@ -76,10 +76,12 @@ _test_problems = lambda: [
     (ConBraninGomez(), '04_C_SO_G', 'Constr. Branin (Gomez)'),
     (ArchCantileveredBeam(), '04_C_SO_G', 'Cant. Beam'),
     (MDCantileveredBeam(), '05_MD_SO_G', 'MD Cant. Beam'),
-    (ArchWeldedBeam(), '06_C_MO_G', 'Welded Beam'),
-    (ArchCarside(), '06_C_MO_G', 'Carside'),
-    (MDWeldedBeam(), '07_MD_MO_G', 'MD Welded Beam'),
-    (MDCarside(), '07_MD_MO_G', 'MD Carside'),
+    (ArchOSY(), '06_C_MO_G', 'Osy.-Kundu'),
+    (MDOSY(), '07_MD_MO_G', 'MD Osy.-Kundu'),
+    # (ArchWeldedBeam(), '06_C_MO_G', 'Welded Beam'),
+    # (ArchCarside(), '06_C_MO_G', 'Carside'),
+    # (MDWeldedBeam(), '07_MD_MO_G', 'MD Welded Beam'),
+    # (MDCarside(), '07_MD_MO_G', 'MD Carside'),
 ]
 
 
@@ -268,6 +270,14 @@ def exp_00_02_infill(post_process=False):
     def _add_cols(df_agg_):
         df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
         df_agg_['infill'] = [val[1] for val in df_agg_.index]
+
+        df_agg_so = analyze_perf_rank(df_agg_[~df_agg_.is_so].copy(), 'delta_hv_regret', n_repeat)
+        df_agg_mo = analyze_perf_rank(df_agg_[df_agg_.is_mo].copy(), 'delta_hv_regret', n_repeat)
+
+        df_agg_so = analyze_perf_rank(df_agg_so, 'iter_delta_hv_regret', n_repeat, prefix='iter')
+        df_agg_mo = analyze_perf_rank(df_agg_mo, 'iter_delta_hv_regret', n_repeat, prefix='iter')
+
+        df_agg_ = pd.concat([df_agg_so, df_agg_mo])
         return df_agg_
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
@@ -486,14 +496,14 @@ def exp_00_03_constraints(post_process=False):
     n_repeat = 20
 
     strategies = [
-        (MeanConstraintPrediction(), 'g', False),
-        (MeanConstraintPrediction(), 'g_agg', True),
-        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25', True),
-        (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50', True),
-        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75', True),
-        # (AdaptiveProbabilityOfFeasibility(min_pof_bounds=(.1, .5)), 'APoF', True),
-        (UpperTrustBound(tau=1.), 'UTB_10', True),
-        (UpperTrustBound(tau=2.), 'UTB_20', True),
+        (MeanConstraintPrediction(), 'g', False, 'g-mean'),
+        (MeanConstraintPrediction(), 'g_agg', True, 'g-mean (Agg.)'),
+        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25', True, 'PoF (25%)'),
+        (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50', True, 'PoF (50%)'),
+        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75', True, 'PoF (75%)'),
+        # (AdaptiveProbabilityOfFeasibility(min_pof_bounds=(.1, .5)), 'APoF', True, 'APoF'),
+        (UpperTrustBound(tau=1.), 'UTB_10', True, 'UTB ($\\tau$ = 1)'),
+        (UpperTrustBound(tau=2.), 'UTB_20', True, 'UTB ($\\tau$ = 2)'),
     ]
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
@@ -511,11 +521,11 @@ def exp_00_03_constraints(post_process=False):
     problems = [(prob, category, title) for prob, category, title in _test_problems() if '_G' in category]
     problem_paths = []
     problem_names = []
-    problem_name_map = {}
+    p_name_map = {}
     problem: Union[ArchOptProblemBase]
     for i, (problem, category, title) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
-        problem_name_map[name] = title
+        p_name_map[name] = title
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
@@ -535,7 +545,7 @@ def exp_00_03_constraints(post_process=False):
 
         algorithms = []
         algo_names = []
-        for strategy, strategy_name, aggregate in strategies:
+        for strategy, strategy_name, aggregate, _ in strategies:
             infill, n_batch, _ = get_default_infill(problem, n_parallel=1)
             infill.constraint_strategy = strategy
             model, norm = ModelFactory(problem).get_md_kriging_model(multi=True)
@@ -558,6 +568,8 @@ def exp_00_03_constraints(post_process=False):
 
     def _add_cols(df_agg_):
         df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
+        df_agg_['strategy'] = [val[1] for val in df_agg_.index]
+        analyze_perf_rank(df_agg_, 'delta_hv_regret', n_repeat)
         return df_agg_
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
@@ -568,6 +580,22 @@ def exp_00_03_constraints(post_process=False):
     _make_comparison_df(df_agg[df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
     # _make_comparison_df(df_agg[~df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='so', strategy_map=strategy_map, prob_map=prob_map)
     # _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', strategy_map=strategy_map, prob_map=prob_map)
+
+    green = matplotlib.cm.get_cmap('Greens')
+    blue = matplotlib.cm.get_cmap('Blues')
+    orange = matplotlib.cm.get_cmap('Oranges')
+
+    cat_names = [inf_data[3] for inf_data in strategies]
+    cat_colors = [
+        green(.33), green(.66),
+        orange(.25), orange(.5), orange(.75),
+        blue(.33), blue(.66),
+    ]
+    plot_problem_bars(df_agg, folder, 'strategy', 'delta_hv_regret', prob_name_map=p_name_map,
+                      cat_colors=cat_colors, label_rot=0, label_i=3, cat_names=cat_names)
+    # plot_problem_bars(df_agg, folder, 'strategy', 'iter_delta_hv_regret', prefix='iter', prob_name_map=p_name_map,
+    #                   cat_colors=cat_colors, label_rot=0, label_i=3, cat_names=cat_names)
+
     plt.close('all')
 
 
@@ -785,8 +813,8 @@ def exp_00_04_high_dim(post_process=False):
 
 if __name__ == '__main__':
     # exp_00_01_md_gp()
-    exp_00_02_infill()
+    # exp_00_02_infill()
     # exp_00_03a_plot_constraints()
     # exp_00_03b_multi_y()
-    # exp_00_03_constraints()
+    exp_00_03_constraints()
     # exp_00_04_high_dim()
