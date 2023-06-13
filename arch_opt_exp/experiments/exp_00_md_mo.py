@@ -271,7 +271,7 @@ def exp_00_02_infill(post_process=False):
         df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
         df_agg_['infill'] = [val[1] for val in df_agg_.index]
 
-        df_agg_so = analyze_perf_rank(df_agg_[~df_agg_.is_so].copy(), 'delta_hv_regret', n_repeat)
+        df_agg_so = analyze_perf_rank(df_agg_[~df_agg_.is_mo].copy(), 'delta_hv_regret', n_repeat)
         df_agg_mo = analyze_perf_rank(df_agg_[df_agg_.is_mo].copy(), 'delta_hv_regret', n_repeat)
 
         df_agg_so = analyze_perf_rank(df_agg_so, 'iter_delta_hv_regret', n_repeat, prefix='iter')
@@ -813,8 +813,8 @@ def exp_00_04_high_dim(post_process=False):
 
 if __name__ == '__main__':
     # exp_00_01_md_gp()
-    # exp_00_02_infill()
+    exp_00_02_infill()
     # exp_00_03a_plot_constraints()
     # exp_00_03b_multi_y()
-    exp_00_03_constraints()
+    # exp_00_03_constraints()
     # exp_00_04_high_dim()
