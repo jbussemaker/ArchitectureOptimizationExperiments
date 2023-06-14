@@ -35,14 +35,37 @@ __all__ = ['ProbabilityOfImprovementInfill', 'LowerConfidenceBoundInfill', 'Mini
 
 class ConstraintAggSBOInfill(SBOInfill):
 
-    def __init__(self, *args, aggregate=False, **kwargs):
+    def __init__(self, *args, aggregate_g=False, eliminate_g=False, **kwargs):
         super().__init__(*args, **kwargs)
-        self._aggregate_g = aggregate
+        self._aggregate_g = aggregate_g
+        self._eliminate_g = eliminate_g
 
     def _get_normalize_g(self, g: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         g_ref = g
-        if self._aggregate_g:
+
+        # Remove constraints that are never violated by themselves
+        if self._eliminate_g:
+            while g_ref.shape[1] > 1:
+                for i_g in range(g_ref.shape[1]):
+                    is_violated = g_ref[:, i_g] > 0
+                    g_ref_other = np.delete(g_ref, i_g, axis=1)
+
+                    # No need to train GP if this constraint is never violated
+                    if not np.any(is_violated):
+                        break
+
+                    all_other_satisfied = np.all(g_ref_other <= 0, axis=1)
+                    i_g_only_active = is_violated & all_other_satisfied
+                    if not np.any(i_g_only_active):
+                        break
+                else:
+                    break
+
+                g_ref = g_ref_other
+
+        elif self._aggregate_g:
             g_ref = np.array([np.max(g, axis=1)]).T
+
         return self._normalize_y(g_ref, keep_centered=True)
 
 
@@ -335,11 +358,11 @@ class UpperTrustBound(ConstraintStrategy):
     application to aircraft design. Aerospace Science and Technology, 105, p.105980.
     """
 
-    def __init__(self, tau: float = None):
+    def __init__(self, tau: float = None, aggregation: ConstraintAggregation = None):
         if tau is None:
             tau = 3
         self.tau = tau
-        super().__init__()
+        super().__init__(aggregation=aggregation)
 
     def evaluate(self, x: np.ndarray, g: np.ndarray, g_var: np.ndarray) -> np.ndarray:
         utb = g - self.tau*np.sqrt(g_var)

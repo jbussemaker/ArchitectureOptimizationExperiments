@@ -228,7 +228,7 @@ def exp_02_02_hier_strategies(sbo=False):
 
         if sbo:
             n_eval_max = n_infill
-            infill, n_batch, agg_g = get_default_infill(problem)
+            infill, n_batch = get_default_infill(problem)
             algorithms = []
             for problem_ in problems:
                 model, norm = ModelFactory(problem_).get_md_kriging_model(kpls_n_comp=n_kpls)
@@ -351,7 +351,7 @@ def exp_02_03_sensitivities(sbo=False, mrd=False):
 
         if sbo:
             n_eval_max = n_infill
-            infill, n_batch, agg_g = get_default_infill(problem)
+            infill, n_batch = get_default_infill(problem)
             algorithms = []
             for problem_ in problems:
                 model, norm = ModelFactory(problem_).get_md_kriging_model(kpls_n_comp=n_kpls)

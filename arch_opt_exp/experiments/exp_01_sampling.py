@@ -817,7 +817,7 @@ def exp_01_06_opt(post_process=False):
             metrics, additional_plot = _get_metrics(problem)
             additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
             model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=n_kpls)
-            infill, n_batch, agg_g = get_default_infill(problem)
+            infill, n_batch = get_default_infill(problem)
 
             algorithms = []
             algo_names = []
@@ -826,7 +826,7 @@ def exp_01_06_opt(post_process=False):
                 #     xm = sampler.get_merged_x(problem)
                 # continue
                 sbo = SBOInfill(
-                    model, infill, pop_size=100, termination=100, normalization=norm, aggregate_g=agg_g, verbose=True)
+                    model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
                 sbo_algo = sbo.algorithm(infill_size=1, init_sampling=sampler, init_size=n_init)
                 algorithms.append(sbo_algo)
                 algo_names.append(sampler_name)

@@ -415,19 +415,17 @@ _strategies: List[HiddenConstraintStrategy] = [
 
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population, verbose=False,
-             aggregate_g=None, kpls_n_dim: int = None, cont=False):
+             g_aggregation: ConstraintAggregation = None, kpls_n_dim: int = None, cont=False):
     kpls_n_comp = kpls_n_dim if kpls_n_dim is not None and problem.n_var > kpls_n_dim else None
     if cont:
         model = ModelFactory.get_kriging_model(kpls_n_comp=kpls_n_comp)
         norm = ModelFactory.get_continuous_normalization(problem)
     else:
         model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=kpls_n_comp)
-    infill, n_batch, agg_g = get_default_infill(problem)
-    if aggregate_g is not None:
-        agg_g = aggregate_g
+    infill, n_batch = get_default_infill(problem, g_aggregation=g_aggregation)
 
     sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm,
-                               aggregate_g=agg_g, verbose=verbose).algorithm(infill_size=n_batch, init_size=len(doe_pop))
+                               verbose=verbose).algorithm(infill_size=n_batch, init_size=len(doe_pop))
     sbo.initialization = Initialization(doe_pop)
     return sbo
 
@@ -955,10 +953,10 @@ def exp_03_07_engine_arch(post_process=False):
         algorithms = []
         algo_names = []
         for j, strategy in enumerate(strategies):
-            agg_g = is_heavy
+            agg_g = ConstraintAggregation.ELIMINATE if is_heavy else None
             cont = is_heavy
             kpls_n_dim = 10 if is_heavy else None
-            sbo = _get_sbo(problem, strategy, doe, verbose=True, aggregate_g=agg_g, kpls_n_dim=kpls_n_dim, cont=cont)
+            sbo = _get_sbo(problem, strategy, doe, verbose=True, g_aggregation=agg_g, kpls_n_dim=kpls_n_dim, cont=cont)
             algorithms.append(sbo)
             algo_names.append(str(strategy))
 

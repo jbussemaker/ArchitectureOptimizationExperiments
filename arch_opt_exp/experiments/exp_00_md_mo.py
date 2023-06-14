@@ -72,12 +72,12 @@ _test_problems = lambda: [
     (MORosenbrock(), '02_C_MO', 'MO Rosenbrock'),
     (MDMOGoldstein(), '03_MD_MO', 'MD-MO Goldstein'),
     (MDMORosenbrock(), '03_MD_MO', 'MD-MO Rosenbrock'),
-    (ConBraninProd(), '04_C_SO_G', 'Constr. Branin'),
-    (ConBraninGomez(), '04_C_SO_G', 'Constr. Branin (Gomez)'),
-    (ArchCantileveredBeam(), '04_C_SO_G', 'Cant. Beam'),
-    (MDCantileveredBeam(), '05_MD_SO_G', 'MD Cant. Beam'),
-    (ArchOSY(), '06_C_MO_G', 'Osy.-Kundu'),
-    (MDOSY(), '07_MD_MO_G', 'MD Osy.-Kundu'),
+    (ConBraninProd(), '04_C_SO_G', 'Constr. Branin'),  # 1 constr
+    (ConBraninGomez(), '04_C_SO_G', 'Constr. Branin (Gomez)'),  # 1 constr
+    (ArchCantileveredBeam(), '04_C_SO_G', 'Cant. Beam'),  # 2 constr
+    (MDCantileveredBeam(), '05_MD_SO_G', 'MD Cant. Beam'),  # 2 constr
+    (ArchOSY(), '06_C_MO_G', 'Osy.-Kundu'),  # 6 constr
+    (MDOSY(), '07_MD_MO_G', 'MD Osy.-Kundu'),  # 6 constr
     # (ArchWeldedBeam(), '06_C_MO_G', 'Welded Beam'),
     # (ArchCarside(), '06_C_MO_G', 'Carside'),
     # (MDWeldedBeam(), '07_MD_MO_G', 'MD Welded Beam'),
@@ -360,11 +360,11 @@ def exp_00_03a_plot_constraints():
             strategy_folder = f'{folder}/{prob_name}_{i:02d}_{secure_filename(strat_name)}'
             os.makedirs(strategy_folder, exist_ok=True)
 
-            infill, n_batch, agg_g = get_default_infill(problem, n_parallel=1)
+            infill, n_batch = get_default_infill(problem, n_parallel=1)
             infill.constraint_strategy = strategy
             model, norm = ModelFactory(problem).get_md_kriging_model()
             sbo_infill = HiddenConstraintsSBO(model, infill, pop_size=100, termination=100, normalization=norm,
-                                              aggregate_g=agg_g, verbose=False)
+                                              verbose=False)
             sbo_infill.hc_strategy = RejectionHCStrategy()
 
             sbo = sbo_infill.algorithm(infill_size=n_batch, init_size=n_init)
@@ -496,14 +496,14 @@ def exp_00_03_constraints(post_process=False):
     n_repeat = 20
 
     strategies = [
-        (MeanConstraintPrediction(), 'g', False, 'g-mean'),
-        (MeanConstraintPrediction(), 'g_agg', True, 'g-mean (Agg.)'),
-        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25', False, 'PoF (25%)'),
-        # (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50', False, 'PoF (50%)'),
-        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75', False, 'PoF (75%)'),
-        # (AdaptiveProbabilityOfFeasibility(min_pof_bounds=(.1, .5)), 'APoF', False, 'APoF'),
-        (UpperTrustBound(tau=1.), 'UTB_10', False, 'UTB ($\\tau$ = 1)'),
-        (UpperTrustBound(tau=2.), 'UTB_20', False, 'UTB ($\\tau$ = 2)'),
+        # strategy, name, aggregate, eliminate, title
+        (MeanConstraintPrediction(), 'g', False, False, 'g-mean'),
+        (MeanConstraintPrediction(), 'g_agg', True, False, 'g-mean (Agg.)'),
+        (MeanConstraintPrediction(), 'g_elim', False, True, 'g-mean (Elim.)'),
+        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25', False, False, 'PoF (25%)'),
+        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75', False, False, 'PoF (75%)'),
+        (UpperTrustBound(tau=1.), 'UTB_10', False, False, 'UTB ($\\tau$ = 1)'),
+        (UpperTrustBound(tau=2.), 'UTB_20', False, False, 'UTB ($\\tau$ = 2)'),
     ]
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
@@ -548,12 +548,13 @@ def exp_00_03_constraints(post_process=False):
 
         algorithms = []
         algo_names = []
-        for strategy, strategy_name, aggregate, _ in strategies:
-            infill, n_batch, _ = get_default_infill(problem, n_parallel=1)
+        for strategy, strategy_name, aggregate, eliminate, _ in strategies:
+            infill, n_batch = get_default_infill(problem, n_parallel=1)
             infill.constraint_strategy = strategy
             model, norm = ModelFactory(problem).get_md_kriging_model(multi=True)
-            sbo = SBOInfill(
-                model, infill, pop_size=100, termination=100, normalization=norm, aggregate_g=aggregate, verbose=False)
+            sbo = ConstraintAggSBOInfill(
+                model, infill, pop_size=100, termination=100, normalization=norm, aggregate_g=aggregate,
+                eliminate_g=eliminate, verbose=False)
             sbo_algo = sbo.algorithm(infill_size=n_batch, init_size=n_init)
             algorithms.append(sbo_algo)
             algo_names.append(strategy_name)
@@ -590,10 +591,9 @@ def exp_00_03_constraints(post_process=False):
     blue = matplotlib.cm.get_cmap('Blues')
     orange = matplotlib.cm.get_cmap('Oranges')
 
-    cat_names = [inf_data[3] for inf_data in strategies]
+    cat_names = [inf_data[4] for inf_data in strategies]
     cat_colors = [
-        green(.33), green(.66),
-        # orange(.25), orange(.5), orange(.75),
+        green(.25), green(.5), green(.75),
         orange(.33), orange(.66),
         blue(.33), blue(.66),
     ]
