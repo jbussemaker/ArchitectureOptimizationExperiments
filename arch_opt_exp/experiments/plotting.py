@@ -30,6 +30,7 @@ _col_names = {
     'fail_ratio': 'Fail rate ratio',
     'delta_hv_ratio': 'Delta HV ratio',
     'delta_hv_regret': 'Delta HV regret',
+    'delta_hv_abs_regret': 'Delta HV regret',
     'iter_delta_hv_regret': 'Delta HV regret',
     'delta_hv_delta_hv': 'Delta HV',
     'hc_pred_acc': 'Predictor Accuracy',
@@ -87,7 +88,7 @@ def plot_scatter(df_agg, folder, x_col, y_col, z_col=None, x_log=False, y_log=Fa
 
 
 def plot_problem_bars(df_agg, folder, cat_col, y_col, y_log=False, prefix=None, prob_name_map=None, cat_colors=None,
-                      label_i=None, label_rot=65, cat_names=None):
+                      label_i=None, label_rot=65, cat_names=None, rel=False):
     if prob_name_map is None:
         prob_name_map = {}
     col_name, y_col_name = _col_names[cat_col], _col_names[y_col]
@@ -108,6 +109,7 @@ def plot_problem_bars(df_agg, folder, cat_col, y_col, y_log=False, prefix=None, 
     w = w0/len(categories)
     x_bars, y_bars, y_lower, y_upper, colors, labels = [], [], [], [], [], []
     for prob_name, df_group in df_agg.groupby(level=0):
+        median_factor = None
         for i_cat, cat_value in enumerate(categories):
             cat_mask = df_group[cat_col] == cat_value
             medians = list(df_group[y_col].values[cat_mask])
@@ -117,12 +119,18 @@ def plot_problem_bars(df_agg, folder, cat_col, y_col, y_log=False, prefix=None, 
             if len(medians) == 0:
                 continue
 
+            if median_factor is None:
+                if rel:
+                    median_factor = 1/np.nanmedian(medians)
+                else:
+                    median_factor = 1.
+
             x_bars.append(x-.5*w0+w*i_cat)
             labels.append(prob_name_map.get(prob_name, prob_name) if i_cat == i_mid_cat else '')
             medians = sorted(medians)
-            y_bars.append(np.nanmedian(medians))
-            y_lower.append(y_bars[-1]-np.nanquantile(medians, .25))
-            y_upper.append(np.nanquantile(medians, .75)-y_bars[-1])
+            y_bars.append(np.nanmedian(medians)*median_factor)
+            y_lower.append(y_bars[-1]-np.nanquantile(medians, .25)*median_factor)
+            y_upper.append(np.nanquantile(medians, .75)*median_factor-y_bars[-1])
             colors.append(cat_colors[i_cat])
         x += 1
 
@@ -135,7 +143,7 @@ def plot_problem_bars(df_agg, folder, cat_col, y_col, y_log=False, prefix=None, 
                      cat_names if cat_names is not None else categories, loc='center left', bbox_to_anchor=(1, .5),
                      frameon=False)
     plt.gca().spines[['right', 'top']].set_visible(False)
-    plt.ylabel(y_col_name)
+    plt.ylabel(f'{y_col_name} (relative)' if rel else y_col_name)
     plt.tight_layout()
 
     prefix = f'{prefix}_' if prefix is not None else ''

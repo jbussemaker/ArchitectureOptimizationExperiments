@@ -20,10 +20,12 @@ import numpy as np
 import pandas as pd
 from typing import *
 import concurrent.futures
+import matplotlib
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
 from arch_opt_exp.experiments.runner import *
 from arch_opt_exp.experiments.metrics import *
+from arch_opt_exp.experiments.plotting import *
 from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.hc_strategies.metrics import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
@@ -786,25 +788,29 @@ def exp_01_06_opt(post_process=False):
 
     problems = [
         (lambda i_opt_: SelectableTunableBranin(
-            n_sub=n_sub, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER'),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR'),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_), '02_SO_HDR'),  # High diversity range
-        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_opt_), '03_MO_HDR'),
+            n_sub=n_sub, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR', 'Branin IR'),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin IR/MRD'),  # High diversity range
+        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 IR/MRD'),
     ]
     # for i, (problem_factory, category) in enumerate(problems):
     #     problem_factory(0).print_stats()
     # exit()
     problem_paths = []
     problem_names = []
+    prob_name_map = {}
     i_prob = 0
     problem: ArchOptProblemBase
-    for i, (problem_factory, category) in enumerate(problems):
+    for i, (problem_factory, category, title) in enumerate(problems):
         for i_opt in i_opt_test:
             problem = problem_factory(i_opt)
             name = f'{category} {problem.__class__.__name__} opt={i_opt}'
             problem_names.append(name)
+            prob_name_map[name] = f'{title} {"L" if i_opt == 0 else "S"}'
             problem_path = f'{folder}/{secure_filename(name)}'
             problem_paths.append(problem_path)
+            if post_process:
+                continue
 
             n_init = int(np.ceil(doe_k*problem.n_var))
             n_kpls = None
@@ -839,9 +845,31 @@ def exp_01_06_opt(post_process=False):
 
     def _add_cols(df_agg_):
         # df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
+        df_agg_['strategy'] = [val[1] for val in df_agg_.index]
+        analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat)
         return df_agg_
 
     df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    cat_names = [
+        'Random', 'LHS',
+        'Hier.: No Grouping',
+        'Hier.: By $n_{act}$', 'Hier.: By $n_{act}$ (wt.)',
+        'Hier.: By $x_{act}$', 'Hier.: By $x_{act}$ (wt.)',
+    ]
+    green = matplotlib.cm.get_cmap('Greens')
+    blue = matplotlib.cm.get_cmap('Blues')
+    orange = matplotlib.cm.get_cmap('Oranges')
+    cat_colors = [
+        orange(.33), orange(.66),
+        blue(.25),
+        blue(.5), green(.5),
+        blue(.75), green(.75),
+    ]
+    plot_problem_bars(df_agg, folder, 'strategy', 'delta_hv_abs_regret', prob_name_map=prob_name_map,
+                      cat_colors=cat_colors, label_rot=20, label_i=3, cat_names=cat_names, y_log=False, rel=True)
+
+    plt.close('all')
 
 
 def agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
