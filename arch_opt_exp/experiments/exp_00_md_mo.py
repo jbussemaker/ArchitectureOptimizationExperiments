@@ -306,9 +306,9 @@ def exp_00_02_infill(post_process=False):
         blue(.25), blue(.5), blue(.75),
     ]
     plot_problem_bars(df_agg[~df_agg.is_mo], folder, 'infill', 'delta_hv_regret', prefix='so', prob_name_map=p_name_map,
-                      cat_colors=so_cat_colors, label_rot=0, label_i=2, cat_names=so_cat_names)
+                      cat_colors=so_cat_colors, label_rot=0, label_i=2, cat_names=so_cat_names, y_log=True)
     plot_problem_bars(df_agg[~df_agg.is_mo], folder, 'infill', 'iter_delta_hv_regret', prefix='so_iter', prob_name_map=p_name_map,
-                      cat_colors=so_cat_colors, label_rot=0, label_i=2, cat_names=so_cat_names)
+                      cat_colors=so_cat_colors, label_rot=0, label_i=2, cat_names=so_cat_names, y_log=True)
 
     mo_cat_names = [inf_data[3] for inf_data in mo_infills]
     mo_cat_colors = [
@@ -317,9 +317,9 @@ def exp_00_02_infill(post_process=False):
         blue(.25), blue(.5), blue(.75),
     ]
     plot_problem_bars(df_agg[df_agg.is_mo], folder, 'infill', 'delta_hv_regret', prefix='mo', prob_name_map=p_name_map,
-                      cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names)
+                      cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names, y_log=True)
     plot_problem_bars(df_agg[df_agg.is_mo], folder, 'infill', 'iter_delta_hv_regret', prefix='mo_iter', prob_name_map=p_name_map,
-                      cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names)
+                      cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names, y_log=True)
 
     plt.close('all')
 
@@ -485,10 +485,10 @@ def exp_00_03_constraints(post_process=False):
 
     Conclusions:
     - UTB (or PoF < 50%) works well for highly-constrained problems
-    - PoF 50%, PoF 75% and non-aggregated g-mean work best for most problems
-    - g-mean aggregation reduces performance slightly, however at a training time reduction of up to 40%
-    - Recommendation: use g-mean prediction, except if more or less conservatism is needed, or aggregation if training
-      time should be reduced
+    - Non-aggregated PoF 75% works best; PoF 50% and g-mean work are close
+    - g-mean aggregation reduces performance greatly, however at a training time reduction of up to 50%
+    - Recommendation: use PoF 75%, except if more or less conservatism is needed; aggregate if training time should be
+      reduced
     """
     folder = set_results_folder(_exp_00_03_folder)
     n_infill = 30
@@ -498,12 +498,12 @@ def exp_00_03_constraints(post_process=False):
     strategies = [
         (MeanConstraintPrediction(), 'g', False, 'g-mean'),
         (MeanConstraintPrediction(), 'g_agg', True, 'g-mean (Agg.)'),
-        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25', True, 'PoF (25%)'),
-        (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50', True, 'PoF (50%)'),
-        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75', True, 'PoF (75%)'),
-        # (AdaptiveProbabilityOfFeasibility(min_pof_bounds=(.1, .5)), 'APoF', True, 'APoF'),
-        (UpperTrustBound(tau=1.), 'UTB_10', True, 'UTB ($\\tau$ = 1)'),
-        (UpperTrustBound(tau=2.), 'UTB_20', True, 'UTB ($\\tau$ = 2)'),
+        (ProbabilityOfFeasibility(min_pof=.25), 'PoF_25', False, 'PoF (25%)'),
+        # (ProbabilityOfFeasibility(min_pof=.5),  'PoF_50', False, 'PoF (50%)'),
+        (ProbabilityOfFeasibility(min_pof=.75), 'PoF_75', False, 'PoF (75%)'),
+        # (AdaptiveProbabilityOfFeasibility(min_pof_bounds=(.1, .5)), 'APoF', False, 'APoF'),
+        (UpperTrustBound(tau=1.), 'UTB_10', False, 'UTB ($\\tau$ = 1)'),
+        (UpperTrustBound(tau=2.), 'UTB_20', False, 'UTB ($\\tau$ = 2)'),
     ]
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
@@ -533,6 +533,9 @@ def exp_00_03_constraints(post_process=False):
             continue
 
         n_init = int(np.ceil(2*problem.n_var))
+        n_infill_prob = n_infill
+        if isinstance(problem, ConBraninGomez):
+            n_infill_prob *= 2
 
         log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
         problem.pareto_front()
@@ -556,7 +559,7 @@ def exp_00_03_constraints(post_process=False):
             algo_names.append(strategy_name)
 
         do_run = not post_process
-        exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
+        exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill_prob,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
 
         _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
@@ -570,6 +573,8 @@ def exp_00_03_constraints(post_process=False):
         df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
         df_agg_['strategy'] = [val[1] for val in df_agg_.index]
         analyze_perf_rank(df_agg_, 'delta_hv_regret', n_repeat)
+
+        df_agg_ = df_agg_[df_agg_.strategy != 'PoF_50']
         return df_agg_
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
@@ -588,13 +593,14 @@ def exp_00_03_constraints(post_process=False):
     cat_names = [inf_data[3] for inf_data in strategies]
     cat_colors = [
         green(.33), green(.66),
-        orange(.25), orange(.5), orange(.75),
+        # orange(.25), orange(.5), orange(.75),
+        orange(.33), orange(.66),
         blue(.33), blue(.66),
     ]
     plot_problem_bars(df_agg, folder, 'strategy', 'delta_hv_regret', prob_name_map=p_name_map,
-                      cat_colors=cat_colors, label_rot=0, label_i=3, cat_names=cat_names)
+                      cat_colors=cat_colors, label_rot=15, label_i=3, cat_names=cat_names, y_log=True)
     # plot_problem_bars(df_agg, folder, 'strategy', 'iter_delta_hv_regret', prefix='iter', prob_name_map=p_name_map,
-    #                   cat_colors=cat_colors, label_rot=0, label_i=3, cat_names=cat_names)
+    #                   cat_colors=cat_colors, label_rot=15, label_i=3, cat_names=cat_names, y_log=True)
 
     plt.close('all')
 
@@ -813,8 +819,8 @@ def exp_00_04_high_dim(post_process=False):
 
 if __name__ == '__main__':
     # exp_00_01_md_gp()
-    exp_00_02_infill()
+    # exp_00_02_infill()
     # exp_00_03a_plot_constraints()
     # exp_00_03b_multi_y()
-    # exp_00_03_constraints()
+    exp_00_03_constraints()
     # exp_00_04_high_dim()
