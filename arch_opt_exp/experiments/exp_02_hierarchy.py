@@ -16,7 +16,9 @@ Contact: jasper.bussemaker@dlr.de
 """
 import logging
 import numpy as np
+import pandas as pd
 from typing import Dict
+import matplotlib
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
 from pymoo.core.population import Population
@@ -49,6 +51,7 @@ capture_log()
 _exp_02_01_folder = '02_hier_01_tpe'
 _exp_02_02_folder = '02_hier_02_strategies'
 _exp_02_03_folder = '02_hier_03_sensitivities'
+_exp_02_04_folder = '02_hier_04_dv_examples'
 
 
 def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, repair=None, evaluator=None):
@@ -404,11 +407,81 @@ def _plot_comparison_df(df_agg, column, title, folder, x_column, x_label, x_log=
     plt.savefig(f'{folder}/compare.png')
 
 
+def exp_02_04_tunable_hier_dv_examples():
+    folder = set_results_folder(_exp_02_04_folder)
+
+    n_opts = 3
+    p = lambda n: Branin()
+    problems = [
+        (TunableHierarchicalMetaProblem(p, imp_ratio=1, n_subproblem=9, diversity_range=0, n_opts=n_opts), 'IR_01_MRD_00'),
+        (TunableHierarchicalMetaProblem(p, imp_ratio=10, n_subproblem=9, diversity_range=0, n_opts=n_opts), 'IR_10_MRD_00'),
+        (TunableHierarchicalMetaProblem(p, imp_ratio=10, n_subproblem=9, diversity_range=.5, n_opts=n_opts), 'IR_10_MRD_05'),
+        (TunableHierarchicalMetaProblem(p, imp_ratio=10, n_subproblem=9, diversity_range=1, n_opts=n_opts), 'IR_10_MRD_MAX'),
+        (TunableHierarchicalMetaProblem(p, imp_ratio=1000, n_subproblem=9, diversity_range=1, n_opts=n_opts), 'IR_MAX_MRD_MAX'),
+    ]
+
+    def _store_dvs(problem: ArchOptProblemBase, name: str, incl_cont=False):
+        x, is_active = problem.all_discrete_x
+        assert x is not None
+        is_cont_mask = problem.is_cont_mask
+
+        data = [[('cont' if is_cont_mask[j] else xij) if is_active[i, j] else ' ' for j, xij in enumerate(xi)
+                 if incl_cont or (not incl_cont and not is_cont_mask[j])]
+                for i, xi in enumerate(x)]
+        df = pd.DataFrame(data=data, columns=[f'x{i}' for i in range(
+            len(is_cont_mask) if incl_cont else int(np.sum(~is_cont_mask)))])
+        df.to_excel(writer, sheet_name=name)
+
+        # https://stackoverflow.com/a/54110153
+        worksheet = writer.sheets[name]
+        for fmt in formats:
+            worksheet.conditional_format(1, 1, len(df), len(df.columns), fmt)
+
+        # Output to Latex
+        styler = df.style
+        if np.any(df.values == ' '):
+            styler.apply(lambda df_: np.where(
+                df_.values == ' ', 'background-color:#FFC7CE;color:#9C0006;', ''), axis=None)
+        if np.any(df.values == 'cont'):
+            styler.apply(lambda df_: np.where(
+                df_.values == 'cont', f'background-color:{hx(blue(.25))};color:{hx(blue(.75))};', ''), axis=None)
+        styler.format(lambda v: v if isinstance(v, str) else int(v))
+
+        i_max = np.max(x)
+        for col in df.columns:
+            styler.background_gradient(cmap='Greens', low=.25, high=.5, axis=0, vmin=0, vmax=i_max,
+                                       subset=pd.IndexSlice[(df[col] != ' ') & (df[col] != 'cont'), col])
+
+        styler.hide()
+        styler.to_latex(f'{folder}/{name}.tex', hrules=True, convert_css=True, column_format='l'*len(df.columns))
+
+    with pd.ExcelWriter(f'{folder}/hierarchical_design_vectors.xlsx', engine='xlsxwriter') as writer:
+        hx = matplotlib.colors.rgb2hex
+        green = matplotlib.cm.get_cmap('Greens')
+        blue = matplotlib.cm.get_cmap('Blues')
+        workbook = writer.book
+        formats = [
+            {'type': 'text', 'criteria': 'containing', 'value': 'inactive',
+             'format': workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})},
+            {'type': 'text', 'criteria': 'containing', 'value': 'cont',
+             'format': workbook.add_format({'bg_color': hx(blue(.25)), 'font_color': hx(blue(.75))})},
+        ]
+        for ic, frac in enumerate(np.linspace(.25, .5, n_opts)):
+            formats.append({'type': 'cell', 'criteria': '=', 'value': ic,
+                            'format': workbook.add_format({'bg_color': hx(green(frac))})})
+
+        for problem_, name_ in problems:
+            problem_.print_stats()
+            _store_dvs(problem_, name_)
+            # problem_.get_discrete_rates().to_excel(writer, sheet_name=f'{name_}_rates')
+
+
 if __name__ == '__main__':
     # exp_02_01_tpe()
-    exp_02_02_hier_strategies()
-    exp_02_02_hier_strategies(sbo=True)
+    # exp_02_02_hier_strategies()
+    # exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)
     # exp_02_03_sensitivities(sbo=True, mrd=True)
+    exp_02_04_tunable_hier_dv_examples()
