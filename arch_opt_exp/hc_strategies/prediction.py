@@ -186,17 +186,24 @@ class SKLearnClassifier(ExtPredictorInterface):
 
 class RandomForestClassifier(SKLearnClassifier):
 
-    def __init__(self, n: int = 100):
+    def __init__(self, n: int = 100, n_dim: float = None):
         self.n = n
+        self.n_dim = n_dim
         super().__init__()
 
     def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
         from sklearn.ensemble import RandomForestClassifier
-        self._predictor = clf = RandomForestClassifier(n_estimators=self.n)
+
+        n_estimators = self.n
+        if self.n_dim is not None:
+            n_estimators = max(int(self.n_dim*x_norm.shape[1]), n_estimators)
+
+        self._predictor = clf = RandomForestClassifier(n_estimators=n_estimators)
         clf.fit(x_norm, y_is_valid)
 
     def __str__(self):
-        return f'Random Forest Classifier ({self.n})'
+        n_dim_str = f' | x{self.n_dim}' if self.n_dim is not None else ''
+        return f'RFC ({self.n}{n_dim_str})'
 
     def __repr__(self):
         return f'{self.__class__.__name__}(n={self.n})'
@@ -359,8 +366,9 @@ class GPRegressor(SMTPredictor):
 class MDGPRegressor(SMTPredictor):
     """Uses SMT's mixed-discrete Kriging regressor"""
 
-    def __init__(self):
+    def __init__(self, kpls_n_dim: Optional[int] = None):
         self._problem = None
+        self._kpls_n_dim = kpls_n_dim
         super().__init__()
 
     def _get_normalization(self, problem: ArchOptProblemBase) -> Normalization:
@@ -370,7 +378,12 @@ class MDGPRegressor(SMTPredictor):
         self._problem = problem
 
     def _do_train(self, x_norm: np.ndarray, y_is_valid: np.ndarray):
-        model, _ = ModelFactory(self._problem).get_md_kriging_model(corr='abs_exp', theta0=[1e-2], n_start=5)
+        kwargs = {}
+        if self._kpls_n_dim is not None and x_norm.shape[1] > self._kpls_n_dim:
+            kwargs['kpls_n_comp'] = self._kpls_n_dim
+
+        model, _ = ModelFactory(self._problem).get_md_kriging_model(
+            corr='abs_exp', theta0=[1e-2], n_start=5, **kwargs)
         self._model = model
         model.set_training_values(x_norm, y_is_valid)
         model.train()
