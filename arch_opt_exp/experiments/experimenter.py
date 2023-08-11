@@ -185,7 +185,7 @@ class ExperimenterResult(Result):
         metrics = [res.metrics[metric_name] for res in results]
         n_eval = None
         if plot_evaluations:
-            n_eval = [res.n_eval-res.n_eval[0] for res in results]
+            n_eval = [np.array(res.n_eval)-res.n_eval[0] for res in results]
         if kwargs.get('titles') is None:
             kwargs['titles'] = [res.plot_name for res in results]
         Metric.plot_multiple(metrics, n_eval=n_eval, **kwargs)
@@ -240,18 +240,25 @@ class ExperimenterResult(Result):
         if show:
             plt.show()
 
-    def plot_obj_progress(self, save_filename=None, show=True):
+    def plot_obj_progress(self, f_pf_known=None, save_filename=None, show=True):
         plt.figure()
         plt.title(f'Objective progress: {self.plot_name}')
 
-        for i, algo_step in enumerate(self.history):
-            f_pareto = algo_step.opt.get('F')
-            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=3, label=f'Step {i}')
+        if self.history is not None:
+            for i, algo_step in enumerate(self.history):
+                f_pareto = algo_step.opt.get('F')
+                plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=3, label=f'Step {i}')
+        else:
+            f_pareto = self.opt.get('F')
+            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=3, label='Pareto')
+
+        if f_pf_known is not None:
+            plt.scatter(f_pf_known[:, 0], f_pf_known[:, 1], s=3, label='Known PF')
         plt.legend()
 
         if save_filename is not None:
             pl.savefig(save_filename+'.png')
-            pl.savefig(save_filename+'.svg')
+            # pl.savefig(save_filename+'.svg')
         if show:
             plt.show()
 

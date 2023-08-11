@@ -32,6 +32,8 @@ from pymoo.core.population import Population
 from pymoo.core.initialization import Initialization
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
+from smt.surrogate_models.krg_based import MixIntKernelType, MixHrcKernelType
+
 from sb_arch_opt.sampling import *
 from sb_arch_opt.problem import *
 from sb_arch_opt.problems.continuous import *
@@ -415,17 +417,19 @@ _strategies: List[HiddenConstraintStrategy] = [
 
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population, verbose=False,
-             g_aggregation: ConstraintAggregation = None, kpls_n_dim: int = None, cont=False):
+             g_aggregation: ConstraintAggregation = None, kpls_n_dim: int = None, cont=False, infill_pop_size=None,
+             **kwargs):
     kpls_n_comp = kpls_n_dim if kpls_n_dim is not None and problem.n_var > kpls_n_dim else None
     if cont:
-        model = ModelFactory.get_kriging_model(kpls_n_comp=kpls_n_comp)
+        model = ModelFactory.get_kriging_model(kpls_n_comp=kpls_n_comp, **kwargs)
         norm = ModelFactory.get_continuous_normalization(problem)
     else:
-        model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=kpls_n_comp)
+        model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=kpls_n_comp, **kwargs)
     infill, n_batch = get_default_infill(problem, g_aggregation=g_aggregation)
 
     sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm,
-                               verbose=verbose).algorithm(infill_size=n_batch, init_size=len(doe_pop))
+                               verbose=verbose, pop_size=infill_pop_size)\
+        .algorithm(infill_size=n_batch, init_size=len(doe_pop))
     sbo.initialization = Initialization(doe_pop)
     return sbo
 
@@ -892,21 +896,26 @@ def exp_03_07_engine_arch(post_process=False):
     """
     Compare strategies for solving the engine architecture optimization problems.
     """
+    # post_process = True
     folder = set_results_folder(_exp_03_07_folder)
     expected_fail_rate = .6
     n_repeat = 4
-    k_doe = 2
+    k_doe = 3
 
     problems = [
         # problem, n_budget, heavy
-        (SimpleTurbofanArch(), 200, False),
-        # (RealisticTurbofanArch(), 400, True),
+        (SimpleTurbofanArch(), 250, False),
+        # (RealisticTurbofanArch(), 205+4*25, True),
+        (RealisticTurbofanArch(), 500, True),
     ]
     strategies: List[HiddenConstraintStrategy] = [
-        # RejectionHCStrategy(),
+        RejectionHCStrategy(),
         LocalReplacement(n=5, mean=True),
-        PredictionHCStrategy(RandomForestClassifier(n=100)),
-        PredictionHCStrategy(MDGPRegressor()),
+        # PredictionHCStrategy(RandomForestClassifier(n=100)),
+        # PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10)),
+        PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10), min_pov=.25),
+        # PredictionHCStrategy(MDGPRegressor()),
+        PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
 
     problem_paths = []
@@ -954,9 +963,17 @@ def exp_03_07_engine_arch(post_process=False):
         algo_names = []
         for j, strategy in enumerate(strategies):
             agg_g = ConstraintAggregation.ELIMINATE if is_heavy else None
-            cont = is_heavy
             kpls_n_dim = 10 if is_heavy else None
-            sbo = _get_sbo(problem, strategy, doe, verbose=True, g_aggregation=agg_g, kpls_n_dim=kpls_n_dim, cont=cont)
+            cont = False  # is_heavy
+            kwargs = {}
+            # if is_heavy:
+            #     kwargs.update(
+            #         categorical_kernel=MixIntKernelType.CONT_RELAX,
+            #     )
+            infill_pop_size = None  # 200 if is_heavy else None
+
+            sbo = _get_sbo(problem, strategy, doe, verbose=True, g_aggregation=agg_g, infill_pop_size=infill_pop_size,
+                           kpls_n_dim=kpls_n_dim, cont=cont, **kwargs)
             algorithms.append(sbo)
             algo_names.append(str(strategy))
 
@@ -964,6 +981,20 @@ def exp_03_07_engine_arch(post_process=False):
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_budget-n_init,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
                    return_exp=False, n_parallel=1)
+
+        f_pf_known = problem.pareto_front()
+        for exp in exps:
+            eff_res = exp.get_effectiveness_results()
+            eff_res[0].plot_compare_metrics(
+                eff_res, 'delta_hv', plot_value_names=['ratio', 'regret'], plot_evaluations=True, show=False,
+                save_filename=exp.get_problem_algo_results_path('delta_hv_sep'))
+
+            for i_res, metric in enumerate(eff_res):
+                if metric.opt is None:
+                    continue
+                metric.plot_obj_progress(
+                    f_pf_known=f_pf_known, save_filename=exp.get_problem_algo_results_path(f'pf_{i_res}'), show=False)
+
         _agg_prob_exp(problem, problem_path, exps)
         plt.close('all')
 
