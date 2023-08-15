@@ -545,7 +545,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     expected_fail_rate = .6
     k_doe_test = [.5, 1, 2, 5]
     min_pov_test = [.1, .25, .5, .75, .9, -1]
-    n_infill = 30
+    n_infill = 60
     n_repeat = 8
     problems = [
         (Alimo(), '01'),
@@ -553,6 +553,9 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         (Mueller01(), '02_HFR'),
         (MDCarsideHC(), '09_MD_MO_G_HFR'),
         (HierAlimo(), '10_HIER'),
+        (HierMueller02(), '10_HIER'),
+        (HierarchicalRosenbrockHC(), '11_HIER_G'),
+        (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR'),
     ]
     # post_process = True
 
@@ -582,13 +585,17 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         doe_exp = {}
         for k in k_doe_test:
             for min_pov in min_pov_test:
-                strategy = PredictionHCStrategy(MDGPRegressor(), constraint=min_pov != -1,
-                                                min_pov=.5 if min_pov == -1 else min_pov)
-                sbo = _get_sbo(problem, strategy, doe[k][0])
-                algo_name = f'DOE K={k}; min_pov={min_pov}'
-                doe_exp[algo_name] = doe[k]
-                algorithms.append(sbo)
-                algo_names.append(algo_name)
+                for classifier, classifier_name in [
+                    (MDGPRegressor(), 'MDGP'),
+                    (RandomForestClassifier(n=100, n_dim=10), 'RFC'),
+                ]:
+                    strategy = PredictionHCStrategy(classifier, constraint=min_pov != -1,
+                                                    min_pov=.5 if min_pov == -1 else min_pov)
+                    sbo = _get_sbo(problem, strategy, doe[k][0])
+                    algo_name = f'{classifier_name}; DOE K={k}; min_pov={min_pov}'
+                    doe_exp[algo_name] = doe[k]
+                    algorithms.append(sbo)
+                    algo_names.append(algo_name)
 
         exps = run(_exp_03_04a_folder, problem, algorithms, algo_names, doe=doe_exp, n_repeat=n_repeat,
                    n_eval_max=n_infill, metrics=metrics, additional_plot=additional_plot, problem_name=name,
@@ -597,21 +604,24 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         plt.close('all')
 
     def _add_cols(df_agg_):
-        df_agg_['doe_k'] = [float(val[1].split(';')[0].split('K=')[1]) for val in df_agg_.index]
-        min_pov_values = [val[1].split(';')[1].split('=')[1] for val in df_agg_.index]
+        df_agg_['cls'] = [val[1].split(';')[0] for val in df_agg_.index]
+        df_agg_['doe_k'] = [float(val[1].split(';')[1].split('K=')[1]) for val in df_agg_.index]
+        min_pov_values = [val[1].split(';')[2].split('=')[1] for val in df_agg_.index]
         df_agg_['min_pov'] = ['F' if val == '-1' else val for val in min_pov_values]
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
-    for category in ['doe_k', 'min_pov']:
+    for category in ['cls', 'doe_k', 'min_pov']:
         plot_problem_bars(df_agg, folder, category, 'delta_hv_ratio', y_log=True)
         plot_problem_bars(df_agg, folder, category, 'delta_hv_delta_hv', y_log=True)
         plot_problem_bars(df_agg, folder, category, 'delta_hv_regret')
         plot_problem_bars(df_agg, folder, category, 'fail_ratio')
         plot_problem_bars(df_agg, folder, category, 'hc_pred_acc')
 
-    plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='fail_ratio', y_log=True)
-    plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
+    plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_regret', z_col='fail_ratio', y_log=True)
+    plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_regret', z_col='hc_pred_acc', y_log=True)
+    plot_scatter(df_agg, folder, 'min_pov', 'delta_hv_regret', z_col='fail_ratio', y_log=True)
+    plot_scatter(df_agg, folder, 'min_pov', 'delta_hv_regret', z_col='hc_pred_acc', y_log=True)
     plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
     plt.close('all')
 
@@ -899,23 +909,23 @@ def exp_03_07_engine_arch(post_process=False):
     # post_process = True
     folder = set_results_folder(_exp_03_07_folder)
     expected_fail_rate = .6
-    n_repeat = 4
+    n_repeat = 8
     k_doe = 3
 
     problems = [
         # problem, n_budget, heavy
         (SimpleTurbofanArch(), 250, False),
         # (RealisticTurbofanArch(), 205+4*25, True),
-        (RealisticTurbofanArch(), 500, True),
+        (RealisticTurbofanArch(), 600, True),
     ]
     strategies: List[HiddenConstraintStrategy] = [
-        RejectionHCStrategy(),
+        # RejectionHCStrategy(),
         LocalReplacement(n=5, mean=True),
         # PredictionHCStrategy(RandomForestClassifier(n=100)),
-        # PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10)),
-        PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10), min_pov=.25),
-        # PredictionHCStrategy(MDGPRegressor()),
-        PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
+        PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10)),
+        # PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10), min_pov=.25),
+        PredictionHCStrategy(MDGPRegressor()),
+        # PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
 
     problem_paths = []

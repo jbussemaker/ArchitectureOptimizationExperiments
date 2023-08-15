@@ -46,6 +46,7 @@ _col_names = {
     'delta_hv_pass_20': 'Delta HV pass 20%',
     'delta_hv_pass_50': 'Delta HV pass 50%',
     'infill': 'Infill criterion',
+    'cls': 'Class',
 }
 
 
