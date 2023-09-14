@@ -915,6 +915,7 @@ def exp_03_07_engine_arch(post_process=False):
     problems = [
         # problem, n_budget, heavy
         (SimpleTurbofanArch(), 250, False),
+        (SimpleTurbofanArch(), 250, True),
         # (RealisticTurbofanArch(), 205+4*25, True),
         (RealisticTurbofanArch(), 600, True),
     ]
@@ -932,8 +933,10 @@ def exp_03_07_engine_arch(post_process=False):
     problem_names = []
     doe_folders = []
     problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
-    for i, (problem, _, _) in enumerate(problems):
+    for i, (problem, _, is_heavy) in enumerate(problems):
         name = f'{problem.__class__.__name__}'
+        if is_heavy:
+            name += '_h'
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
@@ -980,6 +983,10 @@ def exp_03_07_engine_arch(post_process=False):
             #     kwargs.update(
             #         categorical_kernel=MixIntKernelType.CONT_RELAX,
             #     )
+
+            if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
+                strategy.predictor._kpls_n_dim = kpls_n_dim
+
             infill_pop_size = None  # 200 if is_heavy else None
 
             sbo = _get_sbo(problem, strategy, doe, verbose=True, g_aggregation=agg_g, infill_pop_size=infill_pop_size,
@@ -1000,7 +1007,7 @@ def exp_03_07_engine_arch(post_process=False):
                 save_filename=exp.get_problem_algo_results_path('delta_hv_sep'))
 
             for i_res, metric in enumerate(eff_res):
-                if metric.opt is None:
+                if metric.opt is None or problem.n_obj < 2:
                     continue
                 metric.plot_obj_progress(
                     f_pf_known=f_pf_known, save_filename=exp.get_problem_algo_results_path(f'pf_{i_res}'), show=False)

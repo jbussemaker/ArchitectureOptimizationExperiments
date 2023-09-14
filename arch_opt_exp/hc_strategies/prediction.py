@@ -366,7 +366,7 @@ class GPRegressor(SMTPredictor):
 class MDGPRegressor(SMTPredictor):
     """Uses SMT's mixed-discrete Kriging regressor"""
 
-    def __init__(self, kpls_n_dim: Optional[int] = None):
+    def __init__(self, kpls_n_dim: Optional[int] = 10):
         self._problem = None
         self._kpls_n_dim = kpls_n_dim
         super().__init__()
