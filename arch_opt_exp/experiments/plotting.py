@@ -47,6 +47,12 @@ _col_names = {
     'delta_hv_pass_50': 'Delta HV pass 50%',
     'infill': 'Infill criterion',
     'cls': 'Class',
+    'time_train': 'Training time',
+    'time_infill': 'Infill time',
+    'n_comp': 'Model comps',
+    'is_ck_lt': 'Is light categorical kernel',
+    'n_cat': 'Cat vars',
+    'n_theta': 'Hyperparams',
 }
 
 
@@ -75,7 +81,8 @@ def plot_scatter(df_agg, folder, x_col, y_col, z_col=None, x_log=False, y_log=Fa
         size = 10
 
     c = plt.scatter(x_all, y_all, s=size, c=z_all, cmap=cmap)
-    plt.colorbar(c).set_label((z_name + ' (log)') if z_log else z_name)
+    if z_col is not None:
+        plt.colorbar(c).set_label((z_name + ' (log)') if z_log else z_name)
 
     if x_log:
         plt.gca().set_xscale('log')

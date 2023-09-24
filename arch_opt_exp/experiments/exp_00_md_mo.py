@@ -24,6 +24,7 @@ from typing import Union, Dict
 import matplotlib
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
+from pymoo.problems.multi.zdt import ZDT1
 from pymoo.core.population import Population
 from pymoo.core.initialization import Initialization
 
@@ -32,6 +33,7 @@ from sb_arch_opt.problems.md_mo import *
 from sb_arch_opt.problems.discrete import *
 from sb_arch_opt.problems.continuous import *
 from sb_arch_opt.problems.constrained import *
+from sb_arch_opt.problems.problems_base import *
 
 from sb_arch_opt.algo.pymoo_interface import *
 from sb_arch_opt.algo.arch_sbo.algo import *
@@ -96,6 +98,11 @@ def _get_metrics(problem):
 def exp_00_01_md_gp(post_process=False):
     """
     Test different Gaussian Process models on mixed-discrete problems.
+
+    Conclusions:
+    - MD GP works better than continuous GP
+    - Increasing the nr of restarts for training does not necessarily improve results,
+      however linearly increases training time
     """
     folder = set_results_folder(_exp_00_01_folder)
     n_infill = 30
@@ -131,6 +138,7 @@ def exp_00_01_md_gp(post_process=False):
         for (model, norm), model_name in [
             ((ModelFactory.get_kriging_model(), None), 'BO'),
             (ModelFactory(problem).get_md_kriging_model(), 'MD-BO'),
+            (ModelFactory(problem).get_md_kriging_model(n_start=5), 'MD-BO-5'),
         ]:
             sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
             sbo_algo = sbo.algorithm(infill_size=1, init_size=n_init)
@@ -142,9 +150,9 @@ def exp_00_01_md_gp(post_process=False):
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
                    return_exp=post_process)
 
-        plot_for_pub(exps, met_plot_map={
-            'delta_hv': ['ratio'],
-        }, algo_name_map={'BO': 'Continuous GP', 'MD-BO': 'Mixed-discrete GP'})
+        # plot_for_pub(exps, met_plot_map={
+        #     'delta_hv': ['ratio'],
+        # }, algo_name_map={'BO': 'Continuous GP', 'MD-BO': 'Mixed-discrete GP'})
         plt.close('all')
 
 
@@ -699,14 +707,15 @@ def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
 
 
 def _build_md_kriging(problem: ArchOptProblemBase, surrogate_factory):
-    from smt.applications.mixed_integer import MixedIntegerKrigingModel
+    from sb_arch_opt.algo.arch_sbo.models import MultiSurrogateModel
     factory = ModelFactory(problem)
     normalization = factory.get_md_normalization()
     norm_ds_spec = factory.create_smt_design_space_spec(problem.design_space, md_normalize=True)
 
     surrogate = surrogate_factory(norm_ds_spec.design_space)
-    if norm_ds_spec.is_mixed_discrete:
-        surrogate = MixedIntegerKrigingModel(surrogate=surrogate)
+    surrogate = MultiSurrogateModel(surrogate)
+    # if norm_ds_spec.is_mixed_discrete:
+    #     surrogate = MixedIntegerKrigingModel(surrogate=surrogate)
     return surrogate, normalization
 
 
@@ -730,44 +739,78 @@ def _patch_kpls():
 _patch_kpls()
 
 
+class MDTestZDT1(MixedDiscretizerProblemBase):
+
+    def __init__(self, n_cat: int, n_var=30):
+        self._zdt1_n_var = n_var
+        self._n_cat = n_cat
+        super().__init__(ZDT1(n_var=n_var), n_opts=5, n_vars_int=n_cat, cat=True)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(n_cat={self._n_cat}, n_var={self._zdt1_n_var})'
+
+
 def exp_00_04_high_dim(post_process=False):
     """
-    Test different dimension reduction strategies on high-dimensional (mixed-discrete) problems.
+    Test different time reduction strategies on high-dimensional (mixed-discrete) problems.
 
     Conclusions:
-    - Applying KPLS slightly reduces optimizer performance, more when taking less components
-    - Training time is reduced by a factor of 10 (KPLS with 10 components) to 100 (KPLS with 1 component)
+    - Training time varies linearly with the nr of hyperparameters (n_theta) to tune
+      - n_theta is greatly increased by using EHH/HH kernels
+      - n_theta increases linearly with the nr of surrogates to train
+      - n_theta is reduced linearly for the nr of PLS components (on vars where it is applied)
+      - PLS is not applied to categorical vars if EHH/HH kernel is used
+    - Gower shows better optimization results than EHH/HH kernels
+    - Applying PLS
+      - Reduces optimizer performance slightly
+      - Reduces training time for non-categorical variables
+
+    Recommendation:
+    - Use Gower distance by default
+    - Apply PLS to reduce training time above ~10 components
     """
+    # post_process = True
     folder = set_results_folder(_exp_00_04_folder)
     n_infill = 20
-    n_repeat = 12
+    n_repeat = 8
 
-    def _get_kpls_factory(is_md_, n_comp: int = None, kplsk=False):
-        kwargs = {
-            'print_global': False,
-            'categorical_kernel': MixIntKernelType.HOMO_HSPHERE,
-            'hierarchical_kernel': MixHrcKernelType.ALG_KERNEL,
-        }
-        if is_md_:
-            kwargs['n_start'] = 5
+    # def _get_kpls_factory(is_md_, n_comp: int = None, kplsk=False):
+    #     kwargs = {
+    #         'print_global': False,
+    #         'categorical_kernel': MixIntKernelType.HOMO_HSPHERE,
+    #         'hierarchical_kernel': MixHrcKernelType.ALG_KERNEL,
+    #     }
+    #     if is_md_:
+    #         kwargs['n_start'] = 5
+    #
+    #     def _factory(ds):
+    #         if kplsk:
+    #             return KPLSK(design_space=ds, **kwargs)
+    #
+    #         if n_comp is None:
+    #             kwargs['eval_n_comp'] = True
+    #         else:
+    #             kwargs['n_comp'] = n_comp
+    #         return KPLS(design_space=ds, **kwargs)
+    #
+    #     return _factory
 
-        def _factory(ds):
-            if kplsk:
-                return KPLSK(design_space=ds, **kwargs)
+    def prob_add_cols(strat_data_, df_strat, algo_name):
+        strat_data_['nx'] = problem.n_var
+        strat_data_['n_cat'] = int(category.split('_')[1])
+        strat_data_['n_theta'] = model_n_theta[algo_name]
 
-            if n_comp is None:
-                kwargs['eval_n_comp'] = True
-            else:
-                kwargs['n_comp'] = n_comp
-            return KPLS(design_space=ds, **kwargs)
+    kw_cck = dict(  # Cheap categorical kernel
+        categorical_kernel=MixIntKernelType.GOWER,
+    )
 
-        return _factory
-
-    problems = [
-        (MOZDT1(), '02_C_MO'),
-        (MDZDT1(), '03_MD_MO'),
-        (DZDT1(), '03_MD_MO'),
-    ]
+    n_cat = [0, 2, 4, 8]
+    problems = [(MDTestZDT1(n_cat=n, n_var=10), f'ZDT1_{n:02.0f}') for n in n_cat]
+    # problems = [
+    #     (MOZDT1(), '02_C_MO'),
+    #     (MDZDT1(), '03_MD_MO'),
+    #     (DZDT1(), '03_MD_MO'),
+    # ]
     problem_paths = []
     problem_names = []
     problem: Union[ArchOptProblemBase]
@@ -777,7 +820,7 @@ def exp_00_04_high_dim(post_process=False):
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
 
-        n_init = int(np.ceil(2*problem.n_var))
+        n_init = int(np.ceil(5*problem.n_var))
 
         log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
         problem.pareto_front()
@@ -789,32 +832,71 @@ def exp_00_04_high_dim(post_process=False):
         metrics, additional_plot = _get_metrics(problem)
         infill = ExpectedImprovementInfill() if problem.n_obj == 1 else MinVariancePFInfill()
 
-        is_md = not np.all(problem.is_cont_mask)
+        # is_md = not np.all(problem.is_cont_mask)
 
         algorithms = []
         algo_names = []
+        model_n_theta = {}
         for (model, norm), model_name in [
-            (ModelFactory(problem).get_md_kriging_model(), 'MD-BO'),
-            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=1)), 'KPLS-1'),
-            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=2)), 'KPLS-2'),
-            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=4)), 'KPLS-4'),
-            (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=10)), 'KPLS-10'),
+            (ModelFactory(problem).get_md_kriging_model(), 'Krg'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=1), 'KPLS-1'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=2), 'KPLS-2'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=4), 'KPLS-4'),
+            # (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=10), 'KPLS-10'),
+            (ModelFactory(problem).get_md_kriging_model(**kw_cck), 'Krg-Gow'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=1, **kw_cck), 'KPLS-1-Gow'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=2, **kw_cck), 'KPLS-2-Gow'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=4, **kw_cck), 'KPLS-4-Gow'),
+            # (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=10, **kw_cck), 'KPLS-10-Gow'),
+
+            # (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=1)), 'KPLS-1'),
+            # (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=2)), 'KPLS-2'),
+            # (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=4)), 'KPLS-4'),
+            # (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=10)), 'KPLS-10'),
             # (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=None)), 'KPLS-auto'),
             # (_build_md_kriging(problem, _get_kpls_factory(is_md, kplsk=True)), 'KPLSK'),
         ]:
-            sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
+            sbo = SBOInfill(model, infill, normalization=norm, verbose=False)
             sbo_algo = sbo.algorithm(infill_size=1, init_size=n_init)
             algorithms.append(sbo_algo)
             algo_names.append(model_name)
+            model_n_theta[model_name] = ModelFactory.get_n_theta(problem, model)
 
         do_run = not post_process
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
 
-        plot_for_pub(exps, met_plot_map={
-            'delta_hv': ['ratio'],
-        }, algo_name_map={'BO': 'Continuous GP', 'MD-BO': 'Mixed-discrete GP'})
+        _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+
+        # plot_for_pub(exps, met_plot_map={
+        #     'delta_hv': ['ratio'],
+        # }, algo_name_map={'BO': 'Continuous GP', 'MD-BO': 'Mixed-discrete GP'})
         plt.close('all')
+
+    def _add_cols(df_agg_):
+        df_agg_['surr'] = [val[1].split('-')[0] for val in df_agg_.index]
+        df_agg_['is_pls'] = ['KPLS' in val[1] for val in df_agg_.index]
+        df_agg_['cat_ker'] = ['Gower' if 'Gow' in val[1] else 'EHH' for val in df_agg_.index]
+        df_agg_['is_ck_lt'] = ['Gow' in val[1] for val in df_agg_.index]
+
+        nx = df_agg_['nx'].values
+        df_agg_['n_comp'] = [int(val[1].split('-')[1]) if 'KPLS' in val[1] else nx[ii]
+                             for ii, val in enumerate(df_agg_.index)]
+
+        return df_agg_
+
+    df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    # plot_scatter(df_agg, folder, 'delta_hv_ratio', 'time_train', z_col='n_comp', x_log=True, y_log=True)
+    # plot_scatter(df_agg, folder, 'delta_hv_ratio', 'time_infill', z_col='n_comp', x_log=True, y_log=True)
+    plot_scatter(df_agg, folder, 'delta_hv_regret', 'time_train', z_col='n_comp', y_log=True)
+    plot_scatter(df_agg, folder, 'delta_hv_regret', 'time_infill', z_col='n_comp', y_log=True)
+    plot_scatter(df_agg, folder, 'delta_hv_regret', 'time_train', z_col='is_ck_lt', y_log=True)
+    plot_scatter(df_agg, folder, 'delta_hv_regret', 'time_infill', z_col='is_ck_lt', y_log=True)
+    plot_scatter(df_agg, folder, 'delta_hv_regret', 'time_train', z_col='n_cat', y_log=True)
+    plot_scatter(df_agg, folder, 'delta_hv_regret', 'time_infill', z_col='n_cat', y_log=True)
+    plot_scatter(df_agg, folder, 'n_theta', 'time_train', z_col='n_cat', x_log=True, y_log=True)
+    plot_scatter(df_agg, folder, 'n_theta', 'time_infill', z_col='n_cat', x_log=True, y_log=True)
 
 
 if __name__ == '__main__':
@@ -822,5 +904,5 @@ if __name__ == '__main__':
     # exp_00_02_infill()
     # exp_00_03a_plot_constraints()
     # exp_00_03b_multi_y()
-    exp_00_03_constraints()
-    # exp_00_04_high_dim()
+    # exp_00_03_constraints()
+    exp_00_04_high_dim()
