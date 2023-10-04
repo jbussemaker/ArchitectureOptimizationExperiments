@@ -431,7 +431,7 @@ def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, do
                                verbose=verbose, pop_size=infill_pop_size)\
         .algorithm(infill_size=n_batch, init_size=len(doe_pop))
     sbo.initialization = Initialization(doe_pop)
-    return sbo
+    return sbo, model
 
 
 def exp_03_04_simple_optimization():
@@ -469,7 +469,7 @@ def exp_03_04_simple_optimization():
             strategy_folder = f'{folder}/{prob_name}_{i:02d}_{secure_filename(str(strategy))}'
             os.makedirs(strategy_folder, exist_ok=True)
 
-            sbo = _get_sbo(problem, strategy, doe_pop)
+            sbo, _ = _get_sbo(problem, strategy, doe_pop)
             sbo.setup(problem)
             doe_pop = sbo.ask()  # Once to initialize the infill search using the DOE
             sbo.evaluator.eval(problem, doe_pop)
@@ -591,7 +591,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
                 ]:
                     strategy = PredictionHCStrategy(classifier, constraint=min_pov != -1,
                                                     min_pov=.5 if min_pov == -1 else min_pov)
-                    sbo = _get_sbo(problem, strategy, doe[k][0])
+                    sbo, _ = _get_sbo(problem, strategy, doe[k][0])
                     algo_name = f'{classifier_name}; DOE K={k}; min_pov={min_pov}'
                     doe_exp[algo_name] = doe[k]
                     algorithms.append(sbo)
@@ -698,7 +698,7 @@ def exp_03_05_optimization(post_process=False):
         algorithms = []
         algo_names = []
         for j, strategy in enumerate(_strategies):
-            sbo = _get_sbo(problem, strategy, doe[0])
+            sbo, _ = _get_sbo(problem, strategy, doe[0])
             algorithms.append(sbo)
             algo_names.append(str(strategy))
 
@@ -748,7 +748,7 @@ def exp_03_05_optimization(post_process=False):
     plt.close('all')
 
 
-def _agg_prob_exp(problem, problem_path, exps):
+def _agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
     df_data = []
     for exp in exps:
         with open(exp.get_problem_algo_results_path('result_agg_df.pkl'), 'rb') as fp:
@@ -758,6 +758,10 @@ def _agg_prob_exp(problem, problem_path, exps):
             strat_data['prob_fail_rate'] = problem.get_failure_rate()
             strat_data['prob_imp_ratio'] = problem.get_imputation_ratio()
             strat_data['prob_n_valid_discr'] = problem.get_n_valid_discrete()
+            if add_cols_callback is not None:
+                strat_data_ = add_cols_callback(strat_data, df_strat, exp.algorithm_name)
+                if strat_data_ is not None:
+                    strat_data = strat_data_
             df_data.append(strat_data)
 
     df_prob = pd.concat(df_data, axis=1).T
@@ -909,17 +913,9 @@ def exp_03_07_engine_arch(post_process=False):
     # post_process = True
     folder = set_results_folder(_exp_03_07_folder)
     expected_fail_rate = .6
-    n_repeat = 8
-    k_doe = 3
+    n_repeat = 4
 
-    problems = [
-        # problem, n_budget, heavy
-        (SimpleTurbofanArch(), 250, False),
-        (SimpleTurbofanArch(), 250, True),
-        # (RealisticTurbofanArch(), 205+4*25, True),
-        (RealisticTurbofanArch(), 600, True),
-    ]
-    strategies: List[HiddenConstraintStrategy] = [
+    all_strategies: List[HiddenConstraintStrategy] = [
         # RejectionHCStrategy(),
         LocalReplacement(n=5, mean=True),
         # PredictionHCStrategy(RandomForestClassifier(n=100)),
@@ -928,15 +924,30 @@ def exp_03_07_engine_arch(post_process=False):
         PredictionHCStrategy(MDGPRegressor()),
         # PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
+    reduced_strategies: List[HiddenConstraintStrategy] = [
+        PredictionHCStrategy(MDGPRegressor()),
+    ]
+    problems = [
+        # problem, n_budget, k_doe, strategies
+        (SimpleTurbofanArch(), 250, 3, [
+            # Gower, n_kpls, strategies
+            (False, None, reduced_strategies),
+            (True, None, reduced_strategies),
+            (True, 10, all_strategies),
+            (True, 5, reduced_strategies),
+            (True, 2, reduced_strategies),
+        ]),
+        # (RealisticTurbofanArch(), 800, 5, [
+        #     (True, True, all_strategies),
+        # ]),
+    ]
 
     problem_paths = []
     problem_names = []
     doe_folders = []
     problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
-    for i, (problem, _, is_heavy) in enumerate(problems):
+    for i, (problem, _, k_doe, _) in enumerate(problems):
         name = f'{problem.__class__.__name__}'
-        if is_heavy:
-            name += '_h'
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
@@ -960,7 +971,16 @@ def exp_03_07_engine_arch(post_process=False):
         doe_algo.setup(problem)
         doe_algo.run()
 
-    for i, (problem, n_budget, is_heavy) in enumerate(problems):
+    def prob_add_cols(strat_data_, df_strat, algo_name):
+        n_theta, kpls_n_dim, agg_g, kernel = model_settings[algo_name]
+
+        strat_data_['nx'] = problem.n_var
+        strat_data_['n_theta'] = n_theta
+        strat_data_['kpls'] = kpls_n_dim
+        strat_data_['g_agg'] = agg_g.name if agg_g is not None else ''
+        strat_data_['kernel'] = kernel
+
+    for i, (problem, n_budget, _, strategies_settings) in enumerate(problems):
         name = problem_names[i]
         prob_doe_folder = doe_folders[i]
         problem_path = problem_paths[i]
@@ -974,30 +994,44 @@ def exp_03_07_engine_arch(post_process=False):
 
         algorithms = []
         algo_names = []
-        for j, strategy in enumerate(strategies):
-            agg_g = ConstraintAggregation.ELIMINATE if is_heavy else None
-            kpls_n_dim = 10 if is_heavy else None
-            cont = False  # is_heavy
-            kwargs = {}
-            # if is_heavy:
-            #     kwargs.update(
-            #         categorical_kernel=MixIntKernelType.CONT_RELAX,
-            #     )
+        model_settings = {}
+        for use_gower, n_kpls, strategies in strategies_settings:
+            for strategy in strategies:
+                agg_g = ConstraintAggregation.ELIMINATE if (use_gower or n_kpls is not None) else None
+                kpls_n_dim = n_kpls
+                cont = False  # is_heavy
 
-            if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
-                strategy.predictor._kpls_n_dim = kpls_n_dim
+                kwargs = {}
+                kernel = 'Gower'
+                if not use_gower:
+                    kwargs.update(
+                        categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
+                    )
+                    kernel = 'EHH'
+                    kpls_n_dim = None
 
-            infill_pop_size = None  # 200 if is_heavy else None
+                elif n_kpls is None:
+                    kpls_n_dim = None
 
-            sbo = _get_sbo(problem, strategy, doe, verbose=True, g_aggregation=agg_g, infill_pop_size=infill_pop_size,
-                           kpls_n_dim=kpls_n_dim, cont=cont, **kwargs)
-            algorithms.append(sbo)
-            algo_names.append(str(strategy))
+                if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
+                    strategy.predictor._kpls_n_dim = kpls_n_dim
+
+                infill_pop_size = None  # 200 if is_heavy else None
+
+                sbo, model = _get_sbo(problem, strategy, doe, verbose=True, g_aggregation=agg_g,
+                                      infill_pop_size=infill_pop_size, kpls_n_dim=kpls_n_dim, cont=cont, **kwargs)
+                algorithms.append(sbo)
+                algo_name = f'{strategy!s} {kernel}'
+                if n_kpls is not None:
+                    algo_name += f' KPLS {n_kpls}'
+                algo_names.append(algo_name)
+
+                model_settings[algo_name] = (ModelFactory.get_n_theta(problem, model), kpls_n_dim, agg_g, kernel)
 
         do_run = not post_process
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_budget-n_init,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   return_exp=False, n_parallel=1)
+                   return_exp=False, n_parallel=1, run_if_exists=False)
 
         f_pf_known = problem.pareto_front()
         for exp in exps:
@@ -1012,7 +1046,7 @@ def exp_03_07_engine_arch(post_process=False):
                 metric.plot_obj_progress(
                     f_pf_known=f_pf_known, save_filename=exp.get_problem_algo_results_path(f'pf_{i_res}'), show=False)
 
-        _agg_prob_exp(problem, problem_path, exps)
+        _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
         plt.close('all')
 
     def _add_cols(df_agg_):
