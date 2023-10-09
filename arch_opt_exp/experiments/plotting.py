@@ -14,15 +14,17 @@ limitations under the License.
 Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
+import contextlib
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from werkzeug.utils import secure_filename
 
 from arch_opt_exp.experiments.experimenter import *
 
-__all__ = ['plot_scatter', 'plot_problem_bars', 'plot_for_pub', 'analyze_perf_rank']
+__all__ = ['plot_scatter', 'plot_problem_bars', 'plot_for_pub', 'analyze_perf_rank', 'plot_perf_rank']
 
 
 _col_names = {
@@ -194,6 +196,64 @@ def plot_for_pub(exps, met_plot_map, algo_name_map=None, colors=None, styles=Non
         ExperimenterResult.plot_compare_metrics(
             results, metric, plot_value_names=metric_values, plot_evaluations=True, save_filename=save_filename,
             plot_callback=_plot_callback, save_svg=True, colors=colors, styles=styles, show=False)
+
+
+@contextlib.contextmanager
+def sb_theme():
+    sns.set_theme(context='paper', style='ticks', font='serif')
+    yield
+
+
+def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_map=None, prefix=None, save_path=None,
+                   add_counts=True):
+    prefix = '' if prefix is None else f'{prefix}_'
+    rank_col = prefix+'perf_rank'
+    if rank_col not in df.columns:
+        raise RuntimeError('First run analyze_perf_rank!')
+
+    if idx_name_map is None:
+        idx_name_map = {}
+    if cat_name_map is None:
+        cat_name_map = {}
+    df['idx'] = [idx_name_map.get(v[0], v[0]) for v in df.index]
+    df['cat_names'] = [cat_name_map.get(v, v) for v in df[cat_col]]
+    df_rank = df.pivot(index='cat_names', columns='idx', values=rank_col)
+
+    df_cnts = df_counts_an = None
+    if add_counts:
+        n_idx = len(df_rank.columns)
+        df_rank_orig = df_rank.copy()
+        df_rank['Best #'] = (df_rank_orig == 1).sum(axis=1)
+        df_rank['Good #'] = (df_rank_orig <= 2).sum(axis=1)
+
+        df_cnts = df_rank.copy()
+        df_cnts.iloc[:, :-2] = np.nan
+        df_cnts *= 100/n_idx
+        df_counts_an = df_cnts.applymap(lambda v: f'{v:.0f}%').to_numpy()
+
+        df_rank.iloc[:, -2:] = np.nan
+
+    h = .5+len(df_rank)*.3
+    w = 1+len(df_rank.columns)*1.2
+
+    with sb_theme():
+        cmap = sns.light_palette('seagreen', reverse=True, as_cmap=True)
+        cmap_cnt = sns.light_palette('b', as_cmap=True)
+        plt.figure(figsize=(w, h))
+
+        ax = sns.heatmap(df_rank, annot=True, fmt='.0f', linewidths=0, cmap=cmap, cbar=False)
+        if df_cnts is not None:
+            sns.heatmap(df_cnts, annot=df_counts_an, fmt='s', linewidths=0, cmap=cmap_cnt, cbar=False, vmin=0, vmax=100)
+
+        ax.set(xlabel="", ylabel="")
+        sns.despine()
+        plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path+'.png')
+        plt.savefig(save_path+'.svg')
+    else:
+        plt.show()
 
 
 def analyze_perf_rank(df: pd.DataFrame, perf_col: str, n_repeat: int, perf_min=True, prefix=None):
