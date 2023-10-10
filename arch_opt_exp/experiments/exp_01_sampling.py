@@ -839,7 +839,8 @@ def exp_01_06_opt(post_process=False):
 
             do_run = not post_process
             exps = run(folder, problem, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_init+n_infill,
-                       metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+                       metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                       run_if_exists=False)
             agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
             plt.close('all')
 

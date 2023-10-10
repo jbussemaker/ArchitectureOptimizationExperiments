@@ -266,7 +266,8 @@ def exp_00_02_infill(post_process=False):
 
         do_run = not post_process
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
-                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                   run_if_exists=False)
 
         _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
@@ -585,7 +586,8 @@ def exp_00_03_constraints(post_process=False):
 
         do_run = not post_process
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill_prob,
-                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                   run_if_exists=True)
 
         _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
@@ -782,19 +784,20 @@ def exp_00_04_high_dim(post_process=False):
       - n_theta increases linearly with the nr of surrogates to train
       - n_theta is reduced linearly for the nr of PLS components (on vars where it is applied)
       - PLS is not applied to categorical vars if EHH/HH kernel is used
-    - Gower shows better optimization results than EHH/HH kernels
+    - Gower/CR shows better optimization results than EHH/HH kernels
+      - Gower slightly better than CR
     - Applying PLS
       - Reduces optimizer performance slightly
       - Reduces training time for non-categorical variables
 
     Recommendation:
-    - Use Gower distance by default
+    - Use Gower Distance (GD) or Continuous Relaxation (CR) by default
     - Apply PLS to reduce training time above ~10 components
     """
     # post_process = True
     folder = set_results_folder(_exp_00_04_folder)
     n_infill = 20
-    n_repeat = 8
+    n_repeat = 12
 
     # def _get_kpls_factory(is_md_, n_comp: int = None, kplsk=False):
     #     kwargs = {
@@ -822,9 +825,8 @@ def exp_00_04_high_dim(post_process=False):
         strat_data_['n_cat'] = int(category.split('_')[1])
         strat_data_['n_theta'] = model_n_theta[algo_name]
 
-    kw_cck = dict(  # Cheap categorical kernel
-        categorical_kernel=MixIntKernelType.GOWER,
-    )
+    kw_ehh = dict(categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE)
+    kw_cr = dict(categorical_kernel=MixIntKernelType.CONT_RELAX)
 
     n_cat = [0, 2, 4, 8]
     n_var = 10
@@ -869,16 +871,21 @@ def exp_00_04_high_dim(post_process=False):
         algo_names = []
         model_n_theta = {}
         for (model, norm), model_name in [
-            (ModelFactory(problem).get_md_kriging_model(), 'Krg'),
-            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=1), 'KPLS-1'),
-            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=2), 'KPLS-2'),
-            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=4), 'KPLS-4'),
-            # (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=10), 'KPLS-10'),
-            (ModelFactory(problem).get_md_kriging_model(**kw_cck), 'Krg-Gow'),
-            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=1, **kw_cck), 'KPLS-1-Gow'),
-            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=2, **kw_cck), 'KPLS-2-Gow'),
-            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=4, **kw_cck), 'KPLS-4-Gow'),
-            # (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=10, **kw_cck), 'KPLS-10-Gow'),
+            (ModelFactory(problem).get_md_kriging_model(**kw_ehh), 'Krg'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=1, **kw_ehh), 'KPLS-1'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=2, **kw_ehh), 'KPLS-2'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=4, **kw_ehh), 'KPLS-4'),
+            # (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=10, **kw_ehh), 'KPLS-10'),
+            (ModelFactory(problem).get_md_kriging_model(), 'Krg-Gow'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=1), 'KPLS-1-Gow'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=2), 'KPLS-2-Gow'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=4), 'KPLS-4-Gow'),
+            # (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=10), 'KPLS-10-Gow'),
+            (ModelFactory(problem).get_md_kriging_model(**kw_cr), 'Krg-CR'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=1, **kw_cr), 'KPLS-1-CR'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=2, **kw_cr), 'KPLS-2-CR'),
+            (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=4, **kw_cr), 'KPLS-4-CR'),
+            # (ModelFactory(problem).get_md_kriging_model(kpls_n_comp=10), 'KPLS-10-CR'),
 
             # (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=1)), 'KPLS-1'),
             # (_build_md_kriging(problem, _get_kpls_factory(is_md, n_comp=2)), 'KPLS-2'),
@@ -895,7 +902,8 @@ def exp_00_04_high_dim(post_process=False):
 
         do_run = not post_process
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
-                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                   run_if_exists=False)
 
         _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
@@ -907,8 +915,9 @@ def exp_00_04_high_dim(post_process=False):
     def _add_cols(df_agg_):
         df_agg_['surr'] = [val[1].split('-')[0] for val in df_agg_.index]
         df_agg_['is_pls'] = ['KPLS' in val[1] for val in df_agg_.index]
-        df_agg_['cat_ker'] = ['Gower' if 'Gow' in val[1] else 'CR' if 'CR' in val[1] else 'EHH' for val in df_agg_.index]  # TODO
-        df_agg_['is_ck_lt'] = ['Gow' in val[1] for val in df_agg_.index]
+        df_agg_['cat_ker'] = ['Gower' if 'Gow' in val[1] else 'CR' if 'CR' in val[1] else 'EHH'
+                              for val in df_agg_.index]
+        df_agg_['is_ck_lt'] = [1 if 'Gow' in val[1] else .5 if 'CR' in val[1] else 0 for val in df_agg_.index]
 
         nx = df_agg_['nx'].values
         df_agg_['n_comp'] = [int(val[1].split('-')[1]) if 'KPLS' in val[1] else nx[ii]
