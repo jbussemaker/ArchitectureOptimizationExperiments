@@ -945,10 +945,12 @@ def exp_00_04_high_dim(post_process=False):
 
     df_agg_multi = df_agg[df_agg.cat_ker != 'EHH']
     kwargs = dict(sort_by='n_comp', multi_col='cat_ker', multi_col_titles=mc_titles,
-                  prob_names=p_names_map, x_ticks=x_ticks_map, x_label=x_label)
+                  prob_names=p_names_map, x_ticks=x_ticks_map, x_label=x_label, legend_title='Cat. $x$')
     plot_multi_idx_lines(df_agg_multi, folder, 'delta_hv_regret', y_fmt='{x:.0f}', **kwargs)
     plot_multi_idx_lines(df_agg_multi, folder, 'time_train', y_log=True, y_fmt='{x:.0f}', **kwargs)
     plot_multi_idx_lines(df_agg_multi, folder, 'time_infill', y_log=True, y_fmt='{x:.0f}', **kwargs)
+    plot_multi_idx_lines(df_agg_multi, folder, ['delta_hv_regret', 'time_train', 'time_infill'],
+                         y_log=[False, True, True], y_fmt='{x:.0f}', **kwargs)
 
     # for df_agg_sub, prefix in [
     #     (df_agg[df_agg.cat_ker == 'Gower'], 'gower'),

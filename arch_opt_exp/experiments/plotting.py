@@ -51,8 +51,8 @@ _col_names = {
     'delta_hv_pass_50': 'Delta HV pass 50%',
     'infill': 'Infill criterion',
     'cls': 'Class',
-    'time_train': 'Training time',
-    'time_infill': 'Infill time',
+    'time_train': 'Training time [s]',
+    'time_infill': 'Infill time [s]',
     'n_comp': 'Model comps',
     'is_ck_lt': 'Is light categorical kernel',
     'n_cat': 'Cat vars',
@@ -294,8 +294,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
 
 
 def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_col_titles=None, prob_names=None,
-                         x_ticks=None, save_prefix=None, x_label='', y_log=False, y_fmt=None):
-    y_name = _col_names[y_col]
+                         x_ticks=None, save_prefix=None, x_label='', y_log=False, y_fmt=None, legend_title=None):
     if sort_by is not None:
         df = df.sort_values('n_comp').sort_index(level=0)
 
@@ -319,35 +318,60 @@ def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_
         cat_unique = df[df[multi_col] == df[multi_col].unique()[0]]['idx1'].unique()
     x_ticks = [x_ticks.get(val, val) for val in cat_unique]
 
+    y_cols_list = y_col if isinstance(y_col, list) else [y_col]
+    y_log_list = y_log if isinstance(y_log, list) else [y_log]*len(y_cols_list)
+
     df_q25 = df.copy()
-    df_q25[y_col] = df_q25[y_col+'_q25']
     df_q75 = df.copy()
-    df_q75[y_col] = df_q75[y_col+'_q75']
+    for y_col_ in y_cols_list:
+        df_q25[y_col_] = df_q25[y_col_+'_q25']
+        df_q75[y_col_] = df_q75[y_col_+'_q75']
     df = pd.concat([df, df_q25, df_q75], axis=0)
 
+    n_colors = len(df.index.levels[0])
+
+    kwargs = {}
+    y_col_plot = y_col
+    row_var = None
+    if isinstance(y_col, list):
+        id_vars = ['x', 'idx0']
+        if multi_col is not None:
+            id_vars.append(multi_col)
+        df = pd.melt(df, id_vars=id_vars, value_vars=y_col, var_name='var', value_name='value')
+        y_col_plot = 'value'
+        row_var = 'var'
+        kwargs['facet_kws'] = dict(sharey='row')
+
     with sb_theme():
-        palette = sns.color_palette('mako_r', n_colors=len(df.index.levels[0]))
+        palette = sns.color_palette('mako_r', n_colors=n_colors)
+        g = sns.relplot(data=df, kind='line', x='x', y=y_col_plot, hue='idx0', legend='brief',
+                        estimator=lambda s: s.iloc[0], errorbar=lambda s: (s.iloc[1], s.iloc[2]),
+                        sort=False, col=multi_col, row=row_var, palette=palette, height=2, aspect=1.5, **kwargs)
 
-        g = sns.relplot(data=df, kind='line', x='x', y=y_col, hue='idx0', legend='brief', estimator=lambda s: s[0],
-                        errorbar=lambda s: (s[1], s[2]), sort=False, col=multi_col, palette=palette, height=3)
+        g.set(xlabel=x_label)
+        if multi_col is not None and multi_col_titles is not None:
+            g.set_titles(col_template='{col_name}', template='{col_name}')
 
-        g.set(xlabel=x_label, ylabel=y_name)
-        g._legend.set_title('')
-        if y_log:
-            g.set(yscale='log')
+        for i_row, row in enumerate(g.axes):
+            for ax in row:
+                if y_log_list[i_row]:
+                    ax.set(yscale='log')
+                if i_row > 0:
+                    ax.set_title('')
+            row[0].set_ylabel(_col_names[y_cols_list[i_row]])
+
+        g._legend.set_title(legend_title or '')
         if y_fmt is not None:
             for ax in g.axes.flat:
                 ax.yaxis.set_major_formatter(tkr.StrMethodFormatter(y_fmt))
                 ax.yaxis.set_minor_formatter(tkr.NullFormatter())
-        if multi_col is not None and multi_col_titles is not None:
-            g.set_titles(col_template='{col_name}')
 
         plt.xticks(ticks=np.arange(len(x_ticks)), labels=x_ticks)
         sns.despine()
 
     # plt.show()
     save_prefix = f'_{save_prefix}' if save_prefix is not None else ''
-    save_path = f'{folder}/line{save_prefix}_{y_col}'
+    save_path = f'{folder}/line{save_prefix}_{"_".join(y_cols_list)}'
     plt.savefig(save_path+'.png')
     plt.savefig(save_path+'.svg')
 
