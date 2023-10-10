@@ -858,6 +858,10 @@ def exp_01_06_opt(post_process=False):
         'Hier.: By $n_{act}$', 'Hier.: By $n_{act}$ (wt.)',
         'Hier.: By $x_{act}$', 'Hier.: By $x_{act}$ (wt.)',
     ]
+    cat_name_map = {sampler: cat_names[i] for i, (_, sampler) in enumerate(_samplers)}
+    plot_perf_rank(df_agg, 'strategy', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
+                   save_path=f'{folder}/rank')
+
     green = matplotlib.cm.get_cmap('Greens')
     blue = matplotlib.cm.get_cmap('Blues')
     orange = matplotlib.cm.get_cmap('Oranges')

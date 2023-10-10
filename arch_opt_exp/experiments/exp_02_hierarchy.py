@@ -40,6 +40,7 @@ from sb_arch_opt.algo.pymoo_interface.random_search import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.experiments.runner import *
 from arch_opt_exp.experiments.metrics import *
+from arch_opt_exp.experiments.plotting import *
 from arch_opt_exp.hc_strategies.metrics import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.md_mo_hier.naive import *
@@ -190,11 +191,11 @@ def exp_02_02_hier_strategies(sbo=False):
             strat_data_[key] = value
 
     problems = [
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER'),
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, diversity_range=0), '01_SO_LDR'),
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt), '02_SO_HDR'),  # High diversity range
-        (lambda: HierarchicalGoldstein(), '02_SO_HDR'),
-        (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt), '03_MO_HDR'),
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, diversity_range=0), '01_SO_LDR', 'Branin (LDR)'),
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt), '02_SO_HDR', 'Branin (HDR)'),  # High diversity range
+        (lambda: HierarchicalGoldstein(), '02_SO_HDR', 'Goldstein (HDR)'),
+        (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt), '03_MO_HDR', 'ZDT1 (HDR)'),
     ]
     # for i, (problem_factory, category) in enumerate(problems):
     #     problem_factory().print_stats()
@@ -202,14 +203,18 @@ def exp_02_02_hier_strategies(sbo=False):
 
     problem_paths = []
     problem_names = []
+    p_name_map = {}
     i_prob = 0
     problem: ArchOptProblemBase
-    for i, (problem_factory, category) in enumerate(problems):
+    for i, (problem_factory, category, title) in enumerate(problems):
         problem = problem_factory()
         name = f'{category} {problem.__class__.__name__}'
         problem_names.append(name)
+        p_name_map[name] = title
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
+        if post_process:
+            continue
 
         n_init = int(np.ceil(doe_k*problem.n_var))
         n_kpls = None
@@ -222,7 +227,7 @@ def exp_02_02_hier_strategies(sbo=False):
         metrics, additional_plot = _get_metrics(problem)
         additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
 
-        algo_names, hier_sampling, problems = zip(*[
+        algo_names, hier_sampling, problems, algo_titles = zip(*[
             ('00_naive', False, NaiveProblem(problem)),
             ('01_x_out', False, NaiveProblem(problem, return_mod_x=True)),
             ('02_repair', False, NaiveProblem(problem, return_mod_x=True, correct=True)),
@@ -254,11 +259,17 @@ def exp_02_02_hier_strategies(sbo=False):
         agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
         plt.close('all')
 
+    strat_map = {'00_naive': 'Naive', '01_x_out': 'X out', '02_repair': 'Repair', '03_activeness': 'Activeness'}
+
     def _add_cols(df_agg_):
         # df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
+        df_agg_['strategy'] = [strat_map.get(val[1], val[1]) for val in df_agg_.index]
+        analyze_perf_rank(df_agg_, 'delta_hv_regret', n_repeat)
         return df_agg_
 
     df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, save_path=f'{folder}/rank')
 
 
 def exp_02_03_sensitivities(sbo=False, mrd=False):
