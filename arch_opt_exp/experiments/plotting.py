@@ -219,19 +219,54 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
     df['cat_names'] = [cat_name_map.get(v, v) for v in df[cat_col]]
     df_rank = df.pivot(index='cat_names', columns='idx', values=rank_col)
 
+    if cat_name_map is not None:
+        cat_names = [cat_name for cat_name in cat_name_map.values() if cat_name in df_rank.index]
+        df_rank = df_rank.loc[cat_names]
+    if idx_name_map is not None:
+        idx_names = [idx_name for idx_name in idx_name_map.values() if idx_name in df_rank.columns]
+        df_rank = df_rank[idx_names]
+
     df_cnts = df_counts_an = None
+    df_rank_latex = df_rank
+    df_rank_orig = df_rank.copy()
+    i_best = None
     if add_counts:
         n_idx = len(df_rank.columns)
-        df_rank_orig = df_rank.copy()
-        df_rank['Best #'] = (df_rank_orig == 1).sum(axis=1)
-        df_rank['Good #'] = (df_rank_orig <= 2).sum(axis=1)
+        df_rank['Rank 1'] = (df_rank_orig == 1).sum(axis=1)
+        df_rank['Rank $\leq$ 2'] = (df_rank_orig <= 2).sum(axis=1)
 
         df_cnts = df_rank.copy()
         df_cnts.iloc[:, :-2] = np.nan
         df_cnts *= 100/n_idx
         df_counts_an = df_cnts.applymap(lambda v: f'{v:.0f}%').to_numpy()
 
+        np_counts = df_cnts.iloc[:, -2:].values
+        i_good = np.where(np_counts[:, 1] == np.max(np_counts[:, 1]))[0]
+        i_best = i_good[np.argmax(np_counts[i_good, 0])]
+
         df_rank.iloc[:, -2:] = np.nan
+        df_rank_latex = pd.concat([df_rank.iloc[:, :-2], df_cnts.iloc[:, -2:]], axis=1)
+
+    if save_path:
+        s = df_rank_latex.style
+        s.hide(names=True)
+        s.hide(names=True, axis=1)
+        rank_columns = df_rank_latex.columns
+        if add_counts:
+            s.format('{:.0f}\%', subset=df_rank_latex.columns[-2:])
+            rank_columns = df_rank_latex.columns[:-2]
+        col_fmt = 'l'+'c'*len(df_rank_latex.columns)
+        s.background_gradient(cmap='Greens_r', subset=rank_columns, vmin=1, vmax=max(df_rank_orig.max()))
+        if i_best is not None:
+            s.set_properties(subset=pd.IndexSlice[df_rank_latex.index[i_best], :], **{'underline': '--rwrap--latex'})
+            def style_idx_(s):
+                styles = np.array(['']*len(s), dtype=object)
+                styles[i_best] = 'underline: --rwrap--latex;'
+                return styles
+            s.apply_index(style_idx_)
+        s.format_index(lambda s: s.replace('%', '\\%'), axis=0)
+        # s.format_index(axis=0, escape='latex')  # .format_index(axis=1, escape='latex')
+        s.to_latex(save_path+'.tex', hrules=True, convert_css=True, column_format=col_fmt)
 
     h = .5+len(df_rank)*.3
     w = 1+len(df_rank.columns)*1.2

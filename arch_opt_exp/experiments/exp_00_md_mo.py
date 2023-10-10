@@ -70,7 +70,7 @@ _test_problems = lambda: [
     (MDBranin(), '01_MD_SO', 'MD Branin'),
     (AugmentedMDBranin(), '01_MD_SO', 'Aug. MD Branin'),
     (MunozZunigaToy(), '01_MD_SO', 'MZ-Toy'),
-    (MOGoldstein(), '02_C_MO', 'MD Goldstein'),
+    (MOGoldstein(), '02_C_MO', 'MO Goldstein'),
     (MORosenbrock(), '02_C_MO', 'MO Rosenbrock'),
     (MDMOGoldstein(), '03_MD_MO', 'MD-MO Golds.'),
     (MDMORosenbrock(), '03_MD_MO', 'MD-MO Rosenb.'),
@@ -306,15 +306,18 @@ def exp_00_02_infill(post_process=False):
     _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', **kwargs)
 
     so_cat_map = {f'{infill_name}_{n_batch}': title for _, infill_name, n_batch, title in so_infills}
-    for df_rank, rank_cat in [
-        (df_agg[~df_agg.is_mo & ~df_agg.is_md], 'so_c'),
-        (df_agg[~df_agg.is_mo & df_agg.is_md], 'so_md'),
-        (df_agg[df_agg.is_mo & ~df_agg.is_md], 'mo_c'),
-        (df_agg[df_agg.is_mo & df_agg.is_md], 'mo_md'),
+    mo_cat_map = {f'{infill_name}_{n_batch}': title for _, infill_name, n_batch, title in mo_infills}
+    for df_rank, rank_cat, cat_map in [
+        (df_agg[~df_agg.is_mo], 'so', so_cat_map),
+        (df_agg[~df_agg.is_mo & ~df_agg.is_md], 'so_c', so_cat_map),
+        (df_agg[~df_agg.is_mo & df_agg.is_md], 'so_md', so_cat_map),
+        (df_agg[df_agg.is_mo], 'mo', mo_cat_map),
+        (df_agg[df_agg.is_mo & ~df_agg.is_md], 'mo_c', mo_cat_map),
+        (df_agg[df_agg.is_mo & df_agg.is_md], 'mo_md', mo_cat_map),
     ]:
-        plot_perf_rank(df_rank, 'infill', cat_name_map=so_cat_map, idx_name_map=p_name_map,
+        plot_perf_rank(df_rank, 'infill', cat_name_map=cat_map, idx_name_map=p_name_map,
                        save_path=f'{folder}/rank_{rank_cat}')
-        plot_perf_rank(df_rank, 'infill', cat_name_map=so_cat_map, idx_name_map=p_name_map,
+        plot_perf_rank(df_rank, 'infill', cat_name_map=cat_map, idx_name_map=p_name_map,
                        prefix='iter', save_path=f'{folder}/rank_{rank_cat}_iter')
 
     green = matplotlib.cm.get_cmap('Greens')

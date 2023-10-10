@@ -7,3 +7,4 @@ scikit-learn~=1.2
 openpyxl
 git+https://github.com/jbussemaker/SBArchOpt.git#egg=sb-arch-opt
 seaborn
+jinja2
