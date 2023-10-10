@@ -19,12 +19,14 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.ticker as tkr
 from matplotlib.lines import Line2D
 from werkzeug.utils import secure_filename
 
 from arch_opt_exp.experiments.experimenter import *
 
-__all__ = ['plot_scatter', 'plot_problem_bars', 'plot_for_pub', 'analyze_perf_rank', 'plot_perf_rank']
+__all__ = ['plot_scatter', 'plot_problem_bars', 'plot_for_pub', 'analyze_perf_rank', 'plot_perf_rank', 'sb_theme',
+           'plot_multi_idx_lines']
 
 
 _col_names = {
@@ -242,7 +244,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
 
         np_counts = df_cnts.iloc[:, -2:].values
         i_good = np.where(np_counts[:, 1] == np.max(np_counts[:, 1]))[0]
-        i_best = i_good[np.argmax(np_counts[i_good, 0])]
+        i_best = i_good[np_counts[i_good, 0] == np.max(np_counts[i_good, 0])]
 
         df_rank.iloc[:, -2:] = np.nan
         df_rank_latex = pd.concat([df_rank.iloc[:, :-2], df_cnts.iloc[:, -2:]], axis=1)
@@ -289,6 +291,65 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         plt.savefig(save_path+'.svg')
     else:
         plt.show()
+
+
+def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_col_titles=None, prob_names=None,
+                         x_ticks=None, save_prefix=None, x_label='', y_log=False, y_fmt=None):
+    y_name = _col_names[y_col]
+    if sort_by is not None:
+        df = df.sort_values('n_comp').sort_index(level=0)
+
+    if prob_names is None:
+        prob_names = {}
+    df['idx0'] = [prob_names.get(val[0], val[0]) for val in df.index]
+    df['idx1'] = [val[1] for val in df.index]
+
+    if multi_col is not None and multi_col_titles is not None:
+        df[multi_col] = [multi_col_titles.get(val, val) for val in df[multi_col]]
+
+    grp = df.groupby('idx0', group_keys=False)
+    if multi_col is not None:
+        grp = df.groupby(['idx0', multi_col], group_keys=False)
+    df['x'] = grp.apply(lambda df_: pd.Series(index=df_.index, data=np.arange(len(df_))))
+
+    if x_ticks is None:
+        x_ticks = {}
+    cat_unique = df['idx1'].unique()
+    if multi_col is not None:
+        cat_unique = df[df[multi_col] == df[multi_col].unique()[0]]['idx1'].unique()
+    x_ticks = [x_ticks.get(val, val) for val in cat_unique]
+
+    df_q25 = df.copy()
+    df_q25[y_col] = df_q25[y_col+'_q25']
+    df_q75 = df.copy()
+    df_q75[y_col] = df_q75[y_col+'_q75']
+    df = pd.concat([df, df_q25, df_q75], axis=0)
+
+    with sb_theme():
+        palette = sns.color_palette('mako_r', n_colors=len(df.index.levels[0]))
+
+        g = sns.relplot(data=df, kind='line', x='x', y=y_col, hue='idx0', legend='brief', estimator=lambda s: s[0],
+                        errorbar=lambda s: (s[1], s[2]), sort=False, col=multi_col, palette=palette, height=3)
+
+        g.set(xlabel=x_label, ylabel=y_name)
+        g._legend.set_title('')
+        if y_log:
+            g.set(yscale='log')
+        if y_fmt is not None:
+            for ax in g.axes.flat:
+                ax.yaxis.set_major_formatter(tkr.StrMethodFormatter(y_fmt))
+                ax.yaxis.set_minor_formatter(tkr.NullFormatter())
+        if multi_col is not None and multi_col_titles is not None:
+            g.set_titles(col_template='{col_name}')
+
+        plt.xticks(ticks=np.arange(len(x_ticks)), labels=x_ticks)
+        sns.despine()
+
+    # plt.show()
+    save_prefix = f'_{save_prefix}' if save_prefix is not None else ''
+    save_path = f'{folder}/line{save_prefix}_{y_col}'
+    plt.savefig(save_path+'.png')
+    plt.savefig(save_path+'.svg')
 
 
 def analyze_perf_rank(df: pd.DataFrame, perf_col: str, n_repeat: int, perf_min=True, prefix=None):

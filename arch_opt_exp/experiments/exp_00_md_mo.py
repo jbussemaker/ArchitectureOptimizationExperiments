@@ -827,7 +827,12 @@ def exp_00_04_high_dim(post_process=False):
     )
 
     n_cat = [0, 2, 4, 8]
-    problems = [(MDTestZDT1(n_cat=n, n_var=10), f'ZDT1_{n:02.0f}') for n in n_cat]
+    n_var = 10
+    problems = [(
+        MDTestZDT1(n_cat=n, n_var=n_var),
+        f'ZDT1_{n:02.0f}',
+        f'{n:.0f}/{n_var}',
+    ) for n in n_cat]
     # problems = [
     #     (MOZDT1(), '02_C_MO'),
     #     (MDZDT1(), '03_MD_MO'),
@@ -835,12 +840,16 @@ def exp_00_04_high_dim(post_process=False):
     # ]
     problem_paths = []
     problem_names = []
+    p_names_map = {}
     problem: Union[ArchOptProblemBase]
-    for i, (problem, category) in enumerate(problems):
+    for i, (problem, category, title) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
         problem_names.append(name)
+        p_names_map[name] = title
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
+        if post_process:
+            continue
 
         n_init = int(np.ceil(5*problem.n_var))
 
@@ -898,7 +907,7 @@ def exp_00_04_high_dim(post_process=False):
     def _add_cols(df_agg_):
         df_agg_['surr'] = [val[1].split('-')[0] for val in df_agg_.index]
         df_agg_['is_pls'] = ['KPLS' in val[1] for val in df_agg_.index]
-        df_agg_['cat_ker'] = ['Gower' if 'Gow' in val[1] else 'EHH' for val in df_agg_.index]
+        df_agg_['cat_ker'] = ['Gower' if 'Gow' in val[1] else 'CR' if 'CR' in val[1] else 'EHH' for val in df_agg_.index]  # TODO
         df_agg_['is_ck_lt'] = ['Gow' in val[1] for val in df_agg_.index]
 
         nx = df_agg_['nx'].values
@@ -919,6 +928,25 @@ def exp_00_04_high_dim(post_process=False):
     plot_scatter(df_agg, folder, 'delta_hv_regret', 'time_infill', z_col='n_cat', y_log=True)
     plot_scatter(df_agg, folder, 'n_theta', 'time_train', z_col='n_cat', x_log=True, y_log=True)
     plot_scatter(df_agg, folder, 'n_theta', 'time_infill', z_col='n_cat', x_log=True, y_log=True)
+
+    x_ticks_map = {val: val.split("-")[1] if 'KPLS' in val else 'No KPLS'
+                   for val in df_agg.index.levels[1]}
+    x_label = '$n_{kpls}$'
+    mc_titles = {'Gower': 'Gower Distance', 'CR': 'Continuous Relaxation'}
+
+    df_agg_multi = df_agg[df_agg.cat_ker != 'EHH']
+    kwargs = dict(sort_by='n_comp', multi_col='cat_ker', multi_col_titles=mc_titles,
+                  prob_names=p_names_map, x_ticks=x_ticks_map, x_label=x_label)
+    plot_multi_idx_lines(df_agg_multi, folder, 'delta_hv_regret', y_fmt='{x:.0f}', **kwargs)
+    plot_multi_idx_lines(df_agg_multi, folder, 'time_train', y_log=True, y_fmt='{x:.0f}', **kwargs)
+    plot_multi_idx_lines(df_agg_multi, folder, 'time_infill', y_log=True, y_fmt='{x:.0f}', **kwargs)
+
+    # for df_agg_sub, prefix in [
+    #     (df_agg[df_agg.cat_ker == 'Gower'], 'gower'),
+    #     (df_agg[df_agg.cat_ker == 'CR'], 'cr'),
+    # ]:
+    #     plot_multi_idx_lines(df_agg_sub, folder, 'delta_hv_regret', sort_by='n_comp', prob_names=p_names_map,
+    #                          x_ticks=x_ticks_map, save_prefix=prefix, x_label=x_label)
 
 
 if __name__ == '__main__':
