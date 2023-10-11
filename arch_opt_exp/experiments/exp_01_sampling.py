@@ -788,10 +788,10 @@ def exp_01_06_opt(post_process=False):
 
     problems = [
         (lambda i_opt_: SelectableTunableBranin(
-            n_sub=n_sub, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR', 'Branin IR'),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin IR/MRD'),  # High diversity range
-        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 IR/MRD'),
+            n_sub=n_sub, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin ('),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR', 'Branin (H/'),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin (H/MRD/'),  # High diversity range
+        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 (H/MRD/'),
     ]
     # for i, (problem_factory, category) in enumerate(problems):
     #     problem_factory(0).print_stats()
@@ -806,7 +806,7 @@ def exp_01_06_opt(post_process=False):
             problem = problem_factory(i_opt)
             name = f'{category} {problem.__class__.__name__} opt={i_opt}'
             problem_names.append(name)
-            prob_name_map[name] = f'{title} {"L" if i_opt == 0 else "S"}'
+            prob_name_map[name] = f'{title}{"L" if i_opt == 0 else "S"})'
             problem_path = f'{folder}/{secure_filename(name)}'
             problem_paths.append(problem_path)
             if post_process:
@@ -860,7 +860,7 @@ def exp_01_06_opt(post_process=False):
     ]
     cat_name_map = {sampler: cat_names[i] for i, (_, sampler) in enumerate(_samplers)}
     plot_perf_rank(df_agg, 'strategy', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
-                   save_path=f'{folder}/rank')
+                   save_path=f'{folder}/rank', n_col_split=6)
 
     green = matplotlib.cm.get_cmap('Greens')
     blue = matplotlib.cm.get_cmap('Blues')

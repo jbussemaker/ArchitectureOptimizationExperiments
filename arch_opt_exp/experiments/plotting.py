@@ -14,6 +14,7 @@ limitations under the License.
 Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
+import io
 import contextlib
 import numpy as np
 import pandas as pd
@@ -207,7 +208,7 @@ def sb_theme():
 
 
 def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_map=None, prefix=None, save_path=None,
-                   add_counts=True):
+                   add_counts=True, n_col_split=None):
     prefix = '' if prefix is None else f'{prefix}_'
     rank_col = prefix+'perf_rank'
     if rank_col not in df.columns:
@@ -250,25 +251,52 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         df_rank_latex = pd.concat([df_rank.iloc[:, :-2], df_cnts.iloc[:, -2:]], axis=1)
 
     if save_path:
-        s = df_rank_latex.style
-        s.hide(names=True)
-        s.hide(names=True, axis=1)
         rank_columns = df_rank_latex.columns
+        count_columns = None
         if add_counts:
-            s.format('{:.0f}\%', subset=df_rank_latex.columns[-2:])
             rank_columns = df_rank_latex.columns[:-2]
+            count_columns = df_rank_latex.columns[-2:]
+
+        if n_col_split is None:
+            n_col_split = len(df_rank_latex.columns)+1
+
         col_fmt = 'l'+'c'*len(df_rank_latex.columns)
-        s.background_gradient(cmap='Greens_r', subset=rank_columns, vmin=1, vmax=max(df_rank_orig.max()))
-        if i_best is not None:
-            s.set_properties(subset=pd.IndexSlice[df_rank_latex.index[i_best], :], **{'underline': '--rwrap--latex'})
-            def style_idx_(s):
-                styles = np.array(['']*len(s), dtype=object)
-                styles[i_best] = 'underline: --rwrap--latex;'
-                return styles
-            s.apply_index(style_idx_)
-        s.format_index(lambda s: s.replace('%', '\\%'), axis=0)
-        # s.format_index(axis=0, escape='latex')  # .format_index(axis=1, escape='latex')
-        s.to_latex(save_path+'.tex', hrules=True, convert_css=True, column_format=col_fmt)
+        buffer = io.StringIO()
+        for i_start_col in range(-1, len(df_rank_latex.columns), n_col_split):
+            if i_start_col >= 0:
+                buffer.write('\\vspace{15pt}\n')
+
+            df_sub = df_rank_latex.iloc[:, max(0, i_start_col):i_start_col+n_col_split]
+            s = df_sub.style
+            s.hide(names=True)
+            s.hide(names=True, axis=1)
+            if i_start_col >= 0:
+                s.hide(axis='index')
+            else:
+                s.format_index(lambda s: s.replace('%', '\\%'), axis=0)
+
+            if count_columns is not None:
+                columns = [col for col in df_sub.columns if col in count_columns]
+                if len(columns) > 0:
+                    s.format('{:.0f}\%', subset=columns)
+
+            sub_rank_columns = [col for col in df_sub.columns if col in rank_columns]
+            if len(sub_rank_columns) > 0:
+                s.background_gradient(cmap='Greens_r', subset=sub_rank_columns, vmin=1, vmax=max(df_rank_orig.max()))
+
+            if i_best is not None:
+                s.set_properties(subset=pd.IndexSlice[df_rank_latex.index[i_best], :], **{'underline': '--rwrap--latex'})
+                def style_idx_(s):
+                    styles = np.array(['']*len(s), dtype=object)
+                    styles[i_best] = 'underline: --rwrap--latex;'
+                    return styles
+                s.apply_index(style_idx_)
+
+            s.to_latex(buffer, hrules=True, convert_css=True, column_format=col_fmt[i_start_col+1:][:n_col_split])
+
+        with open(save_path+'.tex', 'w') as fp:
+            buffer.seek(0)
+            fp.write(buffer.read())
 
     h = .5+len(df_rank)*.3
     w = 1+len(df_rank.columns)*1.2
