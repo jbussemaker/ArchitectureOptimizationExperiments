@@ -222,10 +222,10 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
     df['cat_names'] = [cat_name_map.get(v, v) for v in df[cat_col]]
     df_rank = df.pivot(index='cat_names', columns='idx', values=rank_col)
 
-    if cat_name_map is not None:
+    if len(cat_name_map) > 0:
         cat_names = [cat_name for cat_name in cat_name_map.values() if cat_name in df_rank.index]
         df_rank = df_rank.loc[cat_names]
-    if idx_name_map is not None:
+    if len(idx_name_map) > 0:
         idx_names = [idx_name for idx_name in idx_name_map.values() if idx_name in df_rank.columns]
         df_rank = df_rank[idx_names]
 

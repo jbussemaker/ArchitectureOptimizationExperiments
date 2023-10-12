@@ -55,7 +55,7 @@ _exp_02_03_folder = '02_hier_03_sensitivities'
 _exp_02_04_folder = '02_hier_04_dv_examples'
 
 
-def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, repair=None, evaluator=None):
+def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, repair=None, evaluator=None, seed=None):
     doe: Dict[int, Population] = {}
     doe_delta_hvs = []
     for i_rep in range(n_repeat):
@@ -67,6 +67,8 @@ def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, rep
                     repair=repair if repair is not None else doe_algo.repair,
                     eliminate_duplicates=LargeDuplicateElimination(),
                 )
+            if seed is not None:  # Works with the HierarchicalSampler
+                np.random.seed(seed)
             if evaluator is not None:
                 doe_algo.evaluator = evaluator
             doe_algo.setup(problem)
@@ -161,8 +163,8 @@ def exp_02_02_hier_strategies(sbo=False):
     folder = set_results_folder(f'{_exp_02_02_folder}_{folder_post}')
     n_infill = 100
     n_gen = 50
-    n_repeat = 8 if sbo else 100
-    doe_k = 5
+    n_repeat = 8 if sbo else 40
+    doe_k = 10
     n_sub = 8
     i_sub_opt = n_sub-1
     prob_data = {}
@@ -197,7 +199,7 @@ def exp_02_02_hier_strategies(sbo=False):
         (lambda: HierarchicalGoldstein(), '02_SO_HDR', 'Goldstein (HDR)'),
         (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt), '03_MO_HDR', 'ZDT1 (HDR)'),
     ]
-    # for i, (problem_factory, category) in enumerate(problems):
+    # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem_factory().print_stats()
     # exit()
 
@@ -227,7 +229,7 @@ def exp_02_02_hier_strategies(sbo=False):
         metrics, additional_plot = _get_metrics(problem)
         additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
 
-        algo_names, hier_sampling, problems, algo_titles = zip(*[
+        algo_names, hier_sampling, problems = zip(*[
             ('00_naive', False, NaiveProblem(problem)),
             ('01_x_out', False, NaiveProblem(problem, return_mod_x=True)),
             ('02_repair', False, NaiveProblem(problem, return_mod_x=True, correct=True)),
@@ -248,14 +250,15 @@ def exp_02_02_hier_strategies(sbo=False):
 
         doe = {}
         for j, problem_ in enumerate(problems):
-            doe_prob, doe_delta_hvs = _create_does(problem_, n_init, n_repeat)
+            doe_prob, doe_delta_hvs = _create_does(problem_, n_init, n_repeat, seed=42+j)
             log.info(f'Naive DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
                      f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
             doe[algo_names[j]] = doe_prob
 
         do_run = not post_process
         exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max, doe=doe,
-                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run)
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                   run_if_exists=False)
         agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
         plt.close('all')
 
@@ -264,12 +267,13 @@ def exp_02_02_hier_strategies(sbo=False):
     def _add_cols(df_agg_):
         # df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
         df_agg_['strategy'] = [strat_map.get(val[1], val[1]) for val in df_agg_.index]
-        analyze_perf_rank(df_agg_, 'delta_hv_regret', n_repeat)
+        analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat)
         return df_agg_
 
     df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
-    plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, save_path=f'{folder}/rank')
+    cat_name_map = {val: val for val in strat_map.values()}
+    plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, cat_name_map=cat_name_map, save_path=f'{folder}/rank')
 
 
 def exp_02_03_sensitivities(sbo=False, mrd=False):
@@ -489,10 +493,10 @@ def exp_02_04_tunable_hier_dv_examples():
 
 if __name__ == '__main__':
     # exp_02_01_tpe()
-    # exp_02_02_hier_strategies()
+    exp_02_02_hier_strategies()
     # exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)
     # exp_02_03_sensitivities(sbo=True, mrd=True)
-    exp_02_04_tunable_hier_dv_examples()
+    # exp_02_04_tunable_hier_dv_examples()
