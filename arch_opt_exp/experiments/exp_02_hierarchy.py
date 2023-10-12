@@ -68,7 +68,7 @@ def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, rep
                     eliminate_duplicates=LargeDuplicateElimination(),
                 )
             if seed is not None:  # Works with the HierarchicalSampler
-                np.random.seed(seed)
+                np.random.seed(seed+i_rep)
             if evaluator is not None:
                 doe_algo.evaluator = evaluator
             doe_algo.setup(problem)
@@ -250,7 +250,7 @@ def exp_02_02_hier_strategies(sbo=False):
 
         doe = {}
         for j, problem_ in enumerate(problems):
-            doe_prob, doe_delta_hvs = _create_does(problem_, n_init, n_repeat, seed=42+j)
+            doe_prob, doe_delta_hvs = _create_does(problem_, n_init, n_repeat, seed=42)
             log.info(f'Naive DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
                      f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
             doe[algo_names[j]] = doe_prob
@@ -493,8 +493,8 @@ def exp_02_04_tunable_hier_dv_examples():
 
 if __name__ == '__main__':
     # exp_02_01_tpe()
-    exp_02_02_hier_strategies()
-    # exp_02_02_hier_strategies(sbo=True)
+    # exp_02_02_hier_strategies()
+    exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)

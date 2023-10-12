@@ -317,15 +317,21 @@ class Experimenter:
 
     def run_effectiveness_parallel(self, n_repeat: int, keep_history=False, n_parallel=None, run_if_exists=True):
         with concurrent.futures.ProcessPoolExecutor(max_workers=n_parallel) as executor:
-            futures = [executor.submit(self.run_effectiveness, i, keep_history=keep_history,
-                                       run_if_exists=run_if_exists) for i in range(n_repeat)]
-            concurrent.futures.wait(futures)
+            futures = []
+            for i in range(n_repeat):
+                if not run_if_exists:
+                    result_path = self._get_effectiveness_result_path(repeat_idx=i)
+                    if os.path.exists(result_path):
+                        log.info(f'Not running repetition index {i}, because result already exists')
+                        continue
 
+                futures.append(executor.submit(self.run_effectiveness, i, keep_history=keep_history))
+
+            concurrent.futures.wait(futures)
             for fut in futures:
                 fut.result()
 
-    def run_effectiveness(self, repeat_idx: int = 0, seed=None, keep_history=False,
-                          run_if_exists=True) -> ExperimenterResult:
+    def run_effectiveness(self, repeat_idx: int = 0, seed=None, keep_history=False) -> ExperimenterResult:
         """
         Run the effectiveness experiment: find out how well the algorithm is able to approach the Pareto front. Simply
         runs the algorithm with a predefines maximum number of function evaluations.
@@ -333,10 +339,6 @@ class Experimenter:
         self.capture_log(level=self._log_level)
 
         result_path = self._get_effectiveness_result_path(repeat_idx=repeat_idx)
-        if not run_if_exists and os.path.exists(result_path):
-            log.info(f'Not running repetition index {repeat_idx}, because result already exists')
-            return self.get_effectiveness_result(repeat_idx=repeat_idx)
-
         termination = EffectivenessTerminator(n_eval_max=self.n_eval_max, metrics=self.metrics)
 
         algorithm = copy.deepcopy(self.algorithm)

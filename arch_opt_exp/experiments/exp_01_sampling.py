@@ -793,7 +793,7 @@ def exp_01_06_opt(post_process=False):
         (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin (H/MRD/'),  # High diversity range
         (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 (H/MRD/'),
     ]
-    # for i, (problem_factory, category) in enumerate(problems):
+    # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem_factory(0).print_stats()
     # exit()
     problem_paths = []
