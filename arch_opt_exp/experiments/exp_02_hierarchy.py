@@ -440,30 +440,31 @@ def exp_02_04_tunable_hier_dv_examples():
         assert x is not None
         is_cont_mask = problem.is_cont_mask
 
-        data = [[('cont' if is_cont_mask[j] else xij) if is_active[i, j] else ' ' for j, xij in enumerate(xi)
+        data = [[i+1]+[('cont' if is_cont_mask[j] else xij) if is_active[i, j] else ' ' for j, xij in enumerate(xi)
                  if incl_cont or (not incl_cont and not is_cont_mask[j])]
                 for i, xi in enumerate(x)]
-        df = pd.DataFrame(data=data, columns=[f'x{i}' for i in range(
-            len(is_cont_mask) if incl_cont else int(np.sum(~is_cont_mask)))])
-        df.to_excel(writer, sheet_name=name)
+        x_cols = [f'x{i}' for i in range(len(is_cont_mask) if incl_cont else int(np.sum(~is_cont_mask)))]
+        df = pd.DataFrame(data=data, columns=['$i_{sub}$']+x_cols)
+        df.iloc[:, 1:].to_excel(writer, sheet_name=name)
 
         # https://stackoverflow.com/a/54110153
         worksheet = writer.sheets[name]
         for fmt in formats:
-            worksheet.conditional_format(1, 1, len(df), len(df.columns), fmt)
+            worksheet.conditional_format(1, 1, len(df), len(df.columns)-1, fmt)
 
         # Output to Latex
         styler = df.style
         if np.any(df.values == ' '):
             styler.apply(lambda df_: np.where(
-                df_.values == ' ', 'background-color:#FFC7CE;color:#9C0006;', ''), axis=None)
+                df_.values == ' ', 'background-color:#FFC7CE;color:#9C0006;', ''), axis=None, subset=x_cols)
         if np.any(df.values == 'cont'):
             styler.apply(lambda df_: np.where(
-                df_.values == 'cont', f'background-color:{hx(blue(.25))};color:{hx(blue(.75))};', ''), axis=None)
-        styler.format(lambda v: v if isinstance(v, str) else int(v))
+                df_.values == 'cont', f'background-color:{hx(blue(.25))};color:{hx(blue(.75))};', ''),
+                         axis=None, subset=x_cols)
+        styler.format(lambda v: v if isinstance(v, str) else int(v), subset=x_cols)
 
         i_max = np.max(x)
-        for col in df.columns:
+        for col in x_cols:
             styler.background_gradient(cmap='Greens', low=.25, high=.5, axis=0, vmin=0, vmax=i_max,
                                        subset=pd.IndexSlice[(df[col] != ' ') & (df[col] != 'cont'), col])
 
