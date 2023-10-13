@@ -198,7 +198,7 @@ def exp_00_02_infill(post_process=False):
 
     so_ensemble = [ExpectedImprovementInfill(), LowerConfidenceBoundInfill(alpha=2.), ProbabilityOfImprovementInfill()]
     so_infills = [
-        (FunctionEstimateConstrainedInfill(), 'y', 1, 'y-mean'),
+        (FunctionEstimateConstrainedInfill(), 'y', 1, '$\\hat{f}$'),
         # (LowerConfidenceBoundInfill(alpha=2.), 'LCB', 1, 'LCB),
         (ExpectedImprovementInfill(), 'EI', 1, 'EI'),
         # (ProbabilityOfImprovementInfill(), 'PoI', 1, 'PoI'),

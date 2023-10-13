@@ -41,6 +41,7 @@ from sb_arch_opt.problems.md_mo import *
 from sb_arch_opt.problems.hierarchical import *
 from sb_arch_opt.problems.problems_base import *
 from sb_arch_opt.problems.turbofan_arch import *
+from sb_arch_opt.algo.pymoo_interface.api import *
 from sb_arch_opt.algo.arch_sbo.algo import *
 from sb_arch_opt.algo.arch_sbo.infill import *
 from sb_arch_opt.algo.arch_sbo.models import *
@@ -732,7 +733,7 @@ def _get_metrics(problem):
     return metrics, additional_plot
 
 
-def exp_01_06_opt(post_process=False):
+def exp_01_06_opt(sbo=True, post_process=False):
     """
     Run optimizations with different sampling strategies for different sub-problem properties and optimum locations:
     - Single-objective, no hierarchy
@@ -750,10 +751,12 @@ def exp_01_06_opt(post_process=False):
       - The hierarchical samplers have better starting points due to higher chances of sampling smaller subproblems
       - The hierarchical grouped-by-active weighted sampler performs best, most consistently
     """
-    folder = set_results_folder(_exp_01_06_folder)
+    folder_post = '' if sbo else '_nsga2'
+    folder = set_results_folder(_exp_01_06_folder+folder_post)
     n_infill = 100
-    n_repeat = 20
-    doe_k = 2
+    n_gen = 25
+    n_repeat = 20 if sbo else 100
+    doe_k = 10
     n_sub = 8
     i_opt_test = [0, n_sub-1]
     prob_data = {}
@@ -828,17 +831,18 @@ def exp_01_06_opt(post_process=False):
             algorithms = []
             algo_names = []
             for sampler, sampler_name in _samplers:
-                # if isinstance(sampler, HierarchicalSamplingTestBase):
-                #     xm = sampler.get_merged_x(problem)
-                # continue
-                sbo = SBOInfill(
-                    model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
-                sbo_algo = sbo.algorithm(infill_size=1, init_sampling=sampler, init_size=n_init)
-                algorithms.append(sbo_algo)
+                if sbo:
+                    sbo_algo = SBOInfill(
+                        model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
+                    sbo_algo = sbo_algo.algorithm(infill_size=1, init_sampling=sampler, init_size=n_init)
+                    algorithms.append(sbo_algo)
+                else:
+                    algorithms.append(ArchOptNSGA2(pop_size=n_init))
                 algo_names.append(sampler_name)
 
             do_run = not post_process
-            exps = run(folder, problem, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_init+n_infill,
+            n_eval_max = (n_init+n_infill) if sbo else ((n_gen-1)*n_init)
+            exps = run(folder, problem, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max,
                        metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
                        run_if_exists=False)
             agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
@@ -860,7 +864,7 @@ def exp_01_06_opt(post_process=False):
     ]
     cat_name_map = {sampler: cat_names[i] for i, (_, sampler) in enumerate(_samplers)}
     plot_perf_rank(df_agg, 'strategy', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
-                   save_path=f'{folder}/rank', n_col_split=6)
+                   save_path=f'{folder}/rank{folder_post}', n_col_split=6)
 
     green = matplotlib.cm.get_cmap('Greens')
     blue = matplotlib.cm.get_cmap('Blues')
@@ -927,4 +931,5 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
-    exp_01_06_opt()
+    # exp_01_06_opt()
+    exp_01_06_opt(sbo=False)
