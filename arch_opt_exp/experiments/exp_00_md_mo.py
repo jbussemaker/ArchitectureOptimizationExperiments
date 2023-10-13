@@ -835,6 +835,9 @@ def exp_00_04_high_dim(post_process=False):
         f'ZDT1_{n:02.0f}',
         f'{n:.0f}/{n_var}',
     ) for n in n_cat]
+    # for problem, _, _ in problems:
+    #     problem.print_stats()
+    # exit()
     # problems = [
     #     (MOZDT1(), '02_C_MO'),
     #     (MDZDT1(), '03_MD_MO'),

@@ -768,6 +768,7 @@ def _agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
     df_prob.to_pickle(f'{problem_path}/df_strategies.pkl')
     with pd.ExcelWriter(f'{problem_path}/df_strategies.xlsx') as writer:
         df_prob.to_excel(writer)
+    return df_prob
 
 
 def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
@@ -972,13 +973,17 @@ def exp_03_07_engine_arch(post_process=False):
         doe_algo.run()
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
-        n_theta, kpls_n_dim, agg_g, kernel = model_settings[algo_name]
+        n_theta, kpls_n_dim, agg_g, kernel, strategy_ = model_settings[algo_name]
 
         strat_data_['nx'] = problem.n_var
         strat_data_['n_theta'] = n_theta
-        strat_data_['kpls'] = kpls_n_dim
+        strat_data_['kpls'] = kpls_n_dim or problem.n_var
         strat_data_['g_agg'] = agg_g.name if agg_g is not None else ''
         strat_data_['kernel'] = kernel
+
+        strat_data_['strategy'] = str(strategy_)
+        strat_data_['is_pred'] = is_pred = isinstance(strategy_, PredictionHCStrategy)
+        strat_data_['pred'] = str(strategy_.predictor) if is_pred else ''
 
     for i, (problem, n_budget, _, strategies_settings) in enumerate(problems):
         name = problem_names[i]
@@ -994,6 +999,8 @@ def exp_03_07_engine_arch(post_process=False):
 
         algorithms = []
         algo_names = []
+        i_md_gp_gower = []
+        md_gp_gower_algo_name_map = {}
         model_settings = {}
         for use_gower, n_kpls, strategies in strategies_settings:
             for strategy in strategies:
@@ -1013,25 +1020,31 @@ def exp_03_07_engine_arch(post_process=False):
                 elif n_kpls is None:
                     kpls_n_dim = None
 
+                algo_name = f'{strategy!s} {kernel}'
+                if n_kpls is not None:
+                    algo_name += f' KPLS {n_kpls}'
+
                 if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
                     strategy.predictor._kpls_n_dim = kpls_n_dim
+                    if use_gower:
+                        i_md_gp_gower.append(len(algo_names))
+                        md_gp_gower_algo_name_map[algo_name] = \
+                            f'$n_{{kpls}} = {n_kpls}$' if n_kpls is not None else 'No KPLS'
 
                 infill_pop_size = None  # 200 if is_heavy else None
 
                 sbo, model = _get_sbo(problem, strategy, doe, verbose=True, g_aggregation=agg_g,
                                       infill_pop_size=infill_pop_size, kpls_n_dim=kpls_n_dim, cont=cont, **kwargs)
                 algorithms.append(sbo)
-                algo_name = f'{strategy!s} {kernel}'
-                if n_kpls is not None:
-                    algo_name += f' KPLS {n_kpls}'
                 algo_names.append(algo_name)
 
-                model_settings[algo_name] = (ModelFactory.get_n_theta(problem, model), kpls_n_dim, agg_g, kernel)
+                model_settings[algo_name] = \
+                    (ModelFactory.get_n_theta(problem, model), kpls_n_dim, agg_g, kernel, strategy)
 
         do_run = not post_process
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_budget-n_init,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   return_exp=False, n_parallel=1, run_if_exists=False)
+                   return_exp=post_process, n_parallel=1, run_if_exists=False)
 
         f_pf_known = problem.pareto_front()
         for exp in exps:
@@ -1046,7 +1059,22 @@ def exp_03_07_engine_arch(post_process=False):
                 metric.plot_obj_progress(
                     f_pf_known=f_pf_known, save_filename=exp.get_problem_algo_results_path(f'pf_{i_res}'), show=False)
 
-        _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+        df_prob = _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+
+        df_md_gp_gower = df_prob[(df_prob.kernel == 'Gower') & (df_prob.pred == 'MD-GP')]
+        df_md_gp_gower['prob'] = [name for _ in range(len(df_md_gp_gower))]
+        df_md_gp_gower['idx'] = df_md_gp_gower.index
+        df_md_gp_gower = df_md_gp_gower.set_index(['prob', 'idx'])
+        plot_multi_idx_lines(df_md_gp_gower, exps[0].get_problem_results_path(),
+                             ['delta_hv_regret', 'time_train', 'time_infill'],
+                             y_log=[False, True, True], y_fmt='{x:.0f}', sort_by='kpls', save_prefix='j',
+                             x_ticks=md_gp_gower_algo_name_map, legend_title=False, height=1.5, aspect=3)
+
+        exps_md_gp_gower = [exp for i_exp, exp in enumerate(exps) if i_exp in i_md_gp_gower]
+        plot_for_pub_sb(exps_md_gp_gower, met_plot_map={
+            'delta_hv': ['ratio'],
+        }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower')
+
         plt.close('all')
 
     def _add_cols(df_agg_):
