@@ -43,6 +43,7 @@ from arch_opt_exp.experiments.metrics import *
 from arch_opt_exp.experiments.plotting import *
 from arch_opt_exp.hc_strategies.metrics import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
+from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.md_mo_hier.naive import *
 from arch_opt_exp.experiments.exp_01_sampling import agg_opt_exp, agg_prob_exp
 
@@ -236,17 +237,25 @@ def exp_02_02_hier_strategies(sbo=False):
             ('03_activeness', True, NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)),
         ])
 
+        sampler = lambda: HierarchicalSampling()
+        # sampler = lambda: ActiveVarHierarchicalSampling()
         if sbo:
             n_eval_max = n_infill
             infill, n_batch = get_default_infill(problem)
             algorithms = []
             for problem_ in problems:
-                model, norm = ModelFactory(problem_).get_md_kriging_model(kpls_n_comp=n_kpls)
-                algorithms.append(get_sbo(model, infill, infill_size=n_batch, init_size=n_init, normalization=norm))
+                # from smt.surrogate_models.krg_based import MixIntKernelType, MixHrcKernelType
+                kwargs = dict(
+                    # categorical_kernel=MixIntKernelType.CONT_RELAX,
+                    # hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,
+                )
+                model, norm = ModelFactory(problem_).get_md_kriging_model(kpls_n_comp=n_kpls, **kwargs)
+                algorithms.append(get_sbo(model, infill, infill_size=n_batch, init_size=n_init, normalization=norm,
+                                          init_sampling=sampler()))
         else:
             pop_size = n_init
             n_eval_max = (n_gen-1)*pop_size
-            algorithms = [ArchOptNSGA2(pop_size=pop_size) for _ in range(len(problems))]
+            algorithms = [ArchOptNSGA2(pop_size=pop_size, sampling=sampler()) for _ in range(len(problems))]
 
         doe = {}
         for j, problem_ in enumerate(problems):
