@@ -46,7 +46,8 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
 
     def __init__(self, *args, i_sub_opt: int = None, **kwargs):
         super().__init__(*args, **kwargs)
-        self._mod_transform(i_sub_opt or 0)
+        if i_sub_opt is not None:
+            self._mod_transform(i_sub_opt)
         self._i_sub_opt = i_sub_opt
 
     def _mod_transform(self, i_sub_opt):
@@ -86,9 +87,9 @@ class SelectableTunableBranin(SelectableTunableMetaProblem):
 
 class SelectableTunableZDT1(SelectableTunableMetaProblem):
 
-    def __init__(self, n_sub=128, i_sub_opt=0):
+    def __init__(self, n_sub=128, i_sub_opt=0, n_opts=2):
         factory = lambda n: NoHierarchyWrappedProblem(ZDT1(n_var=n))
-        super().__init__(factory, imp_ratio=10., n_subproblem=n_sub, diversity_range=.95, n_opts=2, cont_ratio=1,
+        super().__init__(factory, imp_ratio=10., n_subproblem=n_sub, diversity_range=.95, n_opts=n_opts, cont_ratio=1,
                          i_sub_opt=i_sub_opt)
 
 

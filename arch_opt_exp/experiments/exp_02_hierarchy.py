@@ -14,13 +14,19 @@ limitations under the License.
 Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
+import os
+import copy
+import pickle
+import timeit
 import logging
 import numpy as np
 import pandas as pd
 from typing import Dict
+import concurrent.futures
 import matplotlib
 import matplotlib.pyplot as plt
 from werkzeug.utils import secure_filename
+from pymoo.core.evaluator import Evaluator
 from pymoo.core.population import Population
 from pymoo.core.initialization import Initialization
 
@@ -29,6 +35,7 @@ from sb_arch_opt.sampling import *
 from sb_arch_opt.problems.discrete import *
 from sb_arch_opt.problems.continuous import *
 from sb_arch_opt.problems.hierarchical import *
+from sb_arch_opt.problems.turbofan_arch import *
 
 from sb_arch_opt.algo.arch_sbo import *
 from sb_arch_opt.algo.tpe_interface import *
@@ -42,16 +49,19 @@ from arch_opt_exp.experiments.runner import *
 from arch_opt_exp.experiments.metrics import *
 from arch_opt_exp.experiments.plotting import *
 from arch_opt_exp.hc_strategies.metrics import *
+from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.md_mo_hier.naive import *
 from arch_opt_exp.experiments.exp_01_sampling import agg_opt_exp, agg_prob_exp
+from arch_opt_exp.experiments.experimenter import Experimenter
 
 log = logging.getLogger('arch_opt_exp.02_hier')
 capture_log()
 
 _exp_02_01_folder = '02_hier_01_tpe'
 _exp_02_02_folder = '02_hier_02_strategies'
+_exp_02_02a_folder = '02_hier_02a_model_fit'
 _exp_02_03_folder = '02_hier_03_sensitivities'
 _exp_02_04_folder = '02_hier_04_dv_examples'
 
@@ -285,6 +295,185 @@ def exp_02_02_hier_strategies(sbo=False):
     plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, cat_name_map=cat_name_map, save_path=f'{folder}/rank')
 
 
+def exp_02_02a_model_fit(post_process=False):
+    """
+    Test fitted models for the different hierarchy integration strategies.
+    """
+    # post_process = True
+    from smt.surrogate_models.krg_based import MixIntKernelType, MixHrcKernelType
+    Experimenter.capture_log()
+
+    folder = set_results_folder(_exp_02_02a_folder)
+    df_path = f'{folder}/results'
+
+    k_doe = [1, 10, 20]
+    n_sample = 8
+    n_train = 5
+    n_sub, n_opts = 8, 2
+    # n_sub, n_opts = 9, 3
+    i_sub_opt = None
+    # i_sub_opt = n_sub-1
+    problems = [
+        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
+        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
+        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
+        # (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
+        # (lambda: HierarchicalGoldstein(), '02_SO_HDR', 'Goldstein (H/MRD)'),
+        # (lambda: HierarchicalRosenbrock(), '02_SO_HDR', 'Rosenbrock (H/MRD)'),
+        # (lambda: HierCantileveredBeam(), '02_SO_HDR', 'Cant. Beam (H/MRD)'),
+        (lambda: SimpleTurbofanArch(), '04_REAL_S', 'Simple Jet'),
+        # (lambda: RealisticTurbofanArch(), '04_REAL_L', 'Real Jet'),
+    ]
+    # for problem_factory, _, _ in problems:
+    #     problem_factory().print_stats()
+    # exit()
+
+    if post_process and not os.path.exists(df_path):
+        post_process = False
+    if not post_process:
+        data = {
+            'problem': [], 'prob_title': [], 'type': [], 'type_int': [],
+            'k_doe': [], 'n_doe': [], 'cat_ker': [], 'hier_ker': [], 'loocv': [], 'time_train': [],
+        }
+        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+            for base_problem_factory, problem_name, title in problems:
+                base_problem = base_problem_factory()
+                is_jet = isinstance(base_problem, (SimpleTurbofanArch, RealisticTurbofanArch))
+                repair_problem = NaiveProblem(base_problem, return_mod_x=True, correct=True)
+                act_problem = NaiveProblem(base_problem, return_mod_x=True, correct=True, return_activeness=True)
+                for int_name, problem, cat_kernel, hier_kernel in [
+                    ('00_naive', NaiveProblem(base_problem), MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
+                    ('01_x_out', NaiveProblem(base_problem, return_mod_x=True), MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
+                    ('02_repair_gd', repair_problem, MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
+                    # ('02_repair_cr', repair_problem, MixIntKernelType.CONT_RELAX, MixHrcKernelType.ALG_KERNEL),
+                    ('02_repair_ehh', repair_problem, MixIntKernelType.EXP_HOMO_HSPHERE, MixHrcKernelType.ALG_KERNEL),
+                    ('03_activeness_gd_alg', act_problem, MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
+                    ('03_activeness_gd_arc', act_problem, MixIntKernelType.GOWER, MixHrcKernelType.ARC_KERNEL),
+                    # ('03_activeness_cr_alg', act_problem, MixIntKernelType.CONT_RELAX, MixHrcKernelType.ALG_KERNEL),
+                    # ('03_activeness_cr_arc', act_problem, MixIntKernelType.CONT_RELAX, MixHrcKernelType.ARC_KERNEL),
+                    ('03_activeness_ehh_alg', act_problem, MixIntKernelType.EXP_HOMO_HSPHERE, MixHrcKernelType.ALG_KERNEL),
+                    ('03_activeness_ehh_arc', act_problem, MixIntKernelType.EXP_HOMO_HSPHERE, MixHrcKernelType.ARC_KERNEL),
+                ]:
+                    if is_jet and not (int_name.startswith('03_') or int_name.startswith('02_')):
+                        continue
+                    base_model, norm = ModelFactory(problem).get_md_kriging_model(
+                        categorical_kernel=cat_kernel, hierarchical_kernel=hier_kernel, multi=False,
+                    )
+                    for k in k_doe:
+                        futures = []
+                        for i_sample in range(n_sample):
+                            log_str = f'{problem_name} {title} {int_name} k={k} {i_sample+1}/{n_sample}'
+
+                            n_doe = int(k*problem.n_var)
+                            if isinstance(base_problem, (SimpleTurbofanArch, RealisticTurbofanArch)):
+                                x, f, g = base_problem._load_evaluated()
+                                is_failed = base_problem.get_failed_points({'F': f, 'G': g})
+                                pop = Population.new(X=x[~is_failed, :], F=f[~is_failed, :], G=g[~is_failed, :])
+                                if len(pop) > n_doe:
+                                    i_sel = np.random.choice(range(len(pop)), n_doe, replace=False)
+                                    pop = pop[i_sel]
+                            else:
+                                sampler = HierarchicalSampling()
+                                # sampler = ActiveVarHierarchicalSampling()
+                                pop = sampler.do(problem, n_samples=n_doe)
+                                pop = Evaluator().eval(problem, pop)
+
+                            # Following code should have same behavior as arch_sbo/algo.py::_build_model
+                            x = pop.get('X')
+                            y = pop.get('F')
+
+                            y_min, y_max = np.nanmin(y, axis=0), np.nanmax(y, axis=0)
+                            y_norm = y_max-y_min
+                            y_norm[y_norm < 1e-6] = 1e-6
+                            y_train = (y-y_min)/y_norm
+
+                            x_train, is_active = problem.correct_x(x)
+                            x_train = norm.forward(x_train)
+                            futures.append(executor.submit(
+                                _do_cv, log_str, base_model, x_train, y_train, n_train=n_train, is_active=is_active))
+
+                        concurrent.futures.wait(futures)
+                        for fut in futures:
+                            loocv_max, time_train = fut.result()
+
+                            data['problem'].append(problem_name)
+                            data['prob_title'].append(title)
+                            data['type'].append(int_name)
+                            data['type_int'].append('_'.join(int_name.split('_')[:2]))
+                            data['k_doe'].append(k)
+                            data['n_doe'].append(n_doe)
+                            data['cat_ker'].append(cat_kernel.name[:3])
+                            data['hier_ker'].append(hier_kernel.name.split('_')[0])
+                            data['loocv'].append(loocv_max)
+                            data['time_train'].append(time_train)
+
+        df = pd.DataFrame(data=data)
+        df.to_pickle(df_path)
+        df.to_csv(df_path+'.csv')
+    else:
+        with open(df_path, 'rb') as fp:
+            df = pickle.load(fp)
+
+    df['ker'] = [f'{val} {df.hier_ker.values[i]}' for i, val in enumerate(df['cat_ker'])]
+
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    with sb_theme():
+        df_plot = df
+        # df_plot = df_plot[(df_plot.type_int == '02_repair') | (df_plot.type_int == '03_activeness')]
+        palette = sns.color_palette("hls", len(df_plot['type_int'].unique()))
+        g = sns.relplot(kind='line', data=df_plot, x='k_doe', y='loocv',
+                        hue='type_int', style='ker', palette=palette,
+                        col='prob_title', col_wrap=2, errorbar=('pi', 50))
+        g.set(xscale='log', yscale='log')
+        sns.despine()
+
+    plt.savefig(f'{folder}/compare.png')
+    plt.savefig(f'{folder}/compare.svg')
+    plt.show()
+
+
+def _do_cv(log_str, surrogate_model, xt: np.ndarray, yt: np.ndarray, n_train: int = None, is_active: np.ndarray = None):
+    log.info(log_str)
+    s = timeit.default_timer()
+    loocv = cross_validate(surrogate_model, xt, yt, n_train=n_train, is_active=is_active)
+    time_train = (timeit.default_timer()-s)/n_train
+    loocv_max = np.max(loocv)
+    return loocv_max, time_train
+
+
+def cross_validate(surrogate_model, xt: np.ndarray, yt: np.ndarray, n_train: int = None,
+                   is_active: np.ndarray = None) -> np.ndarray:
+    if n_train is None:
+        n_train = xt.shape[0]
+    if n_train > xt.shape[0]:
+        n_train = xt.shape[0]
+
+    i_leave_out = np.random.choice(xt.shape[0], n_train, replace=False)
+    errors = np.empty((n_train, yt.shape[1]))
+    for i, i_lo in enumerate(i_leave_out):
+        errors[i, :] = _get_error(surrogate_model, xt, yt, i_lo, is_active=is_active)
+
+    rmse = np.sqrt(np.mean(errors**2, axis=0))
+    return rmse
+
+
+def _get_error(surrogate_model, xt: np.ndarray, yt: np.ndarray, i_leave_out, is_active: np.ndarray = None) -> np.ndarray:
+    x_lo = xt[i_leave_out, :]
+    y_lo = yt[i_leave_out, :]
+    is_active_lo = is_active[[i_leave_out], :] if is_active is not None else None
+    xt = np.delete(xt, i_leave_out, axis=0)
+    yt = np.delete(yt, i_leave_out, axis=0)
+    is_active = np.delete(is_active, i_leave_out, axis=0)
+
+    surrogate_model_copy = copy.deepcopy(surrogate_model)
+    surrogate_model_copy.set_training_values(xt, yt, is_acting=is_active)
+    surrogate_model_copy.train()
+
+    y_lo_predict = surrogate_model_copy.predict_values(np.atleast_2d(x_lo), is_acting=is_active_lo)
+    return y_lo_predict-y_lo
+
+
 def exp_02_03_sensitivities(sbo=False, mrd=False):
     """
     Investigate sensitivity of imputation ratio and max rate diversity on optimizer performance.
@@ -503,8 +692,9 @@ def exp_02_04_tunable_hier_dv_examples():
 
 if __name__ == '__main__':
     # exp_02_01_tpe()
+    exp_02_02a_model_fit()
     # exp_02_02_hier_strategies()
-    exp_02_02_hier_strategies(sbo=True)
+    # exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)
