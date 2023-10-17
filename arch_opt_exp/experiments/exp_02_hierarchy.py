@@ -51,7 +51,7 @@ from arch_opt_exp.experiments.plotting import *
 from arch_opt_exp.hc_strategies.metrics import *
 from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
-from arch_opt_exp.md_mo_hier.sampling import *
+from arch_opt_exp.md_mo_hier.infill import *
 from arch_opt_exp.md_mo_hier.naive import *
 from arch_opt_exp.experiments.exp_01_sampling import agg_opt_exp, agg_prob_exp
 from arch_opt_exp.experiments.experimenter import Experimenter
@@ -247,16 +247,16 @@ def exp_02_02_hier_strategies(sbo=False):
             ('03_activeness', True, NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)),
         ])
 
-        sampler = lambda: HierarchicalSampling()
-        # sampler = lambda: ActiveVarHierarchicalSampling()
+        # sampler = lambda: HierarchicalSampling()
+        sampler = lambda: ActiveVarHierarchicalSampling()
         if sbo:
             n_eval_max = n_infill
             infill, n_batch = get_default_infill(problem)
             algorithms = []
             for problem_ in problems:
-                # from smt.surrogate_models.krg_based import MixIntKernelType, MixHrcKernelType
+                from smt.surrogate_models.krg_based import MixIntKernelType, MixHrcKernelType
                 kwargs = dict(
-                    # categorical_kernel=MixIntKernelType.CONT_RELAX,
+                    categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
                     # hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,
                 )
                 model, norm = ModelFactory(problem_).get_md_kriging_model(kpls_n_comp=n_kpls, **kwargs)
@@ -692,9 +692,9 @@ def exp_02_04_tunable_hier_dv_examples():
 
 if __name__ == '__main__':
     # exp_02_01_tpe()
-    exp_02_02a_model_fit()
+    # exp_02_02a_model_fit()
     # exp_02_02_hier_strategies()
-    # exp_02_02_hier_strategies(sbo=True)
+    exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)

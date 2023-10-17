@@ -965,8 +965,8 @@ def exp_00_04_high_dim(post_process=False):
 
 if __name__ == '__main__':
     # exp_00_01_md_gp()
-    # exp_00_02_infill()
+    exp_00_02_infill()
     # exp_00_03a_plot_constraints()
     # exp_00_03b_multi_y()
     # exp_00_03_constraints()
-    exp_00_04_high_dim()
+    # exp_00_04_high_dim()

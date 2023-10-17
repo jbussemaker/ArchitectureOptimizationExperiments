@@ -931,5 +931,5 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
-    # exp_01_06_opt()
-    exp_01_06_opt(sbo=False)
+    exp_01_06_opt()
+    # exp_01_06_opt(sbo=False)
