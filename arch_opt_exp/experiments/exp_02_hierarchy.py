@@ -428,7 +428,7 @@ def exp_02_02a_model_fit(post_process=False):
         palette = sns.color_palette("hls", len(df_plot['type_int'].unique()))
         g = sns.relplot(kind='line', data=df_plot, x='k_doe', y='loocv',
                         hue='type_int', style='ker', palette=palette,
-                        col='prob_title', col_wrap=2, errorbar=('pi', 50))
+                        col='prob_title', col_wrap=2, estimator='median', errorbar=('pi', 50))
         g.set(xscale='log', yscale='log')
         sns.despine()
 
