@@ -176,8 +176,9 @@ def exp_02_02_hier_strategies(sbo=False):
     n_gen = 50
     n_repeat = 8 if sbo else 40
     doe_k = 10
-    n_sub = 8
-    i_sub_opt = n_sub-1
+    # n_sub, n_opts = 8, 2
+    n_sub, n_opts = 9, 3
+    i_sub_opt = None
     prob_data = {}
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
@@ -204,11 +205,11 @@ def exp_02_02_hier_strategies(sbo=False):
             strat_data_[key] = value
 
     problems = [
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
         # (lambda: HierarchicalGoldstein(), '02_SO_HDR', 'Goldstein (H/MRD)'),
-        (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt), '03_MO_HDR', 'ZDT1 (H/MRD)'),
+        (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
     ]
     # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem_factory().print_stats()
@@ -240,18 +241,21 @@ def exp_02_02_hier_strategies(sbo=False):
         metrics, additional_plot = _get_metrics(problem)
         additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
 
-        algo_names, hier_sampling, problems = zip(*[
-            ('00_naive', False, NaiveProblem(problem)),
-            ('01_x_out', False, NaiveProblem(problem, return_mod_x=True)),
-            ('02_repair', False, NaiveProblem(problem, return_mod_x=True, correct=True)),
-            ('03_activeness', True, NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)),
+        algo_names, problems = zip(*[
+            ('00_naive', NaiveProblem(problem)),
+            ('01_x_out', NaiveProblem(problem, return_mod_x=True)),
+            ('02_repair', NaiveProblem(problem, return_mod_x=True, correct=True)),
+            # ('02_repair_all_x', NaiveProblem(problem, return_mod_x=True, correct=True, override_send_all_x=True)),
+            # ('02_repair_x_cond', NaiveProblem(problem, return_mod_x=True, correct=True, override_send_cond_act=True)),
+            ('03_activeness', NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)),
         ])
 
-        # sampler = lambda: HierarchicalSampling()
-        sampler = lambda: ActiveVarHierarchicalSampling()
+        sampler = lambda: HierarchicalSampling()
+        # sampler = lambda: ActiveVarHierarchicalSampling()
         if sbo:
             n_eval_max = n_infill
             infill, n_batch = get_default_infill(problem)
+            # infill.select_improve_infills = False
             algorithms = []
             for problem_ in problems:
                 from smt.surrogate_models.krg_based import MixIntKernelType, MixHrcKernelType
@@ -691,6 +695,9 @@ def exp_02_04_tunable_hier_dv_examples():
 
 
 if __name__ == '__main__':
+    # from exp_01_sampling import exp_01_06_opt
+    # exp_01_06_opt()
+
     # exp_02_01_tpe()
     # exp_02_02a_model_fit()
     # exp_02_02_hier_strategies()

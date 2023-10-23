@@ -66,10 +66,9 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
 
         i_hv_max = np.argmax(f_hv)
 
-        swapped_transform = self._transform.copy()
-        swapped_transform[i_sub_opt, :] = self._transform[i_hv_max, :]
-        swapped_transform[i_hv_max, :] = self._transform[i_sub_opt, :]
-        self._transform = swapped_transform
+        i_rotate = np.arange(n_sub)
+        i_rotate = i_rotate[np.roll(i_rotate, i_sub_opt-i_hv_max)]
+        self._transform = self._transform[i_rotate, :]
 
     def __repr__(self):
         return f'{self.__class__.__name__}(imp_ratio={self._imp_ratio}, n_sub={self._n_subproblem}, ' \

@@ -757,7 +757,8 @@ def exp_01_06_opt(sbo=True, post_process=False):
     n_gen = 25
     n_repeat = 20 if sbo else 100
     doe_k = 10
-    n_sub = 8
+    # n_sub, n_opts = 8, 2
+    n_sub, n_opts = 9, 3
     i_opt_test = [0, n_sub-1]
     prob_data = {}
 
@@ -791,10 +792,10 @@ def exp_01_06_opt(sbo=True, post_process=False):
 
     problems = [
         (lambda i_opt_: SelectableTunableBranin(
-            n_sub=n_sub, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin ('),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR', 'Branin (H/'),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin (H/MRD/'),  # High diversity range
-        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 (H/MRD/'),
+            n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin ('),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR', 'Branin (H/'),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin (H/MRD/'),  # High diversity range
+        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 (H/MRD/'),
     ]
     # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem_factory(0).print_stats()
