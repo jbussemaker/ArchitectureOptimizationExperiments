@@ -160,7 +160,7 @@ class CrowdingDistanceMetric(Metric):
     def _calculate_crowding_distances(pop) -> np.ndarray:
         """Based on pymoo.algorithms.moo.nsga2.RankAndCrowdingSurvival"""
 
-        f = pop.get("F").astype(np.float, copy=False)
+        f = pop.get("F").astype(float, copy=False)
         fronts = NonDominatedSorting().do(f)
 
         for k, front in enumerate(fronts):

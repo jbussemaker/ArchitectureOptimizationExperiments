@@ -224,22 +224,22 @@ class Metric:
     @classmethod
     def _get_opt_x(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Design vectors of the optimum population (non-dominated current Pareto front): (n_opt, n_x)"""
-        return cls._get_opt(algorithm, feasible_only=feasible_only).get('X').astype(np.float)
+        return cls._get_opt(algorithm, feasible_only=feasible_only).get('X').astype(float)
 
     @classmethod
     def _get_opt_f(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Objective values of the optimum population: (n_opt, n_f)"""
-        return cls._get_opt(algorithm, feasible_only=feasible_only).get('F').astype(np.float)
+        return cls._get_opt(algorithm, feasible_only=feasible_only).get('F').astype(float)
 
     @classmethod
     def _get_opt_g(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Constraint values of the optimum population: (n_opt, n_g)"""
-        return cls._get_opt(algorithm, feasible_only=feasible_only).get('G').astype(np.float)
+        return cls._get_opt(algorithm, feasible_only=feasible_only).get('G').astype(float)
 
     @classmethod
     def _get_opt_cv(cls, algorithm: Algorithm, feasible_only=False) -> np.ndarray:
         """Constraint violation values of the optimum population: (n_opt, n_g)"""
-        return cls._get_opt(algorithm, feasible_only=feasible_only).get('CV').astype(np.float)
+        return cls._get_opt(algorithm, feasible_only=feasible_only).get('CV').astype(float)
 
     @staticmethod
     def _get_opt(algorithm: Algorithm, feasible_only=False):
