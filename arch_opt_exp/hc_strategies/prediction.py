@@ -25,7 +25,7 @@ from pymoo.util.normalization import Normalization
 
 from smt.surrogate_models.surrogate_model import SurrogateModel
 
-__all__ = ['PredictionHCStrategy', 'PredictorInterface',
+__all__ = ['PredictionHCStrategy', 'PredictorInterface', 'ExtPredictorInterface',
            'RandomForestClassifier', 'KNNClassifier', 'GPClassifier', 'SVMClassifier', 'RBFRegressor',
            'GPRegressor', 'MDGPRegressor', 'VariationalGP', 'LinearInterpolator', 'RBFInterpolator']
 

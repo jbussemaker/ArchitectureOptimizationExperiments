@@ -40,7 +40,7 @@ from sb_arch_opt.problems.continuous import *
 from sb_arch_opt.algo.pymoo_interface import *
 from sb_arch_opt.algo.arch_sbo.models import *
 from sb_arch_opt.problems.turbofan_arch import *
-from sb_arch_opt.algo.arch_sbo.infill import *
+import sb_arch_opt.algo.arch_sbo.infill as sbao_infill
 from sb_arch_opt.problems.hidden_constraints import *
 
 from arch_opt_exp.experiments.runner import *
@@ -243,7 +243,7 @@ def exp_03_02_hc_test_area():
         plot_distance_distributions(problem, f'{folder}/plot_{category}_{problem.__class__.__name__}', name)
 
 
-_predictors: List[PredictorInterface] = [
+_predictors: List[ExtPredictorInterface] = [
     RandomForestClassifier(n=100),
     KNNClassifier(k=5),
     GPClassifier(),
@@ -290,7 +290,8 @@ def exp_03_03_hc_predictors():
             log.info(f'Testing {name} ({n} samples) for predictor ({i+1}/{len(_predictors)}): {predictor!s}')
             predictor_names.append(str(predictor))
 
-            save_path = f'{folder}/{name}_{i}_{secure_filename(str(predictor))}'
+            save_path = f'{folder}/{name}/{i}_{secure_filename(str(predictor))}'
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
             fpr, tpr, acc, _ = predictor.get_stats(
                 problem, n=n, plot=True, save_path=save_path, save_ref=not ref_saved,
                 add_close_points=add_close_points, show=False)
@@ -307,7 +308,7 @@ def exp_03_03_hc_predictors():
         plt.legend(loc='center left', bbox_to_anchor=(1, .5), frameon=False)
         plt.gca().set_aspect('equal')
         plt.tight_layout()
-        plt.savefig(f'{folder}/{name}_roc.png')
+        plt.savefig(f'{folder}/{name}/roc.png')
         plt.close('all')
 
 
@@ -417,7 +418,7 @@ _strategies: List[HiddenConstraintStrategy] = [
 
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population, verbose=False,
-             g_aggregation: ConstraintAggregation = None, kpls_n_dim: int = None, cont=False, infill_pop_size=None,
+             g_aggregation: sbao_infill.ConstraintAggregation = None, kpls_n_dim: int = None, cont=False, infill_pop_size=None,
              **kwargs):
     kpls_n_comp = kpls_n_dim if kpls_n_dim is not None and problem.n_var > kpls_n_dim else None
     if cont:
@@ -425,7 +426,7 @@ def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, do
         norm = ModelFactory.get_continuous_normalization(problem)
     else:
         model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=kpls_n_comp, **kwargs)
-    infill, n_batch = get_default_infill(problem, g_aggregation=g_aggregation)
+    infill, n_batch = sbao_infill.get_default_infill(problem, g_aggregation=g_aggregation)
 
     sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm,
                                verbose=verbose, pop_size=infill_pop_size)\
@@ -481,7 +482,7 @@ def exp_03_04_simple_optimization():
             for i_infill in range(n_infill):
                 # Do the last infill using the mean prediction
                 if i_infill == n_infill-1:
-                    sbo_infill.infill = inf = FunctionEstimateConstrainedInfill()
+                    sbo_infill.infill = inf = sbao_infill.FunctionEstimateConstrainedInfill()
                     inf.initialize(sbo_infill.problem, sbo_infill.surrogate_model, sbo_infill.normalization)
 
                 log.info(f'Infill {i_infill+1}/{n_infill}')
@@ -517,6 +518,8 @@ def exp_03_04_simple_optimization():
             plt.xlabel('Iteration'), plt.ylabel('Best $f$')
             plt.tight_layout()
             plt.savefig(f'{strategy_folder}/f.png')
+
+            plt.close('all')
 
 
 def exp_03_04a_doe_size_min_pov(post_process=False):
@@ -645,7 +648,7 @@ def exp_03_05_optimization(post_process=False):
 
     For the DOE size the following rule of thumb is used:
     5 times the nr of dimensions, corrected for the expected failure rate --> 5*n_dim/(1-expected_fail_rate)
-    This is the ensure there are enough valid points to start the optimization with.
+    This is to ensure there are enough valid points to start the optimization with.
 
     Hypothesis:
     Some predictors are well able to capture the hidden constraint areas.
@@ -673,10 +676,12 @@ def exp_03_05_optimization(post_process=False):
     problems = _test_problems()
     problem_paths = []
     problem_names = []
+    p_name_map = {}
     problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
     for i, (problem, category, infill_mult) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
         problem_names.append(name)
+        p_name_map[name] = name
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
         if post_process:
@@ -706,15 +711,16 @@ def exp_03_05_optimization(post_process=False):
         # do_run = False
         exps = run(_exp_03_05_folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat,
                    n_eval_max=n_infill*infill_mult, metrics=metrics, additional_plot=additional_plot, problem_name=name,
-                   do_run=do_run, return_exp=post_process)
+                   do_run=do_run, return_exp=post_process, run_if_exists=False)
         _agg_prob_exp(problem, problem_path, exps)
         plt.close('all')
 
     def _add_cols(df_agg_):
+        df_agg_['strat_name'] = [val[1] for val in df_agg_.index]
         df_agg_['strategy'] = [val[1].split(':')[0].lower().split(' ')[0] for val in df_agg_.index]
         df_agg_['rep_strat'] = [val[1].split(':')[1].strip() if val[1].startswith('Replacement:') else None
                                 for val in df_agg_.index]
-        df_agg_['g_f_strat'] = [('G' if 'G:' in val[1] else 'F') if val[1].startswith('Prediction') else None
+        df_agg_['g_f_strat'] = [('G' if 'Prediction G' in val[1] else 'F') if val[1].startswith('Prediction') else None
                                 for val in df_agg_.index]
         df_agg_['pw_strat'] = [val[1].split(':')[1].strip() if 'Predicted Worst' in val[1] else None
                                for val in df_agg_.index]
@@ -745,6 +751,16 @@ def exp_03_05_optimization(post_process=False):
     plot_problem_bars(df_agg, folder, 'g_f_strat', 'delta_hv_ratio', y_log=True)
     plot_problem_bars(df_agg, folder, 'g_f_strat', 'fail_ratio')
     plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_ratio')
+
+    cat_name_map = {str(strat): str(strat) for strat in _strategies}
+    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map)
+    plot_perf_rank(df_agg, 'strat_name', save_path=f'{folder}/rank', **kw)
+    plot_perf_rank(df_agg[df_agg.strategy == 'replacement'], 'strat_name', save_path=f'{folder}/rank_replace', **kw)
+    plot_perf_rank(df_agg[(df_agg.strategy == 'prediction') & (df_agg.g_f_strat == 'G')],
+                   'strat_name', save_path=f'{folder}/rank_pred_g', **kw)
+    plot_perf_rank(df_agg[(df_agg.strategy == 'prediction') & (df_agg.g_f_strat == 'F')],
+                   'strat_name', save_path=f'{folder}/rank_pred_f', **kw)
+
     plt.close('all')
 
 
@@ -1004,7 +1020,7 @@ def exp_03_07_engine_arch(post_process=False):
         model_settings = {}
         for use_gower, n_kpls, strategies in strategies_settings:
             for strategy in strategies:
-                agg_g = ConstraintAggregation.ELIMINATE if (use_gower or n_kpls is not None) else None
+                agg_g = sbao_infill.ConstraintAggregation.ELIMINATE if (use_gower or n_kpls is not None) else None
                 kpls_n_dim = n_kpls
                 cont = False  # is_heavy
 
@@ -1091,6 +1107,6 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     # exp_03_04a_doe_size_min_pov()
-    # exp_03_05_optimization(post_process=True)
+    exp_03_05_optimization(post_process=True)
     # exp_03_06_engine_arch_surrogate()
-    exp_03_07_engine_arch()
+    # exp_03_07_engine_arch()
