@@ -205,9 +205,9 @@ def exp_02_02_hier_strategies(sbo=False):
             strat_data_[key] = value
 
     problems = [
-        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
-        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
-        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
         # # (lambda: HierarchicalGoldstein(), '02_SO_HDR', 'Goldstein (H/MRD)'),
         (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
     ]
