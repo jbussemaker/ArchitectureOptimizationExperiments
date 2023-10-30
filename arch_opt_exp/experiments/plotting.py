@@ -72,7 +72,7 @@ def plot_scatter(df_agg, folder, x_col, y_col, z_col=None, x_log=False, y_log=Fa
     y_all += list(y)
     if z_col is not None:
         z = df_agg[z_col].values
-        if z.dtype == np.object:
+        if z.dtype == object:
             values = {val for val in z if val is not None}
             z_num = np.zeros((len(z),))*np.nan
             for i_val, value in enumerate(sorted(values)):
