@@ -174,7 +174,7 @@ def exp_02_02_hier_strategies(sbo=False):
     folder = set_results_folder(f'{_exp_02_02_folder}_{folder_post}')
     n_infill = 100
     n_gen = 50
-    n_repeat = 8 if sbo else 40
+    n_repeat = 12 if sbo else 40
     doe_k = 10
     # n_sub, n_opts = 8, 2
     n_sub, n_opts = 9, 3
@@ -205,10 +205,10 @@ def exp_02_02_hier_strategies(sbo=False):
             strat_data_[key] = value
 
     problems = [
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
-        # (lambda: HierarchicalGoldstein(), '02_SO_HDR', 'Goldstein (H/MRD)'),
+        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
+        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
+        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
+        # # (lambda: HierarchicalGoldstein(), '02_SO_HDR', 'Goldstein (H/MRD)'),
         (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
     ]
     # for i, (problem_factory, _, _) in enumerate(problems):
@@ -241,37 +241,39 @@ def exp_02_02_hier_strategies(sbo=False):
         metrics, additional_plot = _get_metrics(problem)
         additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
 
-        algo_names, problems = zip(*[
-            ('00_naive', NaiveProblem(problem)),
-            ('01_x_out', NaiveProblem(problem, return_mod_x=True)),
-            ('02_repair', NaiveProblem(problem, return_mod_x=True, correct=True)),
-            # ('02_repair_all_x', NaiveProblem(problem, return_mod_x=True, correct=True, override_send_all_x=True)),
-            # ('02_repair_x_cond', NaiveProblem(problem, return_mod_x=True, correct=True, override_send_cond_act=True)),
-            ('03_activeness', NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)),
+        algo_names, prob_and_settings = zip(*[
+            ('00_naive', (NaiveProblem(problem), False)),
+            ('01_x_out', (NaiveProblem(problem, return_mod_x=True), False)),
+            ('02_repair', (NaiveProblem(problem, return_mod_x=True, correct=True), False)),
+            ('03_act_md_gp', (NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True), True)),
+            ('03_activeness', (NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True), False)),
         ])
 
-        sampler = lambda: HierarchicalSampling()
+        sampler = lambda: ActiveVarHierarchicalSampling(weight_by_nr_active=True)
         # sampler = lambda: ActiveVarHierarchicalSampling()
         if sbo:
             n_eval_max = n_infill
             infill, n_batch = get_default_infill(problem)
             # infill.select_improve_infills = False
             algorithms = []
-            for problem_ in problems:
+            for problem_, ignore_hierarchy in prob_and_settings:
                 from smt.surrogate_models.krg_based import MixIntKernelType, MixHrcKernelType
                 kwargs = dict(
-                    categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
+                    kpls_n_comp=n_kpls,
+                    ignore_hierarchy=ignore_hierarchy,
+                    # categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
                     # hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,
                 )
-                model, norm = ModelFactory(problem_).get_md_kriging_model(kpls_n_comp=n_kpls, **kwargs)
+                model, norm = ModelFactory(problem_).get_md_kriging_model(**kwargs)
                 algorithms.append(get_sbo(model, infill, infill_size=n_batch, init_size=n_init, normalization=norm,
                                           init_sampling=sampler()))
         else:
             pop_size = n_init
             n_eval_max = (n_gen-1)*pop_size
-            algorithms = [ArchOptNSGA2(pop_size=pop_size, sampling=sampler()) for _ in range(len(problems))]
+            algorithms = [ArchOptNSGA2(pop_size=pop_size, sampling=sampler()) for _ in range(len(prob_and_settings))]
 
         doe = {}
+        problems = [entry[0] for entry in prob_and_settings]
         for j, problem_ in enumerate(problems):
             doe_prob, doe_delta_hvs = _create_does(problem_, n_init, n_repeat, sampler=sampler(), seed=42)
             log.info(f'Naive DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
