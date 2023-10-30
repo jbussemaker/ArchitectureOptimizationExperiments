@@ -273,7 +273,7 @@ def exp_02_02_hier_strategies(sbo=False):
 
         doe = {}
         for j, problem_ in enumerate(problems):
-            doe_prob, doe_delta_hvs = _create_does(problem_, n_init, n_repeat, seed=42)
+            doe_prob, doe_delta_hvs = _create_does(problem_, n_init, n_repeat, sampler=sampler(), seed=42)
             log.info(f'Naive DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
                      f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
             doe[algo_names[j]] = doe_prob

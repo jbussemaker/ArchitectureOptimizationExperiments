@@ -28,6 +28,7 @@ from sb_arch_opt.problem import ArchOptProblemBase
 from arch_opt_exp.experiments.metrics_base import *
 from arch_opt_exp.experiments.experimenter import *
 from arch_opt_exp.metrics.performance import *
+from arch_opt_exp.experiments import N_PARALLEL
 from werkzeug.utils import secure_filename
 
 from pymoo.core.problem import Problem
@@ -71,6 +72,8 @@ def run(results_key, problems, algorithms, algo_names, doe=None, plot_names=None
     import matplotlib
     matplotlib.use('Agg')
     if do_run:
+        if n_parallel is None:
+            n_parallel = N_PARALLEL
         run_effectiveness_multi(exp, n_repeat=n_repeat, n_parallel=n_parallel, run_if_exists=run_if_exists)
     if do_plot:
         plot_metric_values = {

@@ -1010,6 +1010,12 @@ def exp_03_07_engine_arch(post_process=False):
         n_init = len(doe)
         log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
 
+        # for ii in range(10):
+        #     print(ii)
+        #     # problem.evaluate(problem.design_space.quick_sample_discrete_x(1)[0][[0], :])
+        #     problem.evaluate(doe.get('X')[[ii], :])
+        # exit()
+
         metrics, additional_plot = _get_metrics(problem, allow_evaluate=False)
         # additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
 
