@@ -392,34 +392,18 @@ _strategies: List[HiddenConstraintStrategy] = [
     PredictedWorstReplacement(mul=1.),
     PredictedWorstReplacement(mul=2.),
 
-    PredictionHCStrategy(RandomForestClassifier(n=100)),  # 7
-    PredictionHCStrategy(RandomForestClassifier(n=100), min_pov=.75),
-    PredictionHCStrategy(RandomForestClassifier(n=100), constraint=False),
+    PredictionHCStrategy(RandomForestClassifier()),
     PredictionHCStrategy(GPClassifier()),
-    PredictionHCStrategy(GPClassifier(), min_pov=.75),
-    PredictionHCStrategy(GPClassifier(), constraint=False),
     PredictionHCStrategy(VariationalGP()),
-    PredictionHCStrategy(VariationalGP(), min_pov=.75),
-    PredictionHCStrategy(VariationalGP(), constraint=False),
-    PredictionHCStrategy(KNNClassifier(k_dim=2)),
-    PredictionHCStrategy(KNNClassifier(k_dim=2), min_pov=.75),
-    PredictionHCStrategy(KNNClassifier(k_dim=2), constraint=False),
-    # PredictionHCStrategy(LinearInterpolator()),
-    # PredictionHCStrategy(LinearInterpolator(), constraint=False),
+    PredictionHCStrategy(KNNClassifier()),
     PredictionHCStrategy(RBFInterpolator()),
-    PredictionHCStrategy(RBFInterpolator(), min_pov=.75),
-    PredictionHCStrategy(RBFInterpolator(), constraint=False),
-    # PredictionHCStrategy(GPRegressor()),
-    # PredictionHCStrategy(GPRegressor(), constraint=False),
     PredictionHCStrategy(MDGPRegressor()),
-    PredictionHCStrategy(MDGPRegressor(), min_pov=.75),
-    PredictionHCStrategy(MDGPRegressor(), constraint=False),
 ]
 
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population, verbose=False,
              g_aggregation: sbao_infill.ConstraintAggregation = None, kpls_n_dim: int = None, cont=False,
-             infill_pop_size=None, ignore_hierarchy=False, **kwargs):
+             infill_pop_size=None, ignore_hierarchy=True, **kwargs):
     kpls_n_comp = kpls_n_dim if kpls_n_dim is not None and problem.n_var > kpls_n_dim else None
     if cont:
         model = ModelFactory.get_kriging_model(kpls_n_comp=kpls_n_comp, **kwargs)
@@ -547,9 +531,9 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     """
     folder = set_results_folder(_exp_03_04a_folder)
     expected_fail_rate = .6
-    k_doe_test = [.5, 1, 2, 5]
+    k_doe_test = [2]
     min_pov_test = [.1, .25, .5, .75, .9, -1]
-    n_infill = 60
+    n_infill = 50
     n_repeat = 8
     problems = [
         (Alimo(), '01'),
@@ -590,7 +574,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         for k in k_doe_test:
             for min_pov in min_pov_test:
                 for classifier, classifier_name in [
-                    (MDGPRegressor(), 'MDGP'),
+                    (MDGPRegressor(), 'MD-GP'),
                     (RandomForestClassifier(n=100, n_dim=10), 'RFC'),
                 ]:
                     strategy = PredictionHCStrategy(classifier, constraint=min_pov != -1,
@@ -603,7 +587,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
 
         exps = run(_exp_03_04a_folder, problem, algorithms, algo_names, doe=doe_exp, n_repeat=n_repeat,
                    n_eval_max=n_infill, metrics=metrics, additional_plot=additional_plot, problem_name=name,
-                   do_run=not post_process, return_exp=post_process)
+                   do_run=not post_process, return_exp=post_process, run_if_exists=False)
         _agg_prob_exp(problem, problem_path, exps)
         plt.close('all')
 
@@ -615,18 +599,18 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
-    for category in ['cls', 'doe_k', 'min_pov']:
-        plot_problem_bars(df_agg, folder, category, 'delta_hv_ratio', y_log=True)
-        plot_problem_bars(df_agg, folder, category, 'delta_hv_delta_hv', y_log=True)
-        plot_problem_bars(df_agg, folder, category, 'delta_hv_regret')
-        plot_problem_bars(df_agg, folder, category, 'fail_ratio')
-        plot_problem_bars(df_agg, folder, category, 'hc_pred_acc')
+    # for category in ['cls', 'doe_k', 'min_pov']:
+    #     plot_problem_bars(df_agg, folder, category, 'delta_hv_ratio', y_log=True)
+    #     plot_problem_bars(df_agg, folder, category, 'delta_hv_delta_hv', y_log=True)
+    #     plot_problem_bars(df_agg, folder, category, 'delta_hv_regret')
+    #     plot_problem_bars(df_agg, folder, category, 'fail_ratio')
+    #     plot_problem_bars(df_agg, folder, category, 'hc_pred_acc')
 
-    plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_regret', z_col='fail_ratio', y_log=True)
-    plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_regret', z_col='hc_pred_acc', y_log=True)
-    plot_scatter(df_agg, folder, 'min_pov', 'delta_hv_regret', z_col='fail_ratio', y_log=True)
-    plot_scatter(df_agg, folder, 'min_pov', 'delta_hv_regret', z_col='hc_pred_acc', y_log=True)
-    plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
+    # plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_regret', z_col='fail_ratio', y_log=True)
+    # plot_scatter(df_agg, folder, 'doe_k', 'delta_hv_regret', z_col='hc_pred_acc', y_log=True)
+    # plot_scatter(df_agg, folder, 'min_pov', 'delta_hv_regret', z_col='fail_ratio', y_log=True)
+    # plot_scatter(df_agg, folder, 'min_pov', 'delta_hv_regret', z_col='hc_pred_acc', y_log=True)
+    # plot_scatter(df_agg, folder, 'fail_ratio', 'delta_hv_ratio', z_col='hc_pred_acc', y_log=True)
     plt.close('all')
 
 
@@ -671,7 +655,7 @@ def exp_03_05_optimization(post_process=False):
     """
     folder = set_results_folder(_exp_03_05_folder)
     expected_fail_rate = .6
-    n_infill = 30
+    n_infill = 50
     n_repeat = 8
 
     problems = _test_problems()
@@ -934,13 +918,9 @@ def exp_03_07_engine_arch(post_process=False):
     n_repeat = 4
 
     all_strategies: List[HiddenConstraintStrategy] = [
-        # RejectionHCStrategy(),
         LocalReplacement(n=5, mean=True),
-        # PredictionHCStrategy(RandomForestClassifier(n=100)),
-        PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10)),
-        # PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10), min_pov=.25),
+        PredictionHCStrategy(RandomForestClassifier()),
         PredictionHCStrategy(MDGPRegressor()),
-        # PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
     reduced_strategies: List[HiddenConstraintStrategy] = [
         PredictionHCStrategy(MDGPRegressor()),
@@ -1113,7 +1093,7 @@ if __name__ == '__main__':
     # exp_03_03_hc_predictors()
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
-    # exp_03_04a_doe_size_min_pov()
     exp_03_05_optimization(post_process=True)
+    exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
     # exp_03_07_engine_arch()

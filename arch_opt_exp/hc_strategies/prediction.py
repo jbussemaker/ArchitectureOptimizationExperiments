@@ -186,7 +186,7 @@ class SKLearnClassifier(ExtPredictorInterface):
 
 class RandomForestClassifier(SKLearnClassifier):
 
-    def __init__(self, n: int = 100, n_dim: float = None):
+    def __init__(self, n: int = 100, n_dim: float = 10):
         self.n = n
         self.n_dim = n_dim
         super().__init__()
@@ -366,7 +366,7 @@ class GPRegressor(SMTPredictor):
 class MDGPRegressor(SMTPredictor):
     """Uses SMT's mixed-discrete Kriging regressor"""
 
-    def __init__(self, kpls_n_dim: Optional[int] = 10, ignore_hierarchy=False):
+    def __init__(self, kpls_n_dim: Optional[int] = 10, ignore_hierarchy=True):
         self._problem = None
         self._kpls_n_dim = kpls_n_dim
         self._ignore_hierarchy = ignore_hierarchy
@@ -384,7 +384,7 @@ class MDGPRegressor(SMTPredictor):
             kwargs['kpls_n_comp'] = self._kpls_n_dim
 
         model, _ = ModelFactory(self._problem).get_md_kriging_model(
-            corr='abs_exp', theta0=[1e-2], n_start=5, ignore_hierarchy=self._ignore_hierarchy, **kwargs)
+            corr='abs_exp', theta0=[1e-2], ignore_hierarchy=self._ignore_hierarchy, **kwargs)
         self._model = model
         model.set_training_values(x_norm, y_is_valid)
         model.train()
