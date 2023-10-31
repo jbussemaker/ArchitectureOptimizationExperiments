@@ -21,7 +21,7 @@ import timeit
 import logging
 import numpy as np
 import pandas as pd
-from typing import Dict
+from typing import Dict, List
 import concurrent.futures
 import matplotlib
 import matplotlib.pyplot as plt
@@ -174,7 +174,7 @@ def exp_02_02_hier_strategies(sbo=False):
     folder = set_results_folder(f'{_exp_02_02_folder}_{folder_post}')
     n_infill = 100
     n_gen = 50
-    n_repeat = 12 if sbo else 40
+    n_repeat = 16 if sbo else 100
     doe_k = 10
     # n_sub, n_opts = 8, 2
     n_sub, n_opts = 9, 3
@@ -251,6 +251,7 @@ def exp_02_02_hier_strategies(sbo=False):
 
         sampler = lambda: ActiveVarHierarchicalSampling(weight_by_nr_active=True)
         # sampler = lambda: ActiveVarHierarchicalSampling()
+        algo_models = []
         if sbo:
             n_eval_max = n_infill
             infill, n_batch = get_default_infill(problem)
@@ -265,6 +266,7 @@ def exp_02_02_hier_strategies(sbo=False):
                     # hierarchical_kernel=MixHrcKernelType.ALG_KERNEL,
                 )
                 model, norm = ModelFactory(problem_).get_md_kriging_model(**kwargs)
+                algo_models.append((model, norm))
                 algorithms.append(get_sbo(model, infill, infill_size=n_batch, init_size=n_init, normalization=norm,
                                           init_sampling=sampler()))
         else:
@@ -285,6 +287,17 @@ def exp_02_02_hier_strategies(sbo=False):
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
                    run_if_exists=False)
         agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+
+        # Investigate model fitting qualities
+        if sbo:
+            algo_map = {name: i for i, name in enumerate(algo_names)}
+            md_i, hier_i = algo_map.get('03_act_md_gp'), algo_map.get('03_activeness')
+            if md_i is not None and hier_i is not None:
+                doe_pops = []
+                for i_prob, algo_name in [(md_i, '03_act_md_gp'), (hier_i, '03_activeness')]:
+                    doe_pops.append([Evaluator().eval(problems[i_prob], doe_i) for doe_i in doe[algo_name].values()])
+                _compare_first_last_model_fit([exps[md_i], exps[hier_i]], algo_models, doe_pops, ['MD GP', 'Hier GP'])
+
         plt.close('all')
 
     strat_map = {'00_naive': 'Naive', '01_x_out': 'X out', '02_repair': 'Repair', '03_act_md_gp': 'Hier sampl.',
@@ -302,6 +315,79 @@ def exp_02_02_hier_strategies(sbo=False):
     plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, cat_name_map=cat_name_map, save_path=f'{folder}/rank')
 
 
+def _compare_first_last_model_fit(exps: List[Experimenter], algo_models, does: List[List[Population]],
+                                  exp_names: List[str]):
+    prob_folder = exps[0].get_problem_results_path()
+    df_path = f'{prob_folder}/compare_models'
+    n_train = 10
+
+    if not os.path.exists(df_path):
+        data = {'name': [], 'stage': [], 'loocv': [], 'time_train': []}
+        with concurrent.futures.ProcessPoolExecutor(max_workers=8) as executor:
+            for i, exp in enumerate(exps):
+                model, norm = algo_models[i]
+                futures = []
+                for j, doe_pop in enumerate(does[i]):
+                    log_str = f'Model fit: {exp.problem_name} {exp.algorithm_name}; DOE {j+1}/{len(does[i])}'
+                    futures.append(executor.submit(_do_train_cv, exp.problem, log_str, model, norm, doe_pop, n_train))
+                n_doe = len(futures)
+
+                for j, eff_res in enumerate(exp.get_effectiveness_results()):
+                    log_str = f'Model fit: {exp.problem_name} {exp.algorithm_name}; END {j+1}'
+                    futures.append(executor.submit(_do_train_cv, exp.problem, log_str, model, norm, eff_res.pop, n_train))
+                n_end = len(futures)
+
+                other_exp = exps[i-1]
+                for j, eff_res in enumerate(other_exp.get_effectiveness_results()):
+                    log_str = f'Model fit: {other_exp.problem_name} {other_exp.algorithm_name}; END {j+1} (OTHER)'
+                    futures.append(executor.submit(
+                        _do_train_cv, other_exp.problem, log_str, model, norm, eff_res.pop, n_train))
+
+                concurrent.futures.wait(futures)
+                for j, fut in enumerate(futures):
+                    loocv_max, time_train = fut.result()
+
+                    stage = 'DoE' if j < n_doe else ('End' if j < n_end else 'End (other model)')
+                    data['name'].append(exp_names[i])
+                    data['stage'].append(stage)
+                    data['loocv'].append(loocv_max)
+                    data['time_train'].append(time_train)
+
+        df = pd.DataFrame(data=data)
+        df.to_pickle(df_path)
+        df.to_csv(df_path+'.csv')
+    else:
+        with open(df_path, 'rb') as fp:
+            df = pickle.load(fp)
+
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    with sb_theme():
+        sns.boxplot(x='stage', y='loocv', hue='name', data=df, palette=['b', 'y'], gap=.1)
+        sns.despine(offset=10, trim=True)
+        plt.tight_layout()
+
+    plt.savefig(f'{df_path}.png')
+    plt.savefig(f'{df_path}.svg')
+    # plt.show()
+
+
+def _do_train_cv(problem, log_str, model, norm, pop: Population, n_train):
+    # Following code should have same behavior as arch_sbo/algo.py::_build_model
+    x = pop.get('X')
+    y = pop.get('F')
+
+    y_min, y_max = np.nanmin(y, axis=0), np.nanmax(y, axis=0)
+    y_norm = y_max-y_min
+    y_norm[y_norm < 1e-6] = 1e-6
+    y_train = (y-y_min)/y_norm
+
+    x_train, is_active = problem.correct_x(x)
+    x_train = norm.forward(x_train)
+
+    return _do_cv(log_str, model, x_train, y_train, n_train=n_train, is_active=is_active)
+
+
 def exp_02_02a_model_fit(post_process=False):
     """
     Test fitted models for the different hierarchy integration strategies.
@@ -313,22 +399,23 @@ def exp_02_02a_model_fit(post_process=False):
     folder = set_results_folder(_exp_02_02a_folder)
     df_path = f'{folder}/results'
 
-    k_doe = [1, 10, 20]
+    k_doe = [4, 10]  # [1, 10, 20]
     n_sample = 8
     n_train = 5
-    n_sub, n_opts = 8, 2
-    # n_sub, n_opts = 9, 3
+    # n_sub, n_opts = 8, 2
+    n_sub, n_opts = 9, 3
     i_sub_opt = None
+    add_close_pts = False
     # i_sub_opt = n_sub-1
     problems = [
         # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
         # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
-        # (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
-        # (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
+        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
+        (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
         # (lambda: HierarchicalGoldstein(), '02_SO_HDR', 'Goldstein (H/MRD)'),
         # (lambda: HierarchicalRosenbrock(), '02_SO_HDR', 'Rosenbrock (H/MRD)'),
         # (lambda: HierCantileveredBeam(), '02_SO_HDR', 'Cant. Beam (H/MRD)'),
-        (lambda: SimpleTurbofanArch(), '04_REAL_S', 'Simple Jet'),
+        # (lambda: SimpleTurbofanArch(), '04_REAL_S', 'Simple Jet'),
         # (lambda: RealisticTurbofanArch(), '04_REAL_L', 'Real Jet'),
     ]
     # for problem_factory, _, _ in problems:
@@ -342,24 +429,24 @@ def exp_02_02a_model_fit(post_process=False):
             'problem': [], 'prob_title': [], 'type': [], 'type_int': [],
             'k_doe': [], 'n_doe': [], 'cat_ker': [], 'hier_ker': [], 'loocv': [], 'time_train': [],
         }
-        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=8) as executor:
             for base_problem_factory, problem_name, title in problems:
                 base_problem = base_problem_factory()
                 is_jet = isinstance(base_problem, (SimpleTurbofanArch, RealisticTurbofanArch))
                 repair_problem = NaiveProblem(base_problem, return_mod_x=True, correct=True)
                 act_problem = NaiveProblem(base_problem, return_mod_x=True, correct=True, return_activeness=True)
                 for int_name, problem, cat_kernel, hier_kernel in [
-                    ('00_naive', NaiveProblem(base_problem), MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
-                    ('01_x_out', NaiveProblem(base_problem, return_mod_x=True), MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
+                    # ('00_naive', NaiveProblem(base_problem), MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
+                    # ('01_x_out', NaiveProblem(base_problem, return_mod_x=True), MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
                     ('02_repair_gd', repair_problem, MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
                     # ('02_repair_cr', repair_problem, MixIntKernelType.CONT_RELAX, MixHrcKernelType.ALG_KERNEL),
-                    ('02_repair_ehh', repair_problem, MixIntKernelType.EXP_HOMO_HSPHERE, MixHrcKernelType.ALG_KERNEL),
+                    # ('02_repair_ehh', repair_problem, MixIntKernelType.EXP_HOMO_HSPHERE, MixHrcKernelType.ALG_KERNEL),
                     ('03_activeness_gd_alg', act_problem, MixIntKernelType.GOWER, MixHrcKernelType.ALG_KERNEL),
-                    ('03_activeness_gd_arc', act_problem, MixIntKernelType.GOWER, MixHrcKernelType.ARC_KERNEL),
-                    # ('03_activeness_cr_alg', act_problem, MixIntKernelType.CONT_RELAX, MixHrcKernelType.ALG_KERNEL),
+                    # ('03_activeness_gd_arc', act_problem, MixIntKernelType.GOWER, MixHrcKernelType.ARC_KERNEL),
+                    ('03_activeness_cr_alg', act_problem, MixIntKernelType.CONT_RELAX, MixHrcKernelType.ALG_KERNEL),
                     # ('03_activeness_cr_arc', act_problem, MixIntKernelType.CONT_RELAX, MixHrcKernelType.ARC_KERNEL),
                     ('03_activeness_ehh_alg', act_problem, MixIntKernelType.EXP_HOMO_HSPHERE, MixHrcKernelType.ALG_KERNEL),
-                    ('03_activeness_ehh_arc', act_problem, MixIntKernelType.EXP_HOMO_HSPHERE, MixHrcKernelType.ARC_KERNEL),
+                    # ('03_activeness_ehh_arc', act_problem, MixIntKernelType.EXP_HOMO_HSPHERE, MixHrcKernelType.ARC_KERNEL),
                 ]:
                     if is_jet and not (int_name.startswith('03_') or int_name.startswith('02_')):
                         continue
@@ -383,6 +470,21 @@ def exp_02_02a_model_fit(post_process=False):
                                 sampler = HierarchicalSampling()
                                 # sampler = ActiveVarHierarchicalSampling()
                                 pop = sampler.do(problem, n_samples=n_doe)
+                                if add_close_pts:
+                                    i_pop_ref = np.random.choice(range(len(pop)))
+                                    x_ref = pop.get('X')[i_pop_ref, :]
+                                    i_cont, = np.where(problem.is_cont_mask)
+                                    if len(i_cont) > 0:
+                                        i_cont = i_cont[:2]
+                                        scl, n_add = .005, 6
+                                        dxx = np.meshgrid(*[np.linspace(-scl, scl, n_add) for _ in range(len(i_cont))])
+                                        dx = np.column_stack([dxx_.ravel() for dxx_ in dxx])
+                                        dx *= problem.xu[i_cont]-problem.xl[i_cont]
+                                        x_add = np.repeat(np.array([x_ref]), dx.shape[0], axis=0)
+                                        x_add[:, i_cont] += dx
+                                        pop = Population.new(X=np.row_stack([pop.get('X'), x_add]))
+                                        pop = LargeDuplicateElimination().do(pop)
+
                                 pop = Evaluator().eval(problem, pop)
 
                             # Following code should have same behavior as arch_sbo/algo.py::_build_model

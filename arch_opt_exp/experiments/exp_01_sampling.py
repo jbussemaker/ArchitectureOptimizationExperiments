@@ -79,11 +79,11 @@ _problems = lambda: [
 
 
 _samplers = [
-    (RepairedSampler(FloatRandomSampling()), 'Rnd'),
+    # (RepairedSampler(FloatRandomSampling()), 'Rnd'),
     (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
     (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
-    (NrActiveHierarchicalSampling(), 'HierNrAct'),
-    (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
+    # (NrActiveHierarchicalSampling(), 'HierNrAct'),
+    # (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
     (ActiveVarHierarchicalSampling(), 'HierAct'),
     (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
     # (HierarchicalCoveringSampling(), 'Covering'),
@@ -826,7 +826,7 @@ def exp_01_06_opt(sbo=True, post_process=False):
 
             metrics, additional_plot = _get_metrics(problem)
             additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
-            model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=n_kpls)
+            model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=n_kpls, ignore_hierarchy=True)
             infill, n_batch = get_default_infill(problem)
 
             algorithms = []
@@ -858,9 +858,10 @@ def exp_01_06_opt(sbo=True, post_process=False):
     df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
     cat_names = [
-        'Random', 'LHS',
+        # 'Random',
+        'LHS',
         'Hier.: No Grouping',
-        'Hier.: By $n_{act}$', 'Hier.: By $n_{act}$ (wt.)',
+        # 'Hier.: By $n_{act}$', 'Hier.: By $n_{act}$ (wt.)',
         'Hier.: By $x_{act}$', 'Hier.: By $x_{act}$ (wt.)',
     ]
     cat_name_map = {sampler: cat_names[i] for i, (_, sampler) in enumerate(_samplers)}

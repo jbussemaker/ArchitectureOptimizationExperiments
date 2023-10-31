@@ -418,14 +418,15 @@ _strategies: List[HiddenConstraintStrategy] = [
 
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population, verbose=False,
-             g_aggregation: sbao_infill.ConstraintAggregation = None, kpls_n_dim: int = None, cont=False, infill_pop_size=None,
-             **kwargs):
+             g_aggregation: sbao_infill.ConstraintAggregation = None, kpls_n_dim: int = None, cont=False,
+             infill_pop_size=None, ignore_hierarchy=False, **kwargs):
     kpls_n_comp = kpls_n_dim if kpls_n_dim is not None and problem.n_var > kpls_n_dim else None
     if cont:
         model = ModelFactory.get_kriging_model(kpls_n_comp=kpls_n_comp, **kwargs)
         norm = ModelFactory.get_continuous_normalization(problem)
     else:
-        model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=kpls_n_comp, **kwargs)
+        model, norm = ModelFactory(problem).get_md_kriging_model(
+            kpls_n_comp=kpls_n_comp, ignore_hierarchy=ignore_hierarchy, **kwargs)
     infill, n_batch = sbao_infill.get_default_infill(problem, g_aggregation=g_aggregation)
 
     sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm,

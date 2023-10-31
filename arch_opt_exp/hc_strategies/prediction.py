@@ -366,9 +366,10 @@ class GPRegressor(SMTPredictor):
 class MDGPRegressor(SMTPredictor):
     """Uses SMT's mixed-discrete Kriging regressor"""
 
-    def __init__(self, kpls_n_dim: Optional[int] = 10):
+    def __init__(self, kpls_n_dim: Optional[int] = 10, ignore_hierarchy=False):
         self._problem = None
         self._kpls_n_dim = kpls_n_dim
+        self._ignore_hierarchy = ignore_hierarchy
         super().__init__()
 
     def _get_normalization(self, problem: ArchOptProblemBase) -> Normalization:
@@ -383,7 +384,7 @@ class MDGPRegressor(SMTPredictor):
             kwargs['kpls_n_comp'] = self._kpls_n_dim
 
         model, _ = ModelFactory(self._problem).get_md_kriging_model(
-            corr='abs_exp', theta0=[1e-2], n_start=5, **kwargs)
+            corr='abs_exp', theta0=[1e-2], n_start=5, ignore_hierarchy=self._ignore_hierarchy, **kwargs)
         self._model = model
         model.set_training_values(x_norm, y_is_valid)
         model.train()
