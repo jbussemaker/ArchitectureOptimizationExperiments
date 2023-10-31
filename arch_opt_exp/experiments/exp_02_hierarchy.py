@@ -287,7 +287,8 @@ def exp_02_02_hier_strategies(sbo=False):
         agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
         plt.close('all')
 
-    strat_map = {'00_naive': 'Naive', '01_x_out': 'X out', '02_repair': 'Repair', '03_activeness': 'Activeness'}
+    strat_map = {'00_naive': 'Naive', '01_x_out': 'X out', '02_repair': 'Repair', '03_act_md_gp': 'Hier sampl.',
+                 '03_activeness': 'Activeness'}
 
     def _add_cols(df_agg_):
         # df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
