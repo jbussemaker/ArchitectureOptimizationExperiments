@@ -288,15 +288,15 @@ def exp_02_02_hier_strategies(sbo=False):
                    run_if_exists=False)
         agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
-        # Investigate model fitting qualities
-        if sbo:
-            algo_map = {name: i for i, name in enumerate(algo_names)}
-            md_i, hier_i = algo_map.get('03_act_md_gp'), algo_map.get('03_activeness')
-            if md_i is not None and hier_i is not None:
-                doe_pops = []
-                for i_prob, algo_name in [(md_i, '03_act_md_gp'), (hier_i, '03_activeness')]:
-                    doe_pops.append([Evaluator().eval(problems[i_prob], doe_i) for doe_i in doe[algo_name].values()])
-                _compare_first_last_model_fit([exps[md_i], exps[hier_i]], algo_models, doe_pops, ['MD GP', 'Hier GP'])
+        # # Investigate model fitting qualities
+        # if sbo:
+        #     algo_map = {name: i for i, name in enumerate(algo_names)}
+        #     md_i, hier_i = algo_map.get('03_act_md_gp'), algo_map.get('03_activeness')
+        #     if md_i is not None and hier_i is not None:
+        #         doe_pops = []
+        #         for i_prob, algo_name in [(md_i, '03_act_md_gp'), (hier_i, '03_activeness')]:
+        #             doe_pops.append([Evaluator().eval(problems[i_prob], doe_i) for doe_i in doe[algo_name].values()])
+        #         _compare_first_last_model_fit([exps[md_i], exps[hier_i]], algo_models, doe_pops, ['MD GP', 'Hier GP'])
 
         plt.close('all')
 
@@ -452,6 +452,7 @@ def exp_02_02a_model_fit(post_process=False):
                         continue
                     base_model, norm = ModelFactory(problem).get_md_kriging_model(
                         categorical_kernel=cat_kernel, hierarchical_kernel=hier_kernel, multi=False,
+                        ignore_hierarchy=False,
                     )
                     for k in k_doe:
                         futures = []
@@ -679,7 +680,7 @@ def exp_02_03_sensitivities(sbo=False, mrd=False):
             infill, n_batch = get_default_infill(problem)
             algorithms = []
             for problem_ in problems:
-                model, norm = ModelFactory(problem_).get_md_kriging_model(kpls_n_comp=n_kpls)
+                model, norm = ModelFactory(problem_).get_md_kriging_model(kpls_n_comp=n_kpls, ignore_hierarchy=False)
                 algorithms.append(get_sbo(model, infill, infill_size=n_batch, init_size=n_init, normalization=norm))
         else:
             pop_size = n_init
