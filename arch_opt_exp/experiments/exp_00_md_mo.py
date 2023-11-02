@@ -587,7 +587,7 @@ def exp_00_03_constraints(post_process=False):
         do_run = not post_process
         exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill_prob,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   run_if_exists=True)
+                   run_if_exists=False)
 
         _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
@@ -965,8 +965,8 @@ def exp_00_04_high_dim(post_process=False):
 
 if __name__ == '__main__':
     # exp_00_01_md_gp()
-    exp_00_02_infill()
+    # exp_00_02_infill()
     # exp_00_03a_plot_constraints()
     # exp_00_03b_multi_y()
     # exp_00_03_constraints()
-    # exp_00_04_high_dim()
+    exp_00_04_high_dim()
