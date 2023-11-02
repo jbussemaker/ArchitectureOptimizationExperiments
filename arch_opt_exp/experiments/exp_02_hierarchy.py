@@ -19,6 +19,7 @@ import copy
 import pickle
 import timeit
 import logging
+import itertools
 import numpy as np
 import pandas as pd
 from typing import Dict, List
@@ -743,16 +744,39 @@ def exp_02_04_tunable_hier_dv_examples():
         (TunableHierarchicalMetaProblem(p, imp_ratio=1000, n_subproblem=9, diversity_range=1, n_opts=n_opts), 'IR_MAX_MRD_MAX'),
     ]
 
+    x_cart = np.array(list(itertools.product(*[range(2) for _ in range(4)])))
+    is_act_cart = (x_cart*0+1).astype(bool)
+    is_cont_mask = np.array([False]*4, dtype=bool)
+
+    x_corr = x_cart.copy()
+    x_corr[x_corr[:, 0] == 0, 2:] = 0
+    is_act_corr = is_act_cart.copy()
+    is_act_corr[x_corr[:, 1] == 0, 3] = False
+
+    x_imp = x_corr.copy()
+    x_imp[~is_act_corr] = 0
+    _, i_unique = np.unique(x_imp, axis=0, return_index=True)
+
+    additional = [
+        # x, is_active, is_cont_mask, name
+        (x_cart, is_act_cart, is_cont_mask, 'example_0_cartesian'),
+        (x_corr, is_act_corr, is_cont_mask, 'example_1_corrected'),
+        (x_imp, is_act_cart, is_cont_mask, 'example_2_imputed'),
+        (x_imp[i_unique, :], is_act_cart[i_unique, :], is_cont_mask, 'example_3_valid'),
+    ]
+
     def _store_dvs(problem: ArchOptProblemBase, name: str, incl_cont=False):
         x, is_active = problem.all_discrete_x
         assert x is not None
         is_cont_mask = problem.is_cont_mask
+        _store_x(x, is_active, is_cont_mask, name, incl_cont=incl_cont)
 
+    def _store_x(x, is_active, is_cont_mask, name: str, incl_cont=False, i_col_name=None):
         data = [[i+1]+[('cont' if is_cont_mask[j] else xij) if is_active[i, j] else ' ' for j, xij in enumerate(xi)
-                 if incl_cont or (not incl_cont and not is_cont_mask[j])]
+                       if incl_cont or (not incl_cont and not is_cont_mask[j])]
                 for i, xi in enumerate(x)]
         x_cols = [f'x{i}' for i in range(len(is_cont_mask) if incl_cont else int(np.sum(~is_cont_mask)))]
-        df = pd.DataFrame(data=data, columns=['$i_{sub}$']+x_cols)
+        df = pd.DataFrame(data=data, columns=[i_col_name or '$i_{sub}$']+x_cols)
         df.iloc[:, 1:].to_excel(writer, sheet_name=name)
 
         # https://stackoverflow.com/a/54110153
@@ -761,6 +785,9 @@ def exp_02_04_tunable_hier_dv_examples():
             worksheet.conditional_format(1, 1, len(df), len(df.columns)-1, fmt)
 
         # Output to Latex
+        col_rename_map = {col: f'$x_{{{col[1:]}}}$' for col in df.columns[1:]}
+        x_cols = [col_rename_map.get(col, col) for col in x_cols]
+        df = df.rename(columns=col_rename_map)
         styler = df.style
         if np.any(df.values == ' '):
             styler.apply(lambda df_: np.where(
@@ -799,6 +826,9 @@ def exp_02_04_tunable_hier_dv_examples():
             _store_dvs(problem_, name_)
             # problem_.get_discrete_rates().to_excel(writer, sheet_name=f'{name_}_rates')
 
+        for args in additional:
+            _store_x(*args, i_col_name='$i_{dv}$')
+
 
 if __name__ == '__main__':
     # from exp_01_sampling import exp_01_06_opt
@@ -807,9 +837,9 @@ if __name__ == '__main__':
     # exp_02_01_tpe()
     # exp_02_02a_model_fit()
     # exp_02_02_hier_strategies()
-    exp_02_02_hier_strategies(sbo=True)
+    # exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)
     # exp_02_03_sensitivities(sbo=True, mrd=True)
-    # exp_02_04_tunable_hier_dv_examples()
+    exp_02_04_tunable_hier_dv_examples()

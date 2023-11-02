@@ -57,7 +57,7 @@ _col_names = {
     'n_comp': 'Model comps',
     'is_ck_lt': 'Is light categorical kernel',
     'n_cat': 'Cat vars',
-    'n_theta': 'Hyperparams',
+    'n_theta': 'Nr of hyperparameters',
 }
 
 
@@ -397,8 +397,8 @@ def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_
     df_q25 = df.copy()
     df_q75 = df.copy()
     for y_col_ in y_cols_list:
-        df_q25[y_col_] = df_q25[y_col_+'_q25']
-        df_q75[y_col_] = df_q75[y_col_+'_q75']
+        df_q25[y_col_] = df_q25[y_col_+'_q25'] if y_col_+'_q25' in df.columns else df_q25[y_col_]
+        df_q75[y_col_] = df_q75[y_col_+'_q75'] if y_col_+'_q75' in df.columns else df_q75[y_col_]
     df = pd.concat([df, df_q25, df_q75], axis=0)
 
     n_colors = len(df.index.levels[0])

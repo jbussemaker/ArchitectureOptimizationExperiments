@@ -439,10 +439,16 @@ def exp_03_04_simple_optimization():
       - Constraint-based infill reduces the amount of failed points after finding the best point
       - Objective-based infill on the other hand leads to more exploration after finding the best point
     """
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.rcParams["mathtext.fontset"] = "dejavuserif"
+
     folder = set_results_folder(_exp_03_04_folder)
     n_init = 30
     n_infill = 30
-    for problem, f_known_best in [(Alimo(), -1.0474), (AlimoEdge(), -1.0468)]:
+    n_infill_aggregate = [0, 1, 2, 9, 16, 24]
+    np.random.seed(43)
+    # for problem, f_known_best in [(Alimo(), -1.0474), (AlimoEdge(), -1.0468)]:
+    for problem, f_known_best in [(AlimoEdge(), -1.0468)]:
         prob_name = problem.__class__.__name__
         doe = get_doe_algo(n_init)
         doe.setup(problem)
@@ -450,7 +456,13 @@ def exp_03_04_simple_optimization():
         doe_pop = doe.pop
         log.info(f'Best of initial DOE: {np.nanmin(doe_pop.get("F")[:, 0])} (best: {f_known_best})')
 
+        fig_agg, agg_ax = plt.subplots(
+            len(n_infill_aggregate), 2, sharex=True, sharey=True, squeeze=True, figsize=(6, 12))
+
         for i, strategy in enumerate(_strategies):
+            if not isinstance(strategy, PredictionHCStrategy) or not isinstance(strategy.predictor, RBFInterpolator):
+                continue
+
             log.info(f'Strategy {i+1}/{len(_strategies)}: {strategy!s}')
             strategy_folder = f'{folder}/{prob_name}_{i:02d}_{secure_filename(str(strategy))}'
             os.makedirs(strategy_folder, exist_ok=True)
@@ -475,6 +487,27 @@ def exp_03_04_simple_optimization():
                 assert len(infills) == 1
                 sbo.evaluator.eval(problem, infills)
 
+                if i_infill < max(n_infill_aggregate)+1:
+                    if i_infill in n_infill_aggregate:
+                        i_ax = n_infill_aggregate.index(i_infill)
+                        sbo_infill.plot_state(x_infill=infills.get('X')[0, :], plot_std=False,
+                                              plot_axes={'y0': agg_ax[i_ax, 0], 'g0': agg_ax[i_ax, 1]}, show=False)
+                elif fig_agg is not None:
+                    agg_ax[0, 0].set_title('Predicted $f$')
+                    agg_ax[0, 1].set_title('Infill $g_{PoV}$')
+                    # for ax in agg_ax[-1, :]:
+                    #     ax.set(xlabel='$x_0$')
+                    for i_iter, ax in enumerate(agg_ax[:, 0]):
+                        ax.set(ylabel=f'Infill {n_infill_aggregate[i_iter]+1}')
+                    for ax in agg_ax.flat:
+                        ax.set(xticklabels=[], xticks=[], yticklabels=[], yticks=[])
+                    plt.tight_layout(h_pad=1.2, w_pad=1.2)
+
+                    fig_agg.savefig(f'{strategy_folder}/opt_sequence.png')
+                    fig_agg.savefig(f'{strategy_folder}/opt_sequence.svg')
+                    plt.close(fig_agg)
+                    fig_agg = None
+
                 if i_infill == 0:
                     sbo_infill.plot_state(save_path=f'{strategy_folder}/doe', show=False)
                 sbo_infill.plot_state(x_infill=infills.get('X')[0, :], plot_std=False,
@@ -482,6 +515,9 @@ def exp_03_04_simple_optimization():
                 if isinstance(strategy, PredictionHCStrategy):
                     strategy.predictor.get_stats(problem, train=False, save_ref=False,
                                                  save_path=f'{strategy_folder}/predictor_{i_infill}', show=False)
+
+                if fig_agg is None:
+                    plt.close('all')
 
                 sbo.tell(infills=infills)
 

@@ -618,6 +618,8 @@ def exp_00_03_constraints(post_process=False):
                    save_path=f'{folder}/rank_so')
     plot_perf_rank(df_agg[df_agg.is_mo], 'strategy', cat_name_map=cat_map, idx_name_map=p_name_map,
                    save_path=f'{folder}/rank_mo')
+    plot_perf_rank(df_agg, 'strategy', cat_name_map=cat_map, idx_name_map=p_name_map,
+                   save_path=f'{folder}/rank', n_col_split=5)
 
     green = matplotlib.cm.get_cmap('Greens')
     blue = matplotlib.cm.get_cmap('Blues')
@@ -952,8 +954,8 @@ def exp_00_04_high_dim(post_process=False):
     plot_multi_idx_lines(df_agg_multi, folder, 'delta_hv_regret', y_fmt='{x:.0f}', **kwargs)
     plot_multi_idx_lines(df_agg_multi, folder, 'time_train', y_log=True, y_fmt='{x:.0f}', **kwargs)
     plot_multi_idx_lines(df_agg_multi, folder, 'time_infill', y_log=True, y_fmt='{x:.0f}', **kwargs)
-    plot_multi_idx_lines(df_agg_multi, folder, ['delta_hv_regret', 'time_train', 'time_infill'],
-                         y_log=[False, True, True], y_fmt='{x:.0f}', **kwargs)
+    plot_multi_idx_lines(df_agg_multi, folder, ['delta_hv_regret', 'n_theta', 'time_train', 'time_infill'],
+                         y_log=[False, True, True, True], y_fmt='{x:.0f}', **kwargs)
 
     # for df_agg_sub, prefix in [
     #     (df_agg[df_agg.cat_ker == 'Gower'], 'gower'),
@@ -961,6 +963,28 @@ def exp_00_04_high_dim(post_process=False):
     # ]:
     #     plot_multi_idx_lines(df_agg_sub, folder, 'delta_hv_regret', sort_by='n_comp', prob_names=p_names_map,
     #                          x_ticks=x_ticks_map, save_prefix=prefix, x_label=x_label)
+
+
+def _plot_for_sbo_figure():
+    import seaborn as sns
+    from scipy.stats.qmc import Sobol
+    x = Sobol(d=2, seed=42).random_base2(m=7)
+
+    with sb_theme():
+        palette = sns.cubehelix_palette(light=0, n_colors=1)
+        df = pd.DataFrame(data=x, columns=['$x_0$', '$x_1$'])
+        df['cat'] = [0]*len(df)
+        plt.figure(figsize=(3, 2))
+        ax = sns.scatterplot(df, x=df.columns[0], y=df.columns[1], hue='cat', palette=['k'], size='cat', sizes=[10])
+        ax.set(xticklabels=[], yticklabels=[])
+        ax.tick_params(left=False, bottom=False)
+        ax.legend_.remove()
+        ax.set_aspect('equal')
+        sns.despine()
+        plt.xlim([0, 1]), plt.ylim([0, 1])
+        plt.tight_layout()
+
+    plt.savefig('sobol.svg')
 
 
 if __name__ == '__main__':
