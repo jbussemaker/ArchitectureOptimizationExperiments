@@ -915,7 +915,7 @@ def exp_03_07_engine_arch(post_process=False):
     # post_process = True
     folder = set_results_folder(_exp_03_07_folder)
     expected_fail_rate = .6
-    n_repeat = 4
+    n_repeat = 10
 
     all_strategies: List[HiddenConstraintStrategy] = [
         LocalReplacement(n=5, mean=True),
