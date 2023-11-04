@@ -67,7 +67,7 @@ class ExtPredictorInterface(PredictorInterface):
             x_train, is_valid_train = self.training_set
             is_failed_train = (1-is_valid_train).astype(bool)
 
-        x1, x2 = np.linspace(problem.xl[0], problem.xu[0], 100), np.linspace(problem.xl[1], problem.xu[1], 100)
+        x1, x2 = np.linspace(problem.xl[0], problem.xu[0], 30), np.linspace(problem.xl[1], problem.xu[1], 30)
         xx1, xx2 = np.meshgrid(x1, x2)
         x_eval = np.ones((len(xx1.ravel()), x_train.shape[1]))
         x_eval *= .5*(problem.xu-problem.xl)+problem.xl
@@ -83,7 +83,7 @@ class ExtPredictorInterface(PredictorInterface):
 
         # For the ROC curve, ensure we sufficiently cover the design space
         if x_train.shape[1] > 2:
-            x_eval_roc_abs = HierarchicalSampling().do(problem, 10000).get('X')
+            x_eval_roc_abs = HierarchicalSampling().do(problem, 1000).get('X')
             is_failed_ref = problem.get_failed_points(problem.evaluate(x_eval_roc_abs, return_as_dictionary=True))
             pov_predicted_roc = np.clip(self.evaluate_probability_of_validity(x_eval_roc_abs), 0, 1)
 

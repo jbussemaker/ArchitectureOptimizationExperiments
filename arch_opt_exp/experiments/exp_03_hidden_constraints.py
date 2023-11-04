@@ -68,30 +68,30 @@ _exp_03_07_folder = '03_hc_07_engine_arch'
 
 _test_problems = lambda: [
     # HFR = high failure rate; G = constrained
-    (Branin(), '00_no_HC', 1),  # n_doe multiplier
-    (HCBranin(), '00_far', 1),
-    (Alimo(), '01', 1),
-    (AlimoEdge(), '01', 1),
-    (Mueller02(), '01', 1),
-    (HCSphere(), '01', 1),
-    (Mueller01(), '02_HFR', 1),
-    # (Mueller08(), '02_HFR', 2),
-    (CantileveredBeamHC(), '03_G_HFR', 1),
-    # (MOMueller08(), '04_MO_HFR', 2),
-    (CarsideHCLess(), '05_MO_G', 1),
-    (CarsideHC(), '05_MO_G_HFR', 1),
-    # (MDMueller02(), '06_MD', 1),
-    # (MDMueller08(), '06_MD_HFR', 2),
-    (MDCantileveredBeamHC(), '07_MD_G_HFR', 1),
-    # (MDMOMueller08(), '08_MD_MO_HFR', 2),
-    (MDCarsideHC(), '09_MD_MO_G_HFR', 1),
-    (HierAlimo(), '10_HIER', 2),
-    (HierAlimoEdge(), '10_HIER', 2),
-    (HierMueller02(), '10_HIER', 1),
-    # (HierMueller08(), '10_HIER_HFR', 2),
-    (HierarchicalRosenbrockHC(), '11_HIER_G', 1),
-    # (MOHierMueller08(), '12_HIER_MO_HFR', 2),
-    (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 1),
+    (Branin(), '00_no_HC', 1, 'Branin'),  # n_doe multiplier
+    (HCBranin(), '00_far', 1, 'HC Branin'),
+    (Alimo(), '01', 1, 'Alimo'),
+    (AlimoEdge(), '01', 1, 'Alimo Edge'),
+    (Mueller02(), '01', 1, 'Müller 2'),
+    (HCSphere(), '01', 1, 'HC Sphere'),
+    (Mueller01(), '02_HFR', 1, 'Müller 1'),
+    # (Mueller08(), '02_HFR', 2, 'Müller 8'),
+    (CantileveredBeamHC(), '03_G_HFR', 1, 'HC CantBeam'),
+    # (MOMueller08(), '04_MO_HFR', 2, 'MO Müller 8'),
+    (CarsideHCLess(), '05_MO_G', 1, 'HC Carside Less'),
+    (CarsideHC(), '05_MO_G_HFR', 1, 'HC Carside'),
+    # (MDMueller02(), '06_MD', 1, 'MD Müller 2'),
+    # (MDMueller08(), '06_MD_HFR', 2, 'MD Müller 8'),
+    (MDCantileveredBeamHC(), '07_MD_G_HFR', 1, 'MD HC CantBeam'),
+    # (MDMOMueller08(), '08_MD_MO_HFR', 2, 'MD MO Müller 8'),
+    (MDCarsideHC(), '09_MD_MO_G_HFR', 1, 'MD HC Carside'),
+    (HierAlimo(), '10_HIER', 2, 'H Alimo'),
+    (HierAlimoEdge(), '10_HIER', 2, 'H Alimo Edge'),
+    (HierMueller02(), '10_HIER', 1, 'H Müller 2'),
+    # (HierMueller08(), '10_HIER_HFR', 2, 'H Müller 8'),
+    (HierarchicalRosenbrockHC(), '11_HIER_G', 1, 'H HC Rosenbr.'),
+    # (MOHierMueller08(), '12_HIER_MO_HFR', 2, 'MO H Müller 8'),
+    (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 1, 'MO H HC Rosenbr.'),
 ]
 
 
@@ -237,7 +237,7 @@ def exp_03_02_hc_test_area():
     Conclusions: hypothesis confirmed
     """
     folder = set_results_folder(_exp_03_02_folder)
-    for problem, category, _ in _test_problems():
+    for problem, category, _, _ in _test_problems():
         name = f'{category} {problem.__class__.__name__}'
         log.info(f'Plotting {problem.__class__.__name__}')
         plot_distance_distributions(problem, f'{folder}/plot_{category}_{problem.__class__.__name__}', name)
@@ -572,23 +572,25 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     n_infill = 50
     n_repeat = 8
     problems = [
-        (Alimo(), '01'),
-        (AlimoEdge(), '01'),
-        (Mueller01(), '02_HFR'),
-        (MDCarsideHC(), '09_MD_MO_G_HFR'),
-        (HierAlimo(), '10_HIER'),
-        (HierMueller02(), '10_HIER'),
-        (HierarchicalRosenbrockHC(), '11_HIER_G'),
-        (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR'),
+        (Alimo(), '01', 'Alimo'),
+        (AlimoEdge(), '01', 'Alimo Edge'),
+        (Mueller01(), '02_HFR', 'Müller 1'),
+        (MDCarsideHC(), '09_MD_MO_G_HFR', 'MD HC Carside'),
+        (HierAlimo(), '10_HIER', 'H Alimo'),
+        (HierMueller02(), '10_HIER', 'H Müller 2'),
+        (HierarchicalRosenbrockHC(), '11_HIER_G', 'H HC Rosenbr.'),
+        (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 'MO H HC Rosenbr.'),
     ]
     # post_process = True
 
     problem_paths = []
     problem_names = []
+    p_name_map = {}
     problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
-    for i, (problem, category) in enumerate(problems):
+    for i, (problem, category, title) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
         problem_names.append(name)
+        p_name_map[name] = title
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
         if post_process:
@@ -699,10 +701,10 @@ def exp_03_05_optimization(post_process=False):
     problem_names = []
     p_name_map = {}
     problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
-    for i, (problem, category, infill_mult) in enumerate(problems):
+    for i, (problem, category, infill_mult, title) in enumerate(problems):
         name = f'{category} {problem.__class__.__name__}'
         problem_names.append(name)
-        p_name_map[name] = name
+        p_name_map[name] = title
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
         if post_process:
@@ -724,7 +726,7 @@ def exp_03_05_optimization(post_process=False):
         algorithms = []
         algo_names = []
         for j, strategy in enumerate(_strategies):
-            sbo, _ = _get_sbo(problem, strategy, doe[0])
+            sbo, _ = _get_sbo(problem, strategy, doe[0], verbose=True)
             algorithms.append(sbo)
             algo_names.append(str(strategy))
 
@@ -1129,7 +1131,7 @@ if __name__ == '__main__':
     # exp_03_03_hc_predictors()
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
-    exp_03_05_optimization(post_process=True)
-    exp_03_04a_doe_size_min_pov()
+    exp_03_05_optimization()
+    # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
     # exp_03_07_engine_arch()
