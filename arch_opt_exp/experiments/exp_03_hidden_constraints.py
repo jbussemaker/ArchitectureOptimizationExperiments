@@ -21,7 +21,7 @@ import logging
 import itertools
 import numpy as np
 import pandas as pd
-from typing import List, Union, Dict, Any
+from typing import List, Union, Dict, Any, Tuple
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from scipy.spatial import distance
@@ -76,22 +76,22 @@ _test_problems = lambda: [
     (HCSphere(), '01', 1, 'HC Sphere'),
     (Mueller01(), '02_HFR', 1, 'Müller 1'),
     # (Mueller08(), '02_HFR', 2, 'Müller 8'),
-    (CantileveredBeamHC(), '03_G_HFR', 1, 'HC CantBeam'),
+    (CantileveredBeamHC(), '03_G_HFR', 1, 'HC CantB'),
     # (MOMueller08(), '04_MO_HFR', 2, 'MO Müller 8'),
     (CarsideHCLess(), '05_MO_G', 1, 'HC Carside Less'),
     (CarsideHC(), '05_MO_G_HFR', 1, 'HC Carside'),
     # (MDMueller02(), '06_MD', 1, 'MD Müller 2'),
     # (MDMueller08(), '06_MD_HFR', 2, 'MD Müller 8'),
-    (MDCantileveredBeamHC(), '07_MD_G_HFR', 1, 'MD HC CantBeam'),
-    # (MDMOMueller08(), '08_MD_MO_HFR', 2, 'MD MO Müller 8'),
-    (MDCarsideHC(), '09_MD_MO_G_HFR', 1, 'MD HC Carside'),
+    (MDCantileveredBeamHC(), '07_MD_G_HFR', 1, 'MD/HC CantB'),
+    # (MDMOMueller08(), '08_MD_MO_HFR', 2, 'MD/MO Müller 8'),
+    (MDCarsideHC(), '09_MD_MO_G_HFR', 1, 'MD/HC Carside'),
     (HierAlimo(), '10_HIER', 2, 'H Alimo'),
     (HierAlimoEdge(), '10_HIER', 2, 'H Alimo Edge'),
     (HierMueller02(), '10_HIER', 1, 'H Müller 2'),
     # (HierMueller08(), '10_HIER_HFR', 2, 'H Müller 8'),
-    (HierarchicalRosenbrockHC(), '11_HIER_G', 1, 'H HC Rosenbr.'),
-    # (MOHierMueller08(), '12_HIER_MO_HFR', 2, 'MO H Müller 8'),
-    (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 1, 'MO H HC Rosenbr.'),
+    (HierarchicalRosenbrockHC(), '11_HIER_G', 1, 'H/HC Rosenbr.'),
+    # (MOHierMueller08(), '12_HIER_MO_HFR', 2, 'MO/H Müller 8'),
+    (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 1, 'MO/H/HC Rbr.'),
 ]
 
 
@@ -382,22 +382,22 @@ def exp_03_03a_knn_predictor():
         plt.close('all')
 
 
-_strategies: List[HiddenConstraintStrategy] = [
-    RejectionHCStrategy(),
+_strategies: List[Tuple[HiddenConstraintStrategy, str]] = [
+    (RejectionHCStrategy(), 'Rejection & '),
 
-    GlobalWorstReplacement(),
-    LocalReplacement(n=1),
-    LocalReplacement(n=5, mean=False),
-    LocalReplacement(n=5, mean=True),
-    PredictedWorstReplacement(mul=1.),
-    PredictedWorstReplacement(mul=2.),
+    (GlobalWorstReplacement(), 'Replacement & Global max'),
+    (LocalReplacement(n=1), 'Replacement & Local'),
+    (LocalReplacement(n=5, mean=False), 'Replacement & 5-nearest, max'),
+    (LocalReplacement(n=5, mean=True), 'Replacement & 5-nearest, mean'),
+    (PredictedWorstReplacement(mul=1.), 'Replacement & Predicted worst'),
+    (PredictedWorstReplacement(mul=2.), 'Replacement & Pred. worst ($\\alpha = 2$)'),
 
-    PredictionHCStrategy(RandomForestClassifier()),
-    PredictionHCStrategy(GPClassifier()),
-    PredictionHCStrategy(VariationalGP()),
-    PredictionHCStrategy(KNNClassifier()),
-    PredictionHCStrategy(RBFInterpolator()),
-    PredictionHCStrategy(MDGPRegressor()),
+    (PredictionHCStrategy(RandomForestClassifier()), 'Prediction & RFC'),
+    (PredictionHCStrategy(KNNClassifier()), 'Prediction & KNN'),
+    (PredictionHCStrategy(RBFInterpolator()), 'Prediction & RBF'),
+    (PredictionHCStrategy(GPClassifier()), 'Prediction & GP Classifier'),
+    (PredictionHCStrategy(VariationalGP()), 'Prediction & Variational GP'),
+    (PredictionHCStrategy(MDGPRegressor()), 'Prediction & MD GP'),
 ]
 
 
@@ -459,7 +459,7 @@ def exp_03_04_simple_optimization():
         fig_agg, agg_ax = plt.subplots(
             len(n_infill_aggregate), 2, sharex=True, sharey=True, squeeze=True, figsize=(6, 12))
 
-        for i, strategy in enumerate(_strategies):
+        for i, (strategy, _) in enumerate(_strategies):
             if not isinstance(strategy, PredictionHCStrategy) or not isinstance(strategy.predictor, RBFInterpolator):
                 continue
 
@@ -568,6 +568,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     folder = set_results_folder(_exp_03_04a_folder)
     expected_fail_rate = .6
     k_doe_test = [2]
+    mul_test = [.75, 1, 1.25]
     min_pov_test = [.1, .25, .5, .75, .9, -1]
     n_infill = 50
     n_repeat = 8
@@ -575,11 +576,11 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         (Alimo(), '01', 'Alimo'),
         (AlimoEdge(), '01', 'Alimo Edge'),
         (Mueller01(), '02_HFR', 'Müller 1'),
-        (MDCarsideHC(), '09_MD_MO_G_HFR', 'MD HC Carside'),
+        (MDCarsideHC(), '09_MD_MO_G_HFR', 'MD/HC Carside'),
         (HierAlimo(), '10_HIER', 'H Alimo'),
         (HierMueller02(), '10_HIER', 'H Müller 2'),
-        (HierarchicalRosenbrockHC(), '11_HIER_G', 'H HC Rosenbr.'),
-        (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 'MO H HC Rosenbr.'),
+        (HierarchicalRosenbrockHC(), '11_HIER_G', 'H/HC Rbr.'),
+        (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 'MO/H/HC Rbr.'),
     ]
     # post_process = True
 
@@ -610,6 +611,14 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         algorithms, algo_names = [], []
         doe_exp = {}
         for k in k_doe_test:
+            for mul in mul_test:
+                strategy = PredictedWorstReplacement(mul=mul)
+                sbo, _ = _get_sbo(problem, strategy, doe[k][0])
+                algo_name = f'Predicted Worst; DOE K={k}; mul={mul}'
+                doe_exp[algo_name] = doe[k]
+                algorithms.append(sbo)
+                algo_names.append(algo_name)
+
             for min_pov in min_pov_test:
                 for classifier, classifier_name in [
                     (MDGPRegressor(), 'MD-GP'),
@@ -630,12 +639,24 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         plt.close('all')
 
     def _add_cols(df_agg_):
-        df_agg_['cls'] = [val[1].split(';')[0] for val in df_agg_.index]
+        df_agg_['cls'] = cls_ = [val[1].split(';')[0] for val in df_agg_.index]
         df_agg_['doe_k'] = [float(val[1].split(';')[1].split('K=')[1]) for val in df_agg_.index]
         min_pov_values = [val[1].split(';')[2].split('=')[1] for val in df_agg_.index]
-        df_agg_['min_pov'] = ['F' if val == '-1' else val for val in min_pov_values]
+        df_agg_['min_pov'] = config_ = ['F' if val == '-1' else val for val in min_pov_values]
+        df_agg_['strategy'] = [f'{cls_name}|{config_[ii]}' for ii, cls_name in enumerate(cls_)]
+
+        analyze_perf_rank(df_agg_, 'delta_hv_regret', n_repeat)
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    cat_name_map = {f'Predicted Worst|{mul}': f'Predicted Worst & $\\alpha = {mul:.2f}$'
+                    for mul in df_agg[df_agg.cls == 'Predicted Worst'].min_pov.unique()}
+    cat_name_map.update({strat: f'{strat.split("|")[0]} & $PoV_{{min}} = {strat.split("|")[1]*100:.0f}\%$'
+                         for strat in df_agg[(df_agg.cls != 'Predicted Worst') & (df_agg.min_pov != 'F')].strategy.unique()})
+    cat_name_map.update({strat: f'{strat.split("|")[0]} & $f_{{infill}}$ penalty'
+                         for strat in df_agg[(df_agg.cls != 'Predicted Worst') & (df_agg.min_pov == 'F')].strategy.unique()})
+    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=10)
+    plot_perf_rank(df_agg, 'strategy', save_path=f'{folder}/rank', **kw)
 
     # for category in ['cls', 'doe_k', 'min_pov']:
     #     plot_problem_bars(df_agg, folder, category, 'delta_hv_ratio', y_log=True)
@@ -725,7 +746,7 @@ def exp_03_05_optimization(post_process=False):
 
         algorithms = []
         algo_names = []
-        for j, strategy in enumerate(_strategies):
+        for j, (strategy, _) in enumerate(_strategies):
             sbo, _ = _get_sbo(problem, strategy, doe[0], verbose=True)
             algorithms.append(sbo)
             algo_names.append(str(strategy))
@@ -775,14 +796,51 @@ def exp_03_05_optimization(post_process=False):
     plot_problem_bars(df_agg, folder, 'g_f_strat', 'fail_ratio')
     plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_ratio')
 
-    cat_name_map = {str(strat): str(strat) for strat in _strategies}
-    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map)
+    cat_name_map = {str(strat): title for strat, title in _strategies}
+    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=10)
     plot_perf_rank(df_agg, 'strat_name', save_path=f'{folder}/rank', **kw)
     plot_perf_rank(df_agg[df_agg.strategy == 'replacement'], 'strat_name', save_path=f'{folder}/rank_replace', **kw)
-    plot_perf_rank(df_agg[(df_agg.strategy == 'prediction') & (df_agg.g_f_strat == 'G')],
-                   'strat_name', save_path=f'{folder}/rank_pred_g', **kw)
-    plot_perf_rank(df_agg[(df_agg.strategy == 'prediction') & (df_agg.g_f_strat == 'F')],
-                   'strat_name', save_path=f'{folder}/rank_pred_f', **kw)
+    plot_perf_rank(df_agg[df_agg.strategy == 'prediction'],
+                   'strat_name', save_path=f'{folder}/rank_prediction', **kw)
+
+    df_agg['time_train_infill'] = df_agg['time_train'] + df_agg['time_infill']
+
+    rejection_ref = np.repeat(df_agg[df_agg.index.get_level_values(1) == 'Rejection'].values,
+                              len(np.unique(df_agg.index.get_level_values(1))), axis=0)
+    col_idx = {col: i for i, col in enumerate(df_agg.columns)}
+    for col in df_agg.columns:
+        if '_q25' in col or '_q75' in col:
+            continue
+        if col+'_q25' in col_idx:
+            rejection_ref[:, col_idx[col+'_q25']] = rejection_ref[:, col_idx[col]]
+            rejection_ref[:, col_idx[col+'_q75']] = rejection_ref[:, col_idx[col]]
+    rejection_ref[rejection_ref == 0] = np.nan
+    is_num = np.array([df_agg.dtypes[col] == float for col in df_agg.columns])
+    rel_values = df_agg.values.copy()
+    rel_values[:, is_num] /= rejection_ref[:, is_num]
+    df_rel = pd.DataFrame(index=df_agg.index, columns=df_agg.columns, data=rel_values)
+
+    col_rel_analyze = {'delta_hv_regret': '$\\Delta HV$ regret', 'fail_rate': 'Fail rate',
+                       'time_train': 'Training time', 'time_infill': 'Infill time',
+                       'time_train_infill': 'Training + infill time'}
+    col_rel_sel = [col+post for col in col_rel_analyze for post in ['']]  # , '_q25', '_q75']]
+    df_rel_agg = df_rel[col_rel_sel].groupby(level=1).mean()
+    df_rel_agg = (df_rel_agg-1)*100
+    df_rel_agg['names'] = [cat_name_map.get(cat, cat) for cat in df_rel_agg.index]
+    df_rel_agg = df_rel_agg.set_index('names').loc[[cat for cat in cat_name_map.values()]]
+    df_rel_agg.columns = [col_name for col_name in col_rel_analyze.values()]
+    # df_rel_agg.columns = pd.MultiIndex.from_tuples([(name, pn) for col, name in col_rel_analyze.items()
+    #                                                 for post, pn in [('', 'mean'), ('_q25', 'min'), ('_q75', 'max')]])
+
+    styler = df_rel_agg.style
+    styler.format(formatter=lambda v: f'{v:+.0f}\\%')
+    styler.background_gradient(cmap='Greens_r', subset=col_rel_analyze['delta_hv_regret'], vmin=-100, vmax=0)
+    styler.background_gradient(cmap='Greens_r', subset=col_rel_analyze['fail_rate'], vmin=-100, vmax=0)
+    styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_train'], vmin=0, vmax=200)
+    styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_infill'], vmin=0, vmax=200)
+    styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_train_infill'], vmin=0, vmax=200)
+    styler.to_latex(f'{folder}/rel_perf.tex', hrules=True, convert_css=True,
+                    column_format='ll'+'c'*len(df_rel_agg.columns))
 
     plt.close('all')
 
@@ -1131,7 +1189,7 @@ if __name__ == '__main__':
     # exp_03_03_hc_predictors()
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
-    exp_03_05_optimization()
-    # exp_03_04a_doe_size_min_pov()
+    # exp_03_05_optimization()
+    exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
     # exp_03_07_engine_arch()
