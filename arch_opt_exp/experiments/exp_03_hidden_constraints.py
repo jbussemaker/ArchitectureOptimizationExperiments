@@ -568,7 +568,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     folder = set_results_folder(_exp_03_04a_folder)
     expected_fail_rate = .6
     k_doe_test = [2]
-    mul_test = [.75, 1, 1.25]
+    mul_test = [.75, 1, 1.25, 2]
     min_pov_test = [.1, .25, .5, .75, .9, -1]
     n_infill = 50
     n_repeat = 8
@@ -656,19 +656,21 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     cat_name_map.update({strat: f'b{strat.split("|")[0]} & $f_{{infill}}$ penalty'
                          for strat in df_agg[(df_agg.cls != 'Predicted Worst') & (df_agg.min_pov == 'F')].strategy.unique()})
     cat_name_map = {key: val[1:] for key, val in sorted(cat_name_map.items(), key=lambda v: v[1])}
-    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=10)
+    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=15)
     plot_perf_rank(df_agg, 'strategy', save_path=f'{folder}/rank', **kw)
 
-    # df_agg[['fail_rate', 'fail_rate_q25', 'fail_rate_q75']] *= 100
-    # mc_titles = {'MD-GP': 'Mixed-discrete GP', 'RFC': 'Random Forest Classifier'}
-    # mpv = df_agg.min_pov.values
-    # x_ticks_map = {val: f'{float(mpv[i])*100:.0f}%' if mpv[i] != 'F' else '$f$-penalty'
-    #                for i, (_, val) in enumerate(df_agg.index)}
-    # kw = dict(sort_by='min_pov', multi_col='cls', multi_col_titles=mc_titles, prob_names=p_name_map,
-    #           x_ticks=x_ticks_map, x_label='$PoV_{min}$', legend_title='Problem', cat_colors=True)
-    # df_agg_pred = df_agg[df_agg.cls != 'Predicted Worst']
-    # plot_multi_idx_lines(df_agg_pred, folder, ['delta_hv_regret', 'fail_rate', 'time_train', 'time_infill'],
-    #                      y_log=[False, False, True, True], y_fmt='{x:.0f}', **kw)
+    df_agg_ = df_agg.copy()
+    df_agg[['fail_rate', 'fail_rate_q25', 'fail_rate_q75']] *= 100
+    mc_titles = {'MD-GP': 'Mixed-discrete GP', 'RFC': 'Random Forest Classifier'}
+    mpv = df_agg.min_pov.values
+    x_ticks_map = {val: f'{float(mpv[i])*100:.0f}%' if mpv[i] != 'F' else '$f$-penalty'
+                   for i, (_, val) in enumerate(df_agg.index)}
+    kw = dict(sort_by='min_pov', multi_col='cls', multi_col_titles=mc_titles, prob_names=p_name_map,
+              x_ticks=x_ticks_map, x_label='$PoV_{min}$', legend_title='Problem', cat_colors=True)
+    df_agg_pred = df_agg[df_agg.cls != 'Predicted Worst']
+    plot_multi_idx_lines(df_agg_pred, folder, ['delta_hv_regret', 'fail_rate', 'time_train', 'time_infill'],
+                         y_log=[False, False, True, True], y_fmt='{x:.0f}', **kw)
+    df_agg = df_agg_
 
     with open(f'{set_results_folder(_exp_03_05_folder)}/results.pkl', 'rb') as fp:
         df_agg_rel = pickle.load(fp)
@@ -699,7 +701,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     # df_agg[['fail_rate', 'fail_rate_q25', 'fail_rate_q75']] *= 100
     type_name_map = {'MD-GP': 'MD GP', 'RFC': 'RFC'}
     kw = dict(sort_by='param', prob_names=type_name_map, x_ticks=x_ticks_map, cat_colors=False,
-              y_lims=[(-65, -20), (-75, -40)], y_names=['Rel. $\\Delta HV$ regret %', 'Rel. fail rate %'])
+              y_lims=[(-65, -0), (-75, -40)], y_names=['Rel. $\\Delta HV$ regret %', 'Rel. fail rate %'])
     df_agg_pred = df_rel_q[df_rel_q.type != 'Predicted Worst']
     plot_cols = ['delta_hv_regret', 'fail_rate']
     plot_multi_idx_lines(df_agg_pred, folder, plot_cols, y_log=[False, False], y_fmt='{x:.0f}', save_prefix='rel',
@@ -1273,6 +1275,6 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     # exp_03_05_optimization()
-    # exp_03_04a_doe_size_min_pov()
+    exp_03_04a_doe_size_min_pov(post_process=True)
     # exp_03_06_engine_arch_surrogate()
     exp_03_07_engine_arch(post_process=True)
