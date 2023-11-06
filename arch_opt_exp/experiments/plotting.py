@@ -32,6 +32,7 @@ __all__ = ['plot_scatter', 'plot_problem_bars', 'plot_for_pub', 'analyze_perf_ra
 
 _col_names = {
     'fail_rate_ratio': 'Fail rate ratio',
+    'fail_rate': 'Fail rate % (end)',
     'fail_ratio': 'Fail rate ratio',
     'delta_hv_ratio': '$\Delta$HV ratio',
     'delta_hv_regret': '$\Delta$HV regret',
@@ -364,7 +365,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
 
 def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_col_titles=None, prob_names=None,
                          x_ticks=None, save_prefix=None, x_label='', y_log=False, y_fmt=None, legend_title=None,
-                         height=2, aspect=1.5):
+                         height=2, aspect=1.5, cat_colors=False, y_lims=None, y_names=None):
     if sort_by is not None:
         df = df.sort_values(sort_by)
         if len(df.index.levels[0]) > 1:
@@ -392,6 +393,8 @@ def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_
     x_ticks = [x_ticks.get(val, val) for val in cat_unique]
 
     y_cols_list = y_col if isinstance(y_col, list) else [y_col]
+    if y_names is None:
+        y_names = [_col_names[y_col_] for y_col_ in y_cols_list]
     y_log_list = y_log if isinstance(y_log, list) else [y_log]*len(y_cols_list)
 
     df_q25 = df.copy()
@@ -417,7 +420,7 @@ def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_
 
     with sb_theme():
         if n_colors > 1:
-            palette = sns.color_palette('mako_r', n_colors=n_colors)
+            palette = sns.color_palette('cubehelix' if cat_colors else 'mako_r', n_colors=n_colors)
         else:
             palette = sns.cubehelix_palette(light=0, n_colors=n_colors)
         g = sns.relplot(data=df, kind='line', x='x', y=y_col_plot, hue='idx0', legend=False if legend_title is False else 'brief',
@@ -436,7 +439,9 @@ def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_
                     ax.set(yscale='log')
                 if i_row > 0:
                     ax.set_title('')
-            row[0].set_ylabel(_col_names[y_cols_list[i_row]])
+                if y_lims is not None:
+                    ax.set_ylim(*y_lims[i_row])
+            row[0].set_ylabel(y_names[i_row])
 
         if legend_title is not False:
             g._legend.set_title(legend_title or '')

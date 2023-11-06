@@ -613,7 +613,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         for k in k_doe_test:
             for mul in mul_test:
                 strategy = PredictedWorstReplacement(mul=mul)
-                sbo, _ = _get_sbo(problem, strategy, doe[k][0])
+                sbo, _ = _get_sbo(problem, strategy, doe[k][0], verbose=True)
                 algo_name = f'Predicted Worst; DOE K={k}; mul={mul}'
                 doe_exp[algo_name] = doe[k]
                 algorithms.append(sbo)
@@ -626,7 +626,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
                 ]:
                     strategy = PredictionHCStrategy(classifier, constraint=min_pov != -1,
                                                     min_pov=.5 if min_pov == -1 else min_pov)
-                    sbo, _ = _get_sbo(problem, strategy, doe[k][0])
+                    sbo, _ = _get_sbo(problem, strategy, doe[k][0], verbose=True)
                     algo_name = f'{classifier_name}; DOE K={k}; min_pov={min_pov}'
                     doe_exp[algo_name] = doe[k]
                     algorithms.append(sbo)
@@ -649,14 +649,63 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
 
     df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
-    cat_name_map = {f'Predicted Worst|{mul}': f'Predicted Worst & $\\alpha = {mul:.2f}$'
+    cat_name_map = {f'Predicted Worst|{mul}': f'aPredicted Worst & $\\alpha = {float(mul):.2f}$'
                     for mul in df_agg[df_agg.cls == 'Predicted Worst'].min_pov.unique()}
-    cat_name_map.update({strat: f'{strat.split("|")[0]} & $PoV_{{min}} = {strat.split("|")[1]*100:.0f}\%$'
+    cat_name_map.update({strat: f'b{strat.split("|")[0]} & $PoV_{{min}} = {float(strat.split("|")[1])*100:.0f}%$'
                          for strat in df_agg[(df_agg.cls != 'Predicted Worst') & (df_agg.min_pov != 'F')].strategy.unique()})
-    cat_name_map.update({strat: f'{strat.split("|")[0]} & $f_{{infill}}$ penalty'
+    cat_name_map.update({strat: f'b{strat.split("|")[0]} & $f_{{infill}}$ penalty'
                          for strat in df_agg[(df_agg.cls != 'Predicted Worst') & (df_agg.min_pov == 'F')].strategy.unique()})
+    cat_name_map = {key: val[1:] for key, val in sorted(cat_name_map.items(), key=lambda v: v[1])}
     kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=10)
     plot_perf_rank(df_agg, 'strategy', save_path=f'{folder}/rank', **kw)
+
+    # df_agg[['fail_rate', 'fail_rate_q25', 'fail_rate_q75']] *= 100
+    # mc_titles = {'MD-GP': 'Mixed-discrete GP', 'RFC': 'Random Forest Classifier'}
+    # mpv = df_agg.min_pov.values
+    # x_ticks_map = {val: f'{float(mpv[i])*100:.0f}%' if mpv[i] != 'F' else '$f$-penalty'
+    #                for i, (_, val) in enumerate(df_agg.index)}
+    # kw = dict(sort_by='min_pov', multi_col='cls', multi_col_titles=mc_titles, prob_names=p_name_map,
+    #           x_ticks=x_ticks_map, x_label='$PoV_{min}$', legend_title='Problem', cat_colors=True)
+    # df_agg_pred = df_agg[df_agg.cls != 'Predicted Worst']
+    # plot_multi_idx_lines(df_agg_pred, folder, ['delta_hv_regret', 'fail_rate', 'time_train', 'time_infill'],
+    #                      y_log=[False, False, True, True], y_fmt='{x:.0f}', **kw)
+
+    with open(f'{set_results_folder(_exp_03_05_folder)}/results.pkl', 'rb') as fp:
+        df_agg_rel = pickle.load(fp)
+    df_agg_rel = df_agg_rel[df_agg_rel.index.get_level_values(0).isin(df_agg.index.get_level_values(0).unique())]
+
+    df_agg_rel['time_train_infill'] = df_agg_rel['time_train'] + df_agg_rel['time_infill']
+    df_agg_rel['time_train_infill_q25'] = df_agg_rel['time_train_q25'] + df_agg_rel['time_infill_q25']
+    df_agg_rel['time_train_infill_q75'] = df_agg_rel['time_train_q75'] + df_agg_rel['time_infill_q75']
+
+    sel_cols_ = ['delta_hv_regret', 'fail_rate', 'time_train', 'time_infill', 'time_train_infill']
+    sel_cols = [col+post for col in sel_cols_ for post in ['', '_q25', '_q75']]
+    df_agg_rel = df_agg_rel[sel_cols]
+    df_agg_rel = df_agg_rel[df_agg_rel.index.get_level_values(1) == 'Rejection']
+    cat_name_map_ = {df_agg.strategy.values[i]: algo_name for i, algo_name in enumerate(df_agg.index.get_level_values(1))}
+    cat_name_map_ = {cat_name_map_[key]: val for key, val in cat_name_map.items()}
+    _hc_rel_stats_table(folder, df_agg, cat_name_map_, ref_values=df_agg_rel[sel_cols_].values)
+
+    df_rel_q = _hc_rel_stats_table(None, df_agg, None, ref_values=df_agg_rel.values, incl_q=True)
+    df_rel_q.columns = sel_cols
+    df_rel_q['names'] = names = [cat_name_map_.get(cat, cat) for cat in df_rel_q.index]
+    df_rel_q['type'] = type_ = [cat.split(';')[0] for cat in df_rel_q.index]
+    df_rel_q['param'] = param_ = [float(cat.split(';')[2].split('=')[1]) for cat in df_rel_q.index]
+    df_rel_q['param_text'] = ['$f$-pen' if par == -1 else (f'{par:.2f}' if 'Predicted' in type_[ii] else f'{par*100:.0f}%') for ii, par in enumerate(param_)]
+    x_ticks_map = {name: df_rel_q.param_text.values[ii] for ii, name in enumerate(names)}
+    df_rel_q = df_rel_q.set_index('param_text')  #.loc[[cat for cat in cat_name_map_.values()]]
+    type_ = df_rel_q['type'].values
+    df_rel_q = df_rel_q.set_index(pd.MultiIndex.from_tuples([(type_[ii], name) for ii, name in enumerate(df_rel_q.index)]))
+    # df_agg[['fail_rate', 'fail_rate_q25', 'fail_rate_q75']] *= 100
+    type_name_map = {'MD-GP': 'MD GP', 'RFC': 'RFC'}
+    kw = dict(sort_by='param', prob_names=type_name_map, x_ticks=x_ticks_map, cat_colors=False,
+              y_lims=[(-65, -20), (-75, -40)], y_names=['Rel. $\\Delta HV$ regret %', 'Rel. fail rate %'])
+    df_agg_pred = df_rel_q[df_rel_q.type != 'Predicted Worst']
+    plot_cols = ['delta_hv_regret', 'fail_rate']
+    plot_multi_idx_lines(df_agg_pred, folder, plot_cols, y_log=[False, False], y_fmt='{x:.0f}', save_prefix='rel',
+                         legend_title='Predictor', aspect=1.6, x_label='$PoV_{min}$', **kw)
+    plot_multi_idx_lines(df_rel_q[df_rel_q.type == 'Predicted Worst'], folder, plot_cols, y_log=[False, False],
+                         y_fmt='{x:.0f}', save_prefix='rel_pw', legend_title=False, x_label='$\\alpha$', **kw)
 
     # for category in ['cls', 'doe_k', 'min_pov']:
     #     plot_problem_bars(df_agg, folder, category, 'delta_hv_ratio', y_log=True)
@@ -803,10 +852,26 @@ def exp_03_05_optimization(post_process=False):
     plot_perf_rank(df_agg[df_agg.strategy == 'prediction'],
                    'strat_name', save_path=f'{folder}/rank_prediction', **kw)
 
-    df_agg['time_train_infill'] = df_agg['time_train'] + df_agg['time_infill']
+    _hc_rel_stats_table(folder, df_agg, cat_name_map)
 
-    rejection_ref = np.repeat(df_agg[df_agg.index.get_level_values(1) == 'Rejection'].values,
-                              len(np.unique(df_agg.index.get_level_values(1))), axis=0)
+    plt.close('all')
+
+
+def _hc_rel_stats_table(folder, df_agg: pd.DataFrame, cat_name_map, ref_values: np.ndarray = None, incl_q=False):
+    df_agg['time_train_infill'] = df_agg['time_train'] + df_agg['time_infill']
+    df_agg['time_train_infill_q25'] = df_agg['time_train_q25'] + df_agg['time_infill_q25']
+    df_agg['time_train_infill_q75'] = df_agg['time_train_q75'] + df_agg['time_infill_q75']
+
+    col_rel_analyze = {'delta_hv_regret': '$\\Delta HV$ regret', 'fail_rate': 'Fail rate',
+                       'time_train': 'Training time', 'time_infill': 'Infill time',
+                       'time_train_infill': 'Training + infill time'}
+    select_post = ['', '_q25', '_q75'] if incl_q else ['']
+    col_rel_sel = [col+post for col in col_rel_analyze for post in select_post]
+
+    df_agg = df_agg[col_rel_sel]
+    if ref_values is None:
+        ref_values = df_agg[df_agg.index.get_level_values(1) == 'Rejection'].values
+    rejection_ref = np.repeat(ref_values, len(np.unique(df_agg.index.get_level_values(1))), axis=0)
     col_idx = {col: i for i, col in enumerate(df_agg.columns)}
     for col in df_agg.columns:
         if '_q25' in col or '_q75' in col:
@@ -820,29 +885,29 @@ def exp_03_05_optimization(post_process=False):
     rel_values[:, is_num] /= rejection_ref[:, is_num]
     df_rel = pd.DataFrame(index=df_agg.index, columns=df_agg.columns, data=rel_values)
 
-    col_rel_analyze = {'delta_hv_regret': '$\\Delta HV$ regret', 'fail_rate': 'Fail rate',
-                       'time_train': 'Training time', 'time_infill': 'Infill time',
-                       'time_train_infill': 'Training + infill time'}
-    col_rel_sel = [col+post for col in col_rel_analyze for post in ['']]  # , '_q25', '_q75']]
-    df_rel_agg = df_rel[col_rel_sel].groupby(level=1).mean()
+    df_rel_agg = df_rel.groupby(level=1).mean()
     df_rel_agg = (df_rel_agg-1)*100
-    df_rel_agg['names'] = [cat_name_map.get(cat, cat) for cat in df_rel_agg.index]
-    df_rel_agg = df_rel_agg.set_index('names').loc[[cat for cat in cat_name_map.values()]]
-    df_rel_agg.columns = [col_name for col_name in col_rel_analyze.values()]
-    # df_rel_agg.columns = pd.MultiIndex.from_tuples([(name, pn) for col, name in col_rel_analyze.items()
-    #                                                 for post, pn in [('', 'mean'), ('_q25', 'min'), ('_q75', 'max')]])
+    if cat_name_map is not None:
+        df_rel_agg['names'] = [cat_name_map.get(cat, cat) for cat in df_rel_agg.index]
+        df_rel_agg = df_rel_agg.set_index('names').loc[[cat for cat in cat_name_map.values()]]
+    if incl_q:
+        df_rel_agg.columns = pd.MultiIndex.from_tuples([(name, pn) for col, name in col_rel_analyze.items()
+                                                        for post, pn in [('', 'mean'), ('_q25', 'min'), ('_q75', 'max')]])
+    else:
+        df_rel_agg.columns = [col_name for col_name in col_rel_analyze.values()]
 
-    styler = df_rel_agg.style
-    styler.format(formatter=lambda v: f'{v:+.0f}\\%')
-    styler.background_gradient(cmap='Greens_r', subset=col_rel_analyze['delta_hv_regret'], vmin=-100, vmax=0)
-    styler.background_gradient(cmap='Greens_r', subset=col_rel_analyze['fail_rate'], vmin=-100, vmax=0)
-    styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_train'], vmin=0, vmax=200)
-    styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_infill'], vmin=0, vmax=200)
-    styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_train_infill'], vmin=0, vmax=200)
-    styler.to_latex(f'{folder}/rel_perf.tex', hrules=True, convert_css=True,
-                    column_format='ll'+'c'*len(df_rel_agg.columns))
+    if folder is not None:
+        styler = df_rel_agg.style
+        styler.format(formatter=lambda v: f'{v:+.0f}\\%')
+        styler.background_gradient(cmap='Greens_r', subset=col_rel_analyze['delta_hv_regret'], vmin=-100, vmax=0)
+        styler.background_gradient(cmap='Greens_r', subset=col_rel_analyze['fail_rate'], vmin=-100, vmax=0)
+        styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_train'], vmin=0, vmax=200)
+        styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_infill'], vmin=0, vmax=200)
+        styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_train_infill'], vmin=0, vmax=200)
+        styler.to_latex(f'{folder}/rel_perf.tex', hrules=True, convert_css=True,
+                        column_format='ll'+'c'*len(df_rel_agg.columns))
 
-    plt.close('all')
+    return df_rel_agg
 
 
 def _agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
@@ -886,6 +951,7 @@ def _agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
     if df_agg_ is not None:
         df_agg = df_agg_
 
+    df_agg.to_pickle(f'{folder}/results.pkl')
     try:
         with pd.ExcelWriter(f'{folder}/results.xlsx') as writer:
             df_agg.to_excel(writer)
