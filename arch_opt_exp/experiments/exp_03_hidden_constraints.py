@@ -1080,7 +1080,7 @@ def exp_03_07_engine_arch(post_process=False):
     n_repeat = 10
 
     all_strategies: List[HiddenConstraintStrategy] = [
-        LocalReplacement(n=5, mean=True),
+        # LocalReplacement(n=5, mean=True),
         PredictionHCStrategy(RandomForestClassifier()),
         PredictionHCStrategy(MDGPRegressor()),
     ]
@@ -1098,7 +1098,9 @@ def exp_03_07_engine_arch(post_process=False):
             (True, 2, reduced_strategies),
         ]),
         # (RealisticTurbofanArch(), 800, 5, [
-        #     (True, True, all_strategies),
+        #     # (True, 20, reduced_strategies),
+        #     # (True, 10, all_strategies),
+        #     (True, 10, [PredictionHCStrategy(RandomForestClassifier(), min_pov=.25)]),
         # ]),
     ]
 
@@ -1166,6 +1168,8 @@ def exp_03_07_engine_arch(post_process=False):
         algo_names = []
         i_md_gp_gower = []
         md_gp_gower_algo_name_map = {}
+        i_hc_strat = []
+        hc_strat_algo_name_map = {}
         model_settings = {}
         for use_gower, n_kpls, strategies in strategies_settings:
             for strategy in strategies:
@@ -1195,6 +1199,14 @@ def exp_03_07_engine_arch(post_process=False):
                         i_md_gp_gower.append(len(algo_names))
                         md_gp_gower_algo_name_map[algo_name] = \
                             f'$n_{{kpls}} = {n_kpls}$' if n_kpls is not None else 'No KPLS'
+
+                if n_kpls == 10:
+                    i_hc_strat.append(len(algo_names))
+                    hc_strat_name = 'NA'
+                    if isinstance(strategy, PredictionHCStrategy):
+                        hc_strat_name = {MDGPRegressor.__name__: 'MD GP',
+                                         RandomForestClassifier.__name__: 'RFC'}[strategy.predictor.__class__.__name__]
+                    hc_strat_algo_name_map[algo_name] = hc_strat_name
 
                 infill_pop_size = None  # 200 if is_heavy else None
 
@@ -1240,6 +1252,11 @@ def exp_03_07_engine_arch(post_process=False):
             'delta_hv': ['ratio'],
         }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower')
 
+        exps_hc_strat = [exp for i_exp, exp in enumerate(exps) if i_exp in i_hc_strat]
+        plot_for_pub_sb(exps_hc_strat, met_plot_map={
+            'delta_hv': ['ratio'],
+        }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat', cycle_style=False)
+
         plt.close('all')
 
     def _add_cols(df_agg_):
@@ -1256,6 +1273,6 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     # exp_03_05_optimization()
-    exp_03_04a_doe_size_min_pov()
+    # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    # exp_03_07_engine_arch()
+    exp_03_07_engine_arch(post_process=True)

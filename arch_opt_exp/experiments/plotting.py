@@ -202,7 +202,7 @@ def plot_for_pub(exps, met_plot_map, algo_name_map=None, colors=None, styles=Non
             plot_callback=_plot_callback, save_svg=True, colors=colors, styles=styles, show=False)
 
 
-def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb'):
+def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', cycle_style=True):
     if algo_name_map is None:
         algo_name_map = {}
 
