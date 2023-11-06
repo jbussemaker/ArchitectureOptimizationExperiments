@@ -79,11 +79,11 @@ _problems = lambda: [
 
 
 _samplers = [
-    # (RepairedSampler(FloatRandomSampling()), 'Rnd'),
+    (RepairedSampler(FloatRandomSampling()), 'Rnd'),
     (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
     (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
-    # (NrActiveHierarchicalSampling(), 'HierNrAct'),
-    # (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
+    (NrActiveHierarchicalSampling(), 'HierNrAct'),
+    (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
     (ActiveVarHierarchicalSampling(), 'HierAct'),
     (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
     # (HierarchicalCoveringSampling(), 'Covering'),
@@ -754,12 +754,14 @@ def exp_01_06_opt(sbo=True, post_process=False):
     folder_post = '' if sbo else '_nsga2'
     folder = set_results_folder(_exp_01_06_folder+folder_post)
     n_infill = 100
-    n_gen = 25
-    n_repeat = 20 if sbo else 100
-    doe_k = 10
+    n_repeat = 20 if sbo else 24
+    # doe_k, n_gen = 10, 25
+    doe_k, n_gen = 5, 50
+    # doe_k, n_gen = 2, 100
     # n_sub, n_opts = 8, 2
     n_sub, n_opts = 9, 3
     i_opt_test = [0, n_sub-1]
+    opt_offset = .25
     prob_data = {}
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
@@ -792,13 +794,21 @@ def exp_01_06_opt(sbo=True, post_process=False):
 
     problems = [
         (lambda i_opt_: SelectableTunableBranin(
-            n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin ('),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR', 'Branin (H/'),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin (H/MRD/'),  # High diversity range
-        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 (H/MRD/'),
+            n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0, offset=opt_offset),
+         '00_SO_NO_HIER', 'Branin ('),
+        (lambda i_opt_: SelectableTunableBranin(
+            n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, diversity_range=0, offset=opt_offset), '01_SO_LDR', 'Branin (H/'),
+        (lambda i_opt_: SelectableTunableBranin(
+            n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, offset=opt_offset), '02_SO_HDR', 'Branin (H/MRD/'),  # High diversity range
+        (lambda i_opt_: SelectableTunableZDT1(
+            n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, offset=opt_offset), '03_MO_HDR', 'ZDT1 (H/MRD/'),
+        # (lambda i_opt_: HierarchicalGoldstein(), '04_OTHER', 'Goldst. (H/MRD/'),
+        # (lambda i_opt_: MOHierarchicalGoldstein(), '04_OTHER', 'MO Goldst. (H/MRD/'),
     ]
     # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem_factory(0).print_stats()
+    #     problem_factory(0).plot_transformation(show=False)
+    #     problem_factory(i_opt_test[-1]).plot_transformation()
     # exit()
     problem_paths = []
     problem_names = []
@@ -858,15 +868,15 @@ def exp_01_06_opt(sbo=True, post_process=False):
     df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
     cat_names = [
-        # 'Random',
+        'Random',
         'LHS',
         'Hier.: No Grouping',
-        # 'Hier.: By $n_{act}$', 'Hier.: By $n_{act}$ (wt.)',
+        'Hier.: By $n_{act}$', 'Hier.: By $n_{act}$ (wt.)',
         'Hier.: By $x_{act}$', 'Hier.: By $x_{act}$ (wt.)',
     ]
     cat_name_map = {sampler: cat_names[i] for i, (_, sampler) in enumerate(_samplers)}
     plot_perf_rank(df_agg, 'strategy', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
-                   save_path=f'{folder}/rank{folder_post}', n_col_split=6)
+                   save_path=f'{folder}/rank{folder_post}', n_col_split=6, h_factor=.6)
 
     green = matplotlib.cm.get_cmap('Greens')
     blue = matplotlib.cm.get_cmap('Blues')
@@ -933,5 +943,5 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
+    exp_01_06_opt(sbo=False)
     exp_01_06_opt()
-    # exp_01_06_opt(sbo=False)

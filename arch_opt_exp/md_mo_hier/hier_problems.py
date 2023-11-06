@@ -44,13 +44,14 @@ class TunableZDT1(TunableHierarchicalMetaProblem):
 
 class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
 
-    def __init__(self, *args, i_sub_opt: int = None, **kwargs):
+    def __init__(self, *args, i_sub_opt: int = None, offset: float = 0., **kwargs):
         super().__init__(*args, **kwargs)
         if i_sub_opt is not None:
-            self._mod_transform(i_sub_opt)
+            self._mod_transform(i_sub_opt, offset)
         self._i_sub_opt = i_sub_opt
+        self._offset = offset
 
-    def _mod_transform(self, i_sub_opt):
+    def _mod_transform(self, i_sub_opt, offset: float):
         ref_dirs = RieszEnergyReferenceDirectionFactory(n_dim=self.n_obj, n_points=10)()
         dist_to_origin = np.sqrt(np.sum(ref_dirs**2, axis=1))
         ref_dirs = (ref_dirs.T/dist_to_origin).T
@@ -68,28 +69,30 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
 
         i_rotate = np.arange(n_sub)
         i_rotate = i_rotate[np.roll(i_rotate, i_sub_opt-i_hv_max)]
-        self._transform = self._transform[i_rotate, :]
+        self._transform = transform = self._transform[i_rotate, :]
+
+        transform[i_sub_opt, :self.n_obj] -= offset/.2
 
     def __repr__(self):
         return f'{self.__class__.__name__}(imp_ratio={self._imp_ratio}, n_sub={self._n_subproblem}, ' \
                f'div_range={self._diversity_range}, n_opts={self._n_opts}, cont_ratio={self._cont_ratio}, ' \
-               f'i_sub_opt={self._i_sub_opt})'
+               f'i_sub_opt={self._i_sub_opt}, offset={self._offset})'
 
 
 class SelectableTunableBranin(SelectableTunableMetaProblem):
 
-    def __init__(self, n_sub=128, i_sub_opt=0, diversity_range=.95, imp_ratio=10., n_opts=2):
+    def __init__(self, n_sub=128, i_sub_opt=0, diversity_range=.95, imp_ratio=10., n_opts=2, offset=0.):
         factory = lambda n: MDBranin()
         super().__init__(factory, imp_ratio=imp_ratio, n_subproblem=n_sub, diversity_range=diversity_range,
-                         n_opts=n_opts, i_sub_opt=i_sub_opt)
+                         n_opts=n_opts, i_sub_opt=i_sub_opt, offset=offset)
 
 
 class SelectableTunableZDT1(SelectableTunableMetaProblem):
 
-    def __init__(self, n_sub=128, i_sub_opt=0, n_opts=2):
+    def __init__(self, n_sub=128, i_sub_opt=0, n_opts=2, offset=0.):
         factory = lambda n: NoHierarchyWrappedProblem(ZDT1(n_var=n))
         super().__init__(factory, imp_ratio=10., n_subproblem=n_sub, diversity_range=.95, n_opts=n_opts, cont_ratio=1,
-                         i_sub_opt=i_sub_opt)
+                         i_sub_opt=i_sub_opt, offset=offset)
 
 
 if __name__ == '__main__':

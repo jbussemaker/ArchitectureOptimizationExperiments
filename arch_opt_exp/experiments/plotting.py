@@ -250,7 +250,7 @@ def sb_theme():
 
 
 def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_map=None, prefix=None, save_path=None,
-                   add_counts=True, n_col_split=None):
+                   add_counts=True, n_col_split=None, h_factor=.3):
     prefix = '' if prefix is None else f'{prefix}_'
     rank_col = prefix+'perf_rank'
     if rank_col not in df.columns:
@@ -340,7 +340,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
             buffer.seek(0)
             fp.write(buffer.read())
 
-    h = .5+len(df_rank)*.3
+    h = .5+len(df_rank)*h_factor
     w = 1+len(df_rank.columns)*1.2
 
     with sb_theme():
