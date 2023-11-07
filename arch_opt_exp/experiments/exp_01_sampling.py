@@ -54,7 +54,7 @@ _exp_01_01_folder = '01_sampling_01_dv_opt_occurrence'
 _exp_01_02_folder = '01_sampling_02_sampling_similarity'
 _exp_01_03_folder = '01_sampling_03_doe_accuracy'
 _exp_01_04_folder = '01_sampling_04_activeness_diversity'
-_exp_01_05_folder = '01_sampling_05_perf_influence'
+_exp_01_05_folder = '01_sampling_05_correction'
 _exp_01_06_folder = '01_sampling_06_optimization'
 
 _all_problems = lambda: [
@@ -922,7 +922,7 @@ def exp_01_06_opt(sbo=True, post_process=False):
     folder_post = '' if sbo else '_nsga2'
     folder = set_results_folder(_exp_01_06_folder+folder_post)
     n_infill = 100
-    n_repeat = 20 if sbo else 24
+    n_repeat = 20 if sbo else 100
     # doe_k, n_gen = 10, 25
     doe_k, n_gen = 5, 50
     # doe_k, n_gen = 2, 100

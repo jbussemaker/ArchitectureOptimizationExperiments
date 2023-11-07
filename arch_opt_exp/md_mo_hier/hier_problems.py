@@ -16,6 +16,7 @@ Contact: jasper.bussemaker@dlr.de
 """
 import timeit
 import numpy as np
+from cached_property import cached_property
 
 from sb_arch_opt.problems.discrete import *
 from sb_arch_opt.problems.hierarchical import *
@@ -87,12 +88,16 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
 
         transform[i_sub_opt, :self.n_obj] -= offset/.2
 
+    @cached_property
+    def _x_sub_map(self):
+        return {tuple(xs): i for i, xs in enumerate(self._x_sub)}
+
     def _correct_x(self, x: np.ndarray, is_active: np.ndarray):
-        def _is_valid(xi):
-            x_corr_ = np.array([xi.copy()])
+        def _is_valid(xi_):
+            x_corr_ = np.array([xi_.copy()])
             is_active_corr_ = np.ones(x_corr_.shape, dtype=bool)
             super()._correct_x(x_corr_, is_active_corr_)
-            if np.all(x_corr_[0, :] == xi):
+            if np.all(x_corr_[0, :] == xi_):
                 return is_active_corr_[:, 0]
 
         if self.corrector_factory is not None:
@@ -103,6 +108,14 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
             s = timeit.default_timer()
             corrector.correct_x(x, is_active)
             self.last_corr_times.append(timeit.default_timer()-s)
+
+            x_sub_map = self._x_sub_map
+            n_sub = self._x_sub.shape[1]
+            self.design_space.impute_x(x, is_active)
+            i_sub_selected = np.zeros((x.shape[0],), dtype=int)
+            for i, xi in enumerate(x):
+                i_sub_selected[i] = x_sub_map[tuple(xi[:n_sub])]
+            self._correct_output = {'i_sub_sel': i_sub_selected}
             return
 
         super()._correct_x(x, is_active)
