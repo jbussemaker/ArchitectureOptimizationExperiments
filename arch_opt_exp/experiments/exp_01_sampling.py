@@ -776,10 +776,10 @@ def exp_01_05_correction(sbo=True, post_process=False):
         (CorrectorFactory(FirstLazyCorrector, correct_valid_x=True), 'Lazy First Cval'),
         (CorrectorFactory(RandomLazyCorrector, correct_valid_x=False), 'Lazy Rnd'),
         (CorrectorFactory(RandomLazyCorrector, correct_valid_x=True), 'Lazy Rnd Cval'),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Rnd'),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=False), 'Lazy Rnd Cval'),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=False), 'Lazy Rnd Cval Dist'),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=True), 'Lazy Rnd Cval Dist Euc'),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Closest'),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=False), 'Lazy Closest Cval'),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist'),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc'),
     ]
 
     prob_data = {}
