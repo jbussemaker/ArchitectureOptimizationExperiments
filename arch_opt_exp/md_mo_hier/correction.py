@@ -332,7 +332,7 @@ class LazyCorrectorBase(CorrectorBase):
             if is_discrete:
                 x_opts.append(list(range(int(ds.xl[i]), int(ds.xu[i]+1))))
             else:
-                x_opts.append([[ds.x_mid[i]]])
+                x_opts.append([ds.x_mid[i]])
         return x_opts
 
     def _correct_x(self, x: np.ndarray, is_active: np.ndarray):

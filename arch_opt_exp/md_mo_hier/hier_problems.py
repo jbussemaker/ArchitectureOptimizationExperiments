@@ -93,12 +93,15 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
         return {tuple(xs): i for i, xs in enumerate(self._x_sub)}
 
     def _correct_x(self, x: np.ndarray, is_active: np.ndarray):
+        super_corr = super()._correct_x
+
         def _is_valid(xi_):
             x_corr_ = np.array([xi_.copy()])
             is_active_corr_ = np.ones(x_corr_.shape, dtype=bool)
-            super()._correct_x(x_corr_, is_active_corr_)
-            if np.all(x_corr_[0, :] == xi_):
-                return is_active_corr_[:, 0]
+            super_corr(x_corr_, is_active_corr_)
+            is_act_ = is_active_corr_[0, :]
+            if np.all(x_corr_[0, is_act_] == xi_[is_act_]):
+                return is_act_
 
         if self.corrector_factory is not None:
             if self._corrector is None:
