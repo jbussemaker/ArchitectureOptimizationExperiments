@@ -1092,9 +1092,10 @@ def exp_03_07_engine_arch(post_process=False):
     problems = [
         # problem, n_budget, k_doe, strategies
         (SimpleTurbofanArch(), 250, 3, [
-            # Gower, n_kpls, strategies
+            # Gower, n_kpls (None = Hier GP; False = MD GP), strategies
             (False, None, reduced_strategies),
             (True, None, reduced_strategies),
+            (True, False, reduced_strategies),
             (True, 10, all_strategies),
             (True, 5, reduced_strategies),
             (True, 2, reduced_strategies),
@@ -1175,11 +1176,15 @@ def exp_03_07_engine_arch(post_process=False):
         model_settings = {}
         for use_gower, n_kpls, strategies in strategies_settings:
             for strategy in strategies:
-                agg_g = sbao_infill.ConstraintAggregation.ELIMINATE if (use_gower or n_kpls is not None) else None
-                kpls_n_dim = n_kpls
+                agg_g = sbao_infill.ConstraintAggregation.ELIMINATE if (use_gower or bool(n_kpls)) else None
                 cont = False  # is_heavy
 
-                kwargs = {}
+                md_gp = n_kpls is False
+                kpls_n_dim = n_kpls if not md_gp else None
+
+                kwargs = dict(
+                    ignore_hierarchy=md_gp,
+                )
                 kernel = 'Gower'
                 if not use_gower:
                     kwargs.update(
@@ -1188,21 +1193,22 @@ def exp_03_07_engine_arch(post_process=False):
                     kernel = 'EHH'
                     kpls_n_dim = None
 
-                elif n_kpls is None:
-                    kpls_n_dim = None
-
                 algo_name = f'{strategy!s} {kernel}'
-                if n_kpls is not None:
-                    algo_name += f' KPLS {n_kpls}'
+                if kpls_n_dim is not None:
+                    algo_name += f' KPLS {kpls_n_dim}'
+                elif md_gp:
+                    algo_name += ' MD'
 
                 if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
                     strategy.predictor._kpls_n_dim = kpls_n_dim
                     if use_gower:
                         i_md_gp_gower.append(len(algo_names))
-                        md_gp_gower_algo_name_map[algo_name] = \
-                            f'$n_{{kpls}} = {n_kpls}$' if n_kpls is not None else 'No KPLS'
+                        if kpls_n_dim is not None:
+                            md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
+                        else:
+                            md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier.'
 
-                if n_kpls == 10:
+                if kpls_n_dim == 10:
                     i_hc_strat.append(len(algo_names))
                     hc_strat_name = 'NA'
                     if isinstance(strategy, PredictionHCStrategy):
@@ -1277,4 +1283,4 @@ if __name__ == '__main__':
     # exp_03_05_optimization()
     exp_03_04a_doe_size_min_pov(post_process=True)
     # exp_03_06_engine_arch_surrogate()
-    exp_03_07_engine_arch(post_process=True)
+    exp_03_07_engine_arch()
