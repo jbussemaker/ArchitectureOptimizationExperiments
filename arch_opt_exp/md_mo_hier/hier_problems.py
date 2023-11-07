@@ -14,6 +14,7 @@ limitations under the License.
 Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
+import timeit
 import numpy as np
 
 from sb_arch_opt.problems.discrete import *
@@ -24,8 +25,12 @@ from pymoo.indicators.hv import Hypervolume
 from pymoo.problems.multi.zdt import ZDT1
 from pymoo.util.ref_dirs.energy import RieszEnergyReferenceDirectionFactory
 
+from typing import *
+from arch_opt_exp.md_mo_hier.correction import CorrectorBase
+from arch_opt_exp.experiments.metrics_base import *
+
 __all__ = ['SelectableTunableMetaProblem', 'SelectableTunableBranin', 'SelectableTunableZDT1',
-           'TunableBranin', 'TunableZDT1']
+           'TunableBranin', 'TunableZDT1', 'CorrectionTimeMetric']
 
 
 class TunableBranin(TunableHierarchicalMetaProblem):
@@ -51,6 +56,15 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
         self._i_sub_opt = i_sub_opt
         self._offset = offset
 
+        self.corrector_factory = None
+        self._corrector = None
+        self.last_corr_times = []
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        state['_corrector'] = None
+        return state
+
     def _mod_transform(self, i_sub_opt, offset: float):
         ref_dirs = RieszEnergyReferenceDirectionFactory(n_dim=self.n_obj, n_points=10)()
         dist_to_origin = np.sqrt(np.sum(ref_dirs**2, axis=1))
@@ -73,10 +87,51 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
 
         transform[i_sub_opt, :self.n_obj] -= offset/.2
 
+    def _correct_x(self, x: np.ndarray, is_active: np.ndarray):
+        def _is_valid(xi):
+            x_corr_ = np.array([xi.copy()])
+            is_active_corr_ = np.ones(x_corr_.shape, dtype=bool)
+            super()._correct_x(x_corr_, is_active_corr_)
+            if np.all(x_corr_[0, :] == xi):
+                return is_active_corr_[:, 0]
+
+        if self.corrector_factory is not None:
+            if self._corrector is None:
+                self._corrector = self.corrector_factory(self.design_space, _is_valid)
+            corrector: CorrectorBase = self._corrector
+
+            s = timeit.default_timer()
+            corrector.correct_x(x, is_active)
+            self.last_corr_times.append(timeit.default_timer()-s)
+            return
+
+        super()._correct_x(x, is_active)
+
     def __repr__(self):
         return f'{self.__class__.__name__}(imp_ratio={self._imp_ratio}, n_sub={self._n_subproblem}, ' \
                f'div_range={self._diversity_range}, n_opts={self._n_opts}, cont_ratio={self._cont_ratio}, ' \
                f'i_sub_opt={self._i_sub_opt}, offset={self._offset})'
+
+
+class CorrectionTimeMetric(Metric):
+    """Record the time that correction takes"""
+
+    @property
+    def name(self):
+        return 'corr_time'
+
+    @property
+    def value_names(self) -> List[str]:
+        return ['mean', 'std']
+
+    def _calculate_values(self, algorithm) -> List[float]:
+        problem = algorithm.problem
+        if isinstance(problem, SelectableTunableMetaProblem):
+            corr_times = problem.last_corr_times
+            if len(corr_times) > 0:
+                return [float(np.mean(corr_times)), float(np.std(corr_times))]
+
+        return [np.nan]*len(self.value_names)
 
 
 class SelectableTunableBranin(SelectableTunableMetaProblem):

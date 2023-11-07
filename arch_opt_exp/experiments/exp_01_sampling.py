@@ -28,6 +28,7 @@ from arch_opt_exp.experiments.metrics import *
 from arch_opt_exp.experiments.plotting import *
 from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.hc_strategies.metrics import *
+from arch_opt_exp.md_mo_hier.correction import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.md_mo_hier.hierarchical_comb import *
 
@@ -532,6 +533,7 @@ def exp_01_05_performance_influence():
     Conclusions:
     - No defining parameter found
     """
+    raise NotImplementedError
     folder = set_results_folder(_exp_01_05_folder)
     n_train = 50
     n_test = 10000
@@ -733,6 +735,172 @@ def _get_metrics(problem):
     return metrics, additional_plot
 
 
+class CorrectorFactory:
+
+    def __init__(self, klass, **kwargs):
+        self.klass = klass
+        self.kw = kwargs
+
+    def __call__(self, ds, is_valid):
+        if issubclass(self.klass, LazyCorrectorBase):
+            return self.klass(ds, is_valid, **self.kw)
+        return self.klass(ds, **self.kw)
+
+
+def exp_01_05_correction(sbo=True, post_process=False):
+    """
+    Run optimizations with different correction strategies for different sub-problem properties and optimum locations.
+    """
+    folder_post = '' if sbo else '_nsga2'
+    folder = set_results_folder(_exp_01_05_folder+folder_post)
+    n_infill = 100
+    n_gen = 25
+    n_repeat = 8 if sbo else 100
+    doe_k = 5
+    n_sub, n_opts = 9, 3
+    i_opt_test = [0, n_sub-1]
+
+    correctors = [
+        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Any'),
+        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Any Rnd'),
+        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=False), 'Eager Any Cval'),
+        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=True), 'Eager Any Cval Rnd'),
+        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Greedy'),
+        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd'),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest'),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Euc'),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd'),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc'),
+
+        (CorrectorFactory(FirstLazyCorrector, correct_valid_x=False), 'Lazy First'),
+        (CorrectorFactory(FirstLazyCorrector, correct_valid_x=True), 'Lazy First Cval'),
+        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=False), 'Lazy Rnd'),
+        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=True), 'Lazy Rnd Cval'),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Rnd'),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=False), 'Lazy Rnd Cval'),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=False), 'Lazy Rnd Cval Dist'),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=True), 'Lazy Rnd Cval Dist Euc'),
+    ]
+
+    prob_data = {}
+
+    def prob_add_cols(strat_data_, df_strat, algo_name):
+        strat_data_['corr_cls'] = algo_name.split(' ')[0]
+        strat_data_['corr_type'] = algo_name.split(' ')[1]
+        strat_data_['corr_config'] = ' '.join(algo_name.split(' ')[2:])
+
+        data_key = name
+        if data_key in prob_data:
+            for key, value in prob_data[data_key].items():
+                strat_data_[key] = value
+            return
+
+        discrete_rates = problem.get_discrete_rates(force=True)
+
+        prob_data[data_key] = data = {
+            'is_mo': problem.n_obj > 1,
+            'imp_ratio': problem.get_imputation_ratio(),
+            'imp_ratio_d': problem.get_discrete_imputation_ratio(),
+            'imp_ratio_c': problem.get_continuous_imputation_ratio(),
+            'n_discr': problem.get_n_valid_discrete(),
+            'n_sub': n_sub,
+            'n_doe': n_init,
+            'opt_in_small_sub': i_opt > .5*n_sub,
+            'max_dr': discrete_rates.loc['diversity'].max(),
+            'max_adr': discrete_rates.loc['active-diversity'].max(),
+        }
+        for key, value in data.items():
+            strat_data_[key] = value
+
+    problems = [
+        (lambda i_opt_: SelectableTunableBranin(
+            n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin ('),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR', 'Branin (H/'),
+        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin (H/MRD/'),  # High diversity range
+        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 (H/MRD/'),
+    ]
+    # for i, (problem_factory, _, _) in enumerate(problems):
+    #     problem_factory(0).print_stats()
+    # exit()
+    sampler = RepairedSampler(LatinHypercubeSampling())
+
+    problem_paths = []
+    problem_names = []
+    prob_name_map = {}
+    i_prob = 0
+    problem: ArchOptProblemBase
+    for i, (problem_factory, category, title) in enumerate(problems):
+        for i_opt in i_opt_test:
+            problem = problem_factory(i_opt)
+            name = f'{category} {problem.__class__.__name__} opt={i_opt}'
+            problem_names.append(name)
+            prob_name_map[name] = f'{title}{"L" if i_opt == 0 else "S"})'
+            problem_path = f'{folder}/{secure_filename(name)}'
+            problem_paths.append(problem_path)
+            if post_process:
+                continue
+
+            n_init = int(np.ceil(doe_k*problem.n_var))
+            n_kpls = None
+            # n_kpls = n_kpls if problem.n_var > n_kpls else None
+            i_prob += 1
+            log.info(f'Running optimizations for {i_prob}/{len(problems)*len(i_opt_test)}: {name} '
+                     f'(n_init = {n_init}, n_kpls = {n_kpls})')
+            problem.pareto_front()
+
+            metrics, additional_plot = _get_metrics(problem)
+            additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
+            metrics.append(CorrectionTimeMetric())
+            additional_plot['corr_time'] = ['mean']
+
+            problems = []
+            algorithms = []
+            algo_names = []
+            for corrector_factory, corr_name in correctors:
+                problem: SelectableTunableMetaProblem = problem_factory(i_opt)
+                problem.corrector_factory = corrector_factory
+                problems.append(problem)
+
+                if sbo:
+                    model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=n_kpls, ignore_hierarchy=True)
+                    infill, n_batch = get_default_infill(problem)
+                    sbo_algo = SBOInfill(
+                        model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
+                    sbo_algo = sbo_algo.algorithm(infill_size=1, sampler=sampler, init_size=n_init)
+                    algorithms.append(sbo_algo)
+                else:
+                    algorithms.append(ArchOptNSGA2(pop_size=n_init, sampling=sampler))
+                algo_names.append(corr_name)
+
+            do_run = not post_process
+            n_eval_max = (n_init+n_infill) if sbo else ((n_gen-1)*n_init)
+            exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max,
+                       metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                       run_if_exists=False)
+            agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+            plt.close('all')
+
+    def _add_cols(df_agg_):
+        analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat)
+        return df_agg_
+
+    df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    # cat_names = [
+    #     # 'Random',
+    #     'LHS',
+    #     'Hier.: No Grouping',
+    #     # 'Hier.: By $n_{act}$', 'Hier.: By $n_{act}$ (wt.)',
+    #     'Hier.: By $x_{act}$', 'Hier.: By $x_{act}$ (wt.)',
+    # ]
+    # cat_name_map = {sampler: cat_names[i] for i, (_, sampler) in enumerate(_samplers)}
+    cat_name_map = {}
+    plot_perf_rank(df_agg, 'strategy', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
+                   save_path=f'{folder}/rank{folder_post}')
+
+    plt.close('all')
+
+
 def exp_01_06_opt(sbo=True, post_process=False):
     """
     Run optimizations with different sampling strategies for different sub-problem properties and optimum locations:
@@ -848,7 +1016,7 @@ def exp_01_06_opt(sbo=True, post_process=False):
                     sbo_algo = sbo_algo.algorithm(infill_size=1, init_sampling=sampler, init_size=n_init)
                     algorithms.append(sbo_algo)
                 else:
-                    algorithms.append(ArchOptNSGA2(pop_size=n_init))
+                    algorithms.append(ArchOptNSGA2(pop_size=n_init, sampling=sampler))
                 algo_names.append(sampler_name)
 
             do_run = not post_process
@@ -943,5 +1111,6 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
+    exp_01_05_correction(sbo=False)
+    # exp_01_06_opt()
     exp_01_06_opt(sbo=False)
-    exp_01_06_opt()
