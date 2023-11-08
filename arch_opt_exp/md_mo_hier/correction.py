@@ -65,6 +65,10 @@ class CorrectorBase:
         return self._design_space.is_discrete_mask
 
     @cached_property
+    def is_cont_mask(self) -> np.ndarray:
+        return self._design_space.is_cont_mask
+
+    @cached_property
     def x_imp_discrete(self) -> np.ndarray:
         return self._design_space.xl[self._design_space.is_discrete_mask]
 
@@ -88,7 +92,14 @@ class CorrectorBase:
         if not np.any(self.is_discrete_mask):
             return
 
+        is_cont_mask = self.is_cont_mask
+        x_in_cont = x[:, is_cont_mask].copy()
+
+        # Correct discrete variables
         self._correct_x(x, is_active)
+
+        # Retain values of continuous variables
+        x[:, is_cont_mask] = x_in_cont
 
     def _correct_x(self, x: np.ndarray, is_active: np.ndarray):
         """
