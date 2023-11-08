@@ -756,38 +756,52 @@ def exp_01_05_correction(sbo=True, post_process=False):
     n_infill = 100
     n_gen = 25
     n_repeat = 8 if sbo else 100
-    doe_k = 5
+    doe_k = 10
     n_sub, n_opts = 9, 3
     i_opt_test = [0, n_sub-1]
 
-    correctors = [
-        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Any'),
-        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Any Rnd'),
-        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=False), 'Eager Any Cval'),
-        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=True), 'Eager Any Cval Rnd'),
-        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Greedy'),
-        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd'),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest'),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Euc'),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd'),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc'),
+    eager_samplers = [
+        (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+        (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
+        (ActiveVarHierarchicalSampling(), 'HierAct'),
+        (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
+    ]
+    lazy_samplers = [
+        (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+    ]
 
-        (CorrectorFactory(FirstLazyCorrector, correct_valid_x=False), 'Lazy First'),
-        (CorrectorFactory(FirstLazyCorrector, correct_valid_x=True), 'Lazy First Cval'),
-        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=False), 'Lazy Rnd'),
-        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=True), 'Lazy Rnd Cval'),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Closest'),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=False), 'Lazy Closest Cval'),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist'),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc'),
+    correctors = [
+        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager First', eager_samplers),
+        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=False), 'Eager First Cval', eager_samplers),
+        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),
+        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=True), 'Eager Rnd Cval', eager_samplers),
+        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),
+        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Euc', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc', eager_samplers),
+
+        (CorrectorFactory(FirstLazyCorrector, correct_valid_x=False), 'Lazy First', lazy_samplers),
+        (CorrectorFactory(FirstLazyCorrector, correct_valid_x=True), 'Lazy First Cval', lazy_samplers),
+        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=False), 'Lazy Rnd', lazy_samplers),
+        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=True), 'Lazy Rnd Cval', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Closest', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=False), 'Lazy Closest Cval', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=True, euclidean=False), 'Lazy Closest Dist', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=True, euclidean=True), 'Lazy Closest Dist Euc', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc', lazy_samplers),
     ]
 
     prob_data = {}
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
+        strat_data_['corr'] = algo_name
         strat_data_['corr_cls'] = algo_name.split(' ')[0]
         strat_data_['corr_type'] = algo_name.split(' ')[1]
-        strat_data_['corr_config'] = ' '.join(algo_name.split(' ')[2:])
+        strat_data_['corr_config'] = ' '.join(algo_name.split(' ')[2:-1])
+        strat_data_['sampler'] = algo_name.split(' ')[-1]
 
         data_key = name
         if data_key in prob_data:
@@ -822,8 +836,6 @@ def exp_01_05_correction(sbo=True, post_process=False):
     # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem_factory(0).print_stats()
     # exit()
-    sampler = RepairedSampler(LatinHypercubeSampling())
-
     problem_paths = []
     problem_names = []
     prob_name_map = {}
@@ -856,21 +868,23 @@ def exp_01_05_correction(sbo=True, post_process=False):
             problems = []
             algorithms = []
             algo_names = []
-            for corrector_factory, corr_name in correctors:
-                problem: SelectableTunableMetaProblem = problem_factory(i_opt)
-                problem.corrector_factory = corrector_factory
-                problems.append(problem)
+            for corrector_factory, corr_name, samplers in correctors:
+                for sampler, sampler_name in samplers:
+                    problem: SelectableTunableMetaProblem = problem_factory(i_opt)
+                    problem.corrector_factory = corrector_factory
+                    problems.append(problem)
 
-                if sbo:
-                    model, norm = ModelFactory(problem).get_md_kriging_model(kpls_n_comp=n_kpls, ignore_hierarchy=True)
-                    infill, n_batch = get_default_infill(problem)
-                    sbo_algo = SBOInfill(
-                        model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
-                    sbo_algo = sbo_algo.algorithm(infill_size=1, sampler=sampler, init_size=n_init)
-                    algorithms.append(sbo_algo)
-                else:
-                    algorithms.append(ArchOptNSGA2(pop_size=n_init, sampling=sampler))
-                algo_names.append(corr_name)
+                    if sbo:
+                        model, norm = ModelFactory(problem).get_md_kriging_model(
+                            kpls_n_comp=n_kpls, ignore_hierarchy=True)
+                        infill, n_batch = get_default_infill(problem)
+                        sbo_algo = SBOInfill(
+                            model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
+                        sbo_algo = sbo_algo.algorithm(infill_size=1, sampler=sampler, init_size=n_init)
+                        algorithms.append(sbo_algo)
+                    else:
+                        algorithms.append(ArchOptNSGA2(pop_size=n_init, sampling=sampler))
+                    algo_names.append(f'{corr_name} {sampler_name}')
 
             do_run = not post_process
             n_eval_max = (n_init+n_infill) if sbo else ((n_gen-1)*n_init)
@@ -895,7 +909,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
     # ]
     # cat_name_map = {sampler: cat_names[i] for i, (_, sampler) in enumerate(_samplers)}
     cat_name_map = {}
-    plot_perf_rank(df_agg, 'strategy', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
+    plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
                    save_path=f'{folder}/rank{folder_post}')
 
     plt.close('all')
@@ -1113,4 +1127,4 @@ if __name__ == '__main__':
     # exp_01_05_performance_influence()
     exp_01_05_correction(sbo=False)
     # exp_01_06_opt()
-    exp_01_06_opt(sbo=False)
+    # exp_01_06_opt(sbo=False)
