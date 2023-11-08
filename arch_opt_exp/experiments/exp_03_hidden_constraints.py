@@ -571,7 +571,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     mul_test = [.75, 1, 1.25, 2]
     min_pov_test = [.1, .25, .5, .75, .9, -1]
     n_infill = 50
-    n_repeat = 8
+    n_repeat = 16
     problems = [
         (Alimo(), '01', 'Alimo'),
         (AlimoEdge(), '01', 'Alimo Edge'),
@@ -651,11 +651,12 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
 
     cat_name_map = {f'Predicted Worst|{mul}': f'aPredicted Worst & $\\alpha = {float(mul):.2f}$'
                     for mul in df_agg[df_agg.cls == 'Predicted Worst'].min_pov.unique()}
-    cat_name_map.update({strat: f'b{strat.split("|")[0]} & $PoV_{{min}} = {float(strat.split("|")[1])*100:.0f}%$'
+    cat_name_map.update({strat: f'b{strat.split("|")[0]} & b$PoV_{{min}} = {float(strat.split("|")[1])*100:.0f}%$'
                          for strat in df_agg[(df_agg.cls != 'Predicted Worst') & (df_agg.min_pov != 'F')].strategy.unique()})
-    cat_name_map.update({strat: f'b{strat.split("|")[0]} & $f_{{infill}}$ penalty'
+    cat_name_map.update({strat: f'b{strat.split("|")[0]} & a$f_{{infill}}$ penalty'
                          for strat in df_agg[(df_agg.cls != 'Predicted Worst') & (df_agg.min_pov == 'F')].strategy.unique()})
-    cat_name_map = {key: val[1:] for key, val in sorted(cat_name_map.items(), key=lambda v: v[1])}
+    cat_name_map = {key: val[1:].replace('& b$', '& $').replace('& a$', '& $')
+                    for key, val in sorted(cat_name_map.items(), key=lambda v: v[1])}
     kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=15)
     plot_perf_rank(df_agg, 'strategy', save_path=f'{folder}/rank', **kw)
 
@@ -1082,12 +1083,11 @@ def exp_03_07_engine_arch(post_process=False):
     n_repeat = 10
 
     all_strategies: List[HiddenConstraintStrategy] = [
-        # LocalReplacement(n=5, mean=True),
-        PredictionHCStrategy(RandomForestClassifier()),
-        PredictionHCStrategy(MDGPRegressor()),
+        PredictionHCStrategy(RandomForestClassifier(), min_pov=.25),
+        PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
     reduced_strategies: List[HiddenConstraintStrategy] = [
-        PredictionHCStrategy(MDGPRegressor()),
+        PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
     problems = [
         # problem, n_budget, k_doe, strategies
@@ -1281,6 +1281,6 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     # exp_03_05_optimization()
-    exp_03_04a_doe_size_min_pov(post_process=True)
+    # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
     exp_03_07_engine_arch()
