@@ -763,6 +763,8 @@ def exp_01_05_correction(sbo=True, post_process=False):
     eager_samplers = [
         (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
         (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
+        (NrActiveHierarchicalSampling(), 'HierNrAct'),
+        (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
         (ActiveVarHierarchicalSampling(), 'HierAct'),
         (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
     ]
@@ -771,8 +773,8 @@ def exp_01_05_correction(sbo=True, post_process=False):
     ]
 
     correctors = [
-        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager First', eager_samplers),
-        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=False), 'Eager First Cval', eager_samplers),
+        # (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager First', eager_samplers),
+        # (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=False), 'Eager First Cval', eager_samplers),
         (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),
         (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=True), 'Eager Rnd Cval', eager_samplers),
         (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),
@@ -782,8 +784,8 @@ def exp_01_05_correction(sbo=True, post_process=False):
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd', eager_samplers),
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc', eager_samplers),
 
-        (CorrectorFactory(FirstLazyCorrector, correct_valid_x=False), 'Lazy First', lazy_samplers),
-        (CorrectorFactory(FirstLazyCorrector, correct_valid_x=True), 'Lazy First Cval', lazy_samplers),
+        # (CorrectorFactory(FirstLazyCorrector, correct_valid_x=False), 'Lazy First', lazy_samplers),
+        # (CorrectorFactory(FirstLazyCorrector, correct_valid_x=True), 'Lazy First Cval', lazy_samplers),
         (CorrectorFactory(RandomLazyCorrector, correct_valid_x=False), 'Lazy Rnd', lazy_samplers),
         (CorrectorFactory(RandomLazyCorrector, correct_valid_x=True), 'Lazy Rnd Cval', lazy_samplers),
         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Closest', lazy_samplers),
@@ -869,7 +871,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
             algorithms = []
             algo_names = []
             for corrector_factory, corr_name, samplers in correctors:
-                for sampler, sampler_name in samplers:
+                for cls_sampler, sampler_name in samplers:
                     problem: SelectableTunableMetaProblem = problem_factory(i_opt)
                     problem.corrector_factory = corrector_factory
                     problems.append(problem)
@@ -880,10 +882,10 @@ def exp_01_05_correction(sbo=True, post_process=False):
                         infill, n_batch = get_default_infill(problem)
                         sbo_algo = SBOInfill(
                             model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
-                        sbo_algo = sbo_algo.algorithm(infill_size=1, sampler=sampler, init_size=n_init)
+                        sbo_algo = sbo_algo.algorithm(infill_size=1, sampler=cls_sampler, init_size=n_init)
                         algorithms.append(sbo_algo)
                     else:
-                        algorithms.append(ArchOptNSGA2(pop_size=n_init, sampling=sampler))
+                        algorithms.append(ArchOptNSGA2(pop_size=n_init, sampling=cls_sampler))
                     algo_names.append(f'{corr_name} {sampler_name}')
 
             do_run = not post_process
@@ -895,7 +897,16 @@ def exp_01_05_correction(sbo=True, post_process=False):
             plt.close('all')
 
     def _add_cols(df_agg_):
+        df_agg_['cls_sampler'] = [f'{df_agg_["corr_cls"].values[ii]} {samp}' for ii, samp in enumerate(df_agg_.sampler)]
+
         analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat)
+        for corr_cls_ in df_agg_['corr_cls'].unique():
+            analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat, prefix=corr_cls_,
+                              df_subset=df_agg_.corr_cls == corr_cls_)
+        for cls_sampler_ in df_agg_.cls_sampler.unique():
+            analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat, prefix=cls_sampler_,
+                              df_subset=df_agg_.cls_sampler == cls_sampler_)
+
         return df_agg_
 
     df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
@@ -911,6 +922,29 @@ def exp_01_05_correction(sbo=True, post_process=False):
     cat_name_map = {}
     plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
                    save_path=f'{folder}/rank{folder_post}')
+    for corr_cls in df_agg['corr_cls'].unique():
+        plot_perf_rank(df_agg[df_agg.corr_cls == corr_cls], 'corr', cat_name_map=cat_name_map,
+                       idx_name_map=prob_name_map, save_path=f'{folder}/rank_{corr_cls}{folder_post}',
+                       prefix=corr_cls)
+
+    i_best_all = []
+    for cls_sampler in df_agg.cls_sampler.unique():
+        i_best_ = plot_perf_rank(df_agg[df_agg.cls_sampler == cls_sampler], 'corr', cat_name_map=cat_name_map,
+                                 idx_name_map=prob_name_map, save_path=f'{folder}/rank_{cls_sampler}{folder_post}',
+                                 prefix=cls_sampler)
+
+        if cls_sampler.startswith('Eager'):
+            i_best_glob, = np.where(df_agg.index.get_level_values(1).isin(i_best_))
+            i_best_all += list(i_best_glob)
+
+    is_selected = np.zeros((len(df_agg),), dtype=bool)
+    is_selected[i_best_all] = True
+    best_all_selector = pd.Series(index=df_agg.index, data=is_selected)
+    analyze_perf_rank(df_agg, 'delta_hv_abs_regret', n_repeat, prefix='best_eager',
+                      df_subset=best_all_selector)
+    plot_perf_rank(df_agg[best_all_selector], 'corr', cat_name_map=cat_name_map,
+                   idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_eager{folder_post}',
+                   prefix='best_eager', h_factor=.5)
 
     plt.close('all')
 

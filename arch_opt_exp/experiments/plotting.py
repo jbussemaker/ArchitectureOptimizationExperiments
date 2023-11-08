@@ -274,7 +274,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
     df_cnts = df_counts_an = None
     df_rank_latex = df_rank
     df_rank_orig = df_rank.copy()
-    i_best = None
+    i_best = i_best_idx = None
     if add_counts:
         n_idx = len(df_rank.columns)
         df_rank['Rank 1'] = (df_rank_orig == 1).sum(axis=1)
@@ -288,6 +288,8 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         np_counts = df_cnts.iloc[:, -2:].values
         i_good = np.where(np_counts[:, 1] == np.max(np_counts[:, 1]))[0]
         i_best = i_good[np_counts[i_good, 0] == np.max(np_counts[i_good, 0])]
+        print(f'Best perf ({rank_col}): {df[cat_col].iloc[i_best].values}')
+        i_best_idx = df.index.get_level_values(1)[i_best].values
 
         df_rank.iloc[:, -2:] = np.nan
         df_rank_latex = pd.concat([df_rank.iloc[:, :-2], df_cnts.iloc[:, -2:]], axis=1)
@@ -343,6 +345,11 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
     h = .5+len(df_rank)*h_factor
     w = 1+len(df_rank.columns)*1.2
 
+    if i_best is not None:
+        df_rank.index = idx = [f'>>>>> {val} <<<<<' if i in i_best else val for i, val in enumerate(df_rank.index)]
+        if df_cnts is not None:
+            df_cnts.index = idx
+
     with sb_theme():
         cmap = sns.light_palette('seagreen', reverse=True, as_cmap=True)
         cmap_cnt = sns.light_palette('b', as_cmap=True)
@@ -361,6 +368,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         plt.savefig(save_path+'.svg')
     else:
         plt.show()
+    return i_best_idx
 
 
 def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_col_titles=None, prob_names=None,
@@ -460,21 +468,31 @@ def plot_multi_idx_lines(df, folder, y_col, sort_by=None, multi_col=None, multi_
     plt.savefig(save_path+'.svg')
 
 
-def analyze_perf_rank(df: pd.DataFrame, perf_col: str, n_repeat: int, perf_min=True, prefix=None):
+def analyze_perf_rank(df: pd.DataFrame, perf_col: str, n_repeat: int, perf_min=True, prefix=None, df_subset=None):
+    df_sub = df[df_subset] if df_subset is not None else df
+
+    def _expand(ser_grp_res, is_bool=False):
+        if df_subset is None:
+            return ser_grp_res, ser_grp_res
+        expanded_series = pd.Series(
+            index=df.index, data=np.zeros((len(df),), dtype=bool) if is_bool else np.zeros((len(df),))*np.nan)
+        expanded_series[df_subset] = ser_grp_res
+        return expanded_series, ser_grp_res
+
     prefix = '' if prefix is None else f'{prefix}_'
-    df[prefix+'perf_rank'] = df.groupby(level=0, axis=0, group_keys=False).apply(
-        lambda x: get_ranks(x, perf_col, n_repeat, perf_min=perf_min))
-    df[prefix+'is_best'] = df[prefix+'perf_rank'] == 1
-    df[prefix+'n_is_best'] = df.groupby(level=1, axis=0, group_keys=False).apply(
-        lambda x: count_bool(x, prefix+'is_best'))
+    df[prefix+'perf_rank'], df_sub[prefix+'perf_rank'] = _expand(df_sub.groupby(level=0, axis=0, group_keys=False).apply(
+        lambda x: get_ranks(x, perf_col, n_repeat, perf_min=perf_min)))
+    df[prefix+'is_best'], df_sub[prefix+'is_best'] = _expand(df_sub[prefix+'perf_rank'] == 1)
+    df[prefix+'n_is_best'], _ = _expand(df_sub.groupby(level=1, axis=0, group_keys=False).apply(
+        lambda x: count_bool(x, prefix+'is_best')))
 
-    df[prefix+'is_good'] = df[prefix+'perf_rank'] <= 2
-    df[prefix+'n_is_good'] = df.groupby(level=1, axis=0, group_keys=False).apply(
-        lambda x: count_bool(x, prefix+'is_good'))
+    df[prefix+'is_good'], df_sub[prefix+'is_good'] = _expand(df_sub[prefix+'perf_rank'] <= 2)
+    df[prefix+'n_is_good'], _ = _expand(df_sub.groupby(level=1, axis=0, group_keys=False).apply(
+        lambda x: count_bool(x, prefix+'is_good')))
 
-    df[prefix+'is_bad'] = df[prefix+'perf_rank'] >= 4
-    df[prefix+'n_is_bad'] = df.groupby(level=1, axis=0, group_keys=False).apply(
-        lambda x: count_bool(x, prefix+'is_bad'))
+    df[prefix+'is_bad'], df_sub[prefix+'is_bad'] = _expand(df_sub[prefix+'perf_rank'] >= 4)
+    df[prefix+'n_is_bad'], _ = _expand(df_sub.groupby(level=1, axis=0, group_keys=False).apply(
+        lambda x: count_bool(x, prefix+'is_bad')))
     return df
 
 

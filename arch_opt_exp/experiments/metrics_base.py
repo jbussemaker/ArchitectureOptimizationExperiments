@@ -85,7 +85,8 @@ class Metric:
             plot_value_names = metrics[0].value_names
 
         if styles is None:
-            styles = ['-']*10 + ['-.']*10 + [':']*10
+            styles = ['-']*10 + ['-.']*10 + [':']*10 + ['--']*10
+            styles = styles*10
 
         for value_name in plot_value_names:
             fig = plt.figure(figsize=(16, 12))
