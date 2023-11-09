@@ -772,33 +772,54 @@ def exp_01_05_correction(sbo=True, post_process=False):
         (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
     ]
 
+    # if sbo:
+    #     correctors = [
+    #         (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),
+    #         (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
+    #         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False), 'Lazy Closest', lazy_samplers),
+    #     ]
+    # else:
     correctors = [
-        # (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager First', eager_samplers),
-        # (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=False), 'Eager First Cval', eager_samplers),
-        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),
+        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),  # 0
         (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=True), 'Eager Rnd Cval', eager_samplers),
-        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),
+        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),  # 2
         (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=False, euclidean=False), 'Eager Closest', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=False, euclidean=False), 'Eager Closest', eager_samplers),  # 4
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=False, euclidean=True), 'Eager Closest Euc', eager_samplers),
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd', eager_samplers),
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest Cval', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest Cval', eager_samplers),  # 8
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Cval Euc', eager_samplers),
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Cval Rnd', eager_samplers),
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Cval Rnd Euc', eager_samplers),
 
-        # (CorrectorFactory(FirstLazyCorrector, correct_valid_x=False), 'Lazy First', lazy_samplers),
-        # (CorrectorFactory(FirstLazyCorrector, correct_valid_x=True), 'Lazy First Cval', lazy_samplers),
-        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=False), 'Lazy Rnd', lazy_samplers),
+        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=False), 'Lazy Rnd', lazy_samplers),  # 12
         (CorrectorFactory(RandomLazyCorrector, correct_valid_x=True), 'Lazy Rnd Cval', lazy_samplers),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Closest', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Closest', lazy_samplers),  # 14
         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=False), 'Lazy Closest Cval', lazy_samplers),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=True, euclidean=False), 'Lazy Closest Dist', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=True, euclidean=False), 'Lazy Closest Dist', lazy_samplers),  # 16
         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=True, euclidean=True), 'Lazy Closest Dist Euc', lazy_samplers),
         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist', lazy_samplers),
         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc', lazy_samplers),
     ]
+    if sbo:
+        sbo_eager_samplers = [
+            (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+            # (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
+            (NrActiveHierarchicalSampling(), 'HierNrAct'),
+            # (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
+            # (ActiveVarHierarchicalSampling(), 'HierAct'),
+            (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
+        ]
+        sbo_corr = {
+            'Eager Rnd': sbo_eager_samplers,  # Best eager
+            'Eager Greedy': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Greedy LHS --> custom correct_x
+            # 'Eager Closest': sbo_eager_samplers,  # Not selected because HierActWt also has other good correctors
+            'Eager Closest Euc': sbo_eager_samplers,  # Best eager
+            # 'Eager Closest Rnd Euc': sbo_eager_samplers,  # Not selected because samplers also have better correctors
+            'Lazy Closest': lazy_samplers,  # Best lazy
+        }
+        correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in enumerate(correctors) if name in sbo_corr]
 
     prob_data = {}
 
@@ -1244,6 +1265,7 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
-    exp_01_05_correction(sbo=False)
+    # exp_01_05_correction(sbo=False)
+    exp_01_05_correction()
     # exp_01_06_opt()
     # exp_01_06_opt(sbo=False)

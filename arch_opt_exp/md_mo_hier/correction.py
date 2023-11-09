@@ -49,7 +49,7 @@ class CorrectorBase:
     design vectors to be modified.
     """
 
-    default_correct_valid_x = True
+    default_correct_valid_x = False
 
     def __init__(self, design_space: ArchDesignSpace, correct_valid_x: bool = None):
         self._design_space = design_space
