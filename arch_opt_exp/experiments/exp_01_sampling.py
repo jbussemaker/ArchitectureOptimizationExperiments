@@ -779,10 +779,14 @@ def exp_01_05_correction(sbo=True, post_process=False):
         (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=True), 'Eager Rnd Cval', eager_samplers),
         (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),
         (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Euc', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=False, euclidean=False), 'Eager Closest', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=False, euclidean=True), 'Eager Closest Euc', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest Cval', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Cval Euc', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Cval Rnd', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Cval Rnd Euc', eager_samplers),
 
         # (CorrectorFactory(FirstLazyCorrector, correct_valid_x=False), 'Lazy First', lazy_samplers),
         # (CorrectorFactory(FirstLazyCorrector, correct_valid_x=True), 'Lazy First Cval', lazy_samplers),
@@ -927,26 +931,107 @@ def exp_01_05_correction(sbo=True, post_process=False):
                        idx_name_map=prob_name_map, save_path=f'{folder}/rank_{corr_cls}{folder_post}',
                        prefix=corr_cls)
 
+    i_best_eager = []
     i_best_all = []
     for cls_sampler in df_agg.cls_sampler.unique():
         i_best_ = plot_perf_rank(df_agg[df_agg.cls_sampler == cls_sampler], 'corr', cat_name_map=cat_name_map,
                                  idx_name_map=prob_name_map, save_path=f'{folder}/rank_{cls_sampler}{folder_post}',
                                  prefix=cls_sampler)
 
+        i_best_glob, = np.where(df_agg.index.get_level_values(1).isin(i_best_))
+        i_best_all += list(i_best_glob)
         if cls_sampler.startswith('Eager'):
-            i_best_glob, = np.where(df_agg.index.get_level_values(1).isin(i_best_))
-            i_best_all += list(i_best_glob)
+            i_best_eager += list(i_best_glob)
 
-    is_selected = np.zeros((len(df_agg),), dtype=bool)
-    is_selected[i_best_all] = True
-    best_all_selector = pd.Series(index=df_agg.index, data=is_selected)
+    best_eager_selector = pd.Series(index=df_agg.index, data=np.in1d(np.arange(len(df_agg)), i_best_eager))
     analyze_perf_rank(df_agg, 'delta_hv_abs_regret', n_repeat, prefix='best_eager',
+                      df_subset=best_eager_selector)
+    best_eager = plot_perf_rank(df_agg[best_eager_selector], 'corr', cat_name_map=cat_name_map,
+                                idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_eager{folder_post}',
+                                prefix='best_eager', h_factor=.5)
+
+    best_all_selector = pd.Series(index=df_agg.index, data=np.in1d(np.arange(len(df_agg)), i_best_all))
+    analyze_perf_rank(df_agg, 'delta_hv_abs_regret', n_repeat, prefix='best_all',
                       df_subset=best_all_selector)
     plot_perf_rank(df_agg[best_all_selector], 'corr', cat_name_map=cat_name_map,
-                   idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_eager{folder_post}',
-                   prefix='best_eager', h_factor=.5)
+                   idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_all{folder_post}',
+                   prefix='best_all', h_factor=.5)
+
+    ref_df = df_agg[df_agg.index.get_level_values(1) == best_eager[0]]
+    df_rel_stats: pd.DataFrame = _sampling_rel_stats_table(
+        None, df_agg[best_all_selector], None, ref_df=ref_df, incl_q=True)
+    df_rel_stats.to_csv(f'{folder}/best_rel_perf.csv')
+    df_rel_stats.to_excel(f'{folder}/best_rel_perf.xlsx')
+
+    df_corr_times = df_agg[best_all_selector]
+    df_corr_times['col'] = df_corr_times.index.get_level_values(0)
+    df_corr_times['idx'] = df_corr_times.index.get_level_values(1)
+    df_corr_times = np.log10(df_corr_times.pivot(columns='col', index='idx', values='corr_time_mean').astype(float))
+
+    def _split_prob_name(p_name):
+        prob, spec = p_name[:-3].strip(), p_name[-2:-1]
+        if '(' in prob:
+            prob += ')'
+        return prob, spec
+
+    df_corr_times.columns = pd.MultiIndex.from_tuples(
+        [_split_prob_name(prob_name_map.get(col, col)) for col in df_corr_times.columns])
+    df_corr_times = df_corr_times.groupby(level=0, axis=1).mean()
+    df_corr_times.index = [cat_name_map.get(val, val) for val in df_corr_times.index]
+
+    styler = df_corr_times.style
+    styler.format(formatter=lambda v: f'{v:.2f}')
+    styler.background_gradient(cmap='Reds', vmin=df_corr_times.min().min(), vmax=df_corr_times.max().max())
+    styler.to_latex(f'{folder}/best_rel_perf_corr_time.tex', hrules=True, convert_css=True,
+                    column_format='ll'+'c'*len(df_corr_times.columns))
 
     plt.close('all')
+
+
+def _sampling_rel_stats_table(folder, df_agg: pd.DataFrame, cat_name_map, ref_df, incl_q=False):
+    col_rel_analyze = {'delta_hv_abs_regret': '$\\Delta HV$ regret', 'corr_time_mean': 'Correction time'}
+    select_post = ['', '_q25', '_q75'] if incl_q else ['']
+    col_rel_sel = [col+post for col in col_rel_analyze for post in select_post]
+
+    df_agg = df_agg[col_rel_sel].astype(float)
+    ref_values = ref_df[col_rel_sel].astype(float).values
+    rejection_ref = np.repeat(ref_values, len(np.unique(df_agg.index.get_level_values(1))), axis=0)
+    col_idx = {col: i for i, col in enumerate(df_agg.columns)}
+    for col in df_agg.columns:
+        if '_q25' in col or '_q75' in col:
+            continue
+        if col+'_q25' in col_idx:
+            rejection_ref[:, col_idx[col+'_q25']] = rejection_ref[:, col_idx[col]]
+            rejection_ref[:, col_idx[col+'_q75']] = rejection_ref[:, col_idx[col]]
+    rejection_ref[rejection_ref == 0] = np.nan
+    is_num = np.array([df_agg.dtypes[col] == float for col in df_agg.columns])
+    rel_values = df_agg.values.copy()
+    rel_values[:, is_num] /= rejection_ref[:, is_num]
+    df_rel = pd.DataFrame(index=df_agg.index, columns=df_agg.columns, data=rel_values)
+
+    df_rel_agg = df_rel.groupby(level=1).mean()
+    df_rel_agg = (df_rel_agg-1)*100
+    if cat_name_map is not None:
+        df_rel_agg['names'] = [cat_name_map.get(cat, cat) for cat in df_rel_agg.index]
+        df_rel_agg = df_rel_agg.set_index('names').loc[[cat for cat in cat_name_map.values()]]
+    if incl_q:
+        df_rel_agg.columns = pd.MultiIndex.from_tuples([(name, pn) for col, name in col_rel_analyze.items()
+                                                        for post, pn in [('', 'mean'), ('_q25', 'min'), ('_q75', 'max')]])
+    else:
+        df_rel_agg.columns = [col_name for col_name in col_rel_analyze.values()]
+
+    if folder is not None:
+        styler = df_rel_agg.style
+        styler.format(formatter=lambda v: f'{v:+.0f}\\%')
+        styler.background_gradient(cmap='Greens_r', subset=col_rel_analyze['delta_hv_regret'], vmin=-100, vmax=0)
+        styler.background_gradient(cmap='Greens_r', subset=col_rel_analyze['fail_rate'], vmin=-100, vmax=0)
+        styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_train'], vmin=0, vmax=200)
+        styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_infill'], vmin=0, vmax=200)
+        styler.background_gradient(cmap='Reds', subset=col_rel_analyze['time_train_infill'], vmin=0, vmax=200)
+        styler.to_latex(f'{folder}/rel_perf.tex', hrules=True, convert_css=True,
+                        column_format='ll'+'c'*len(df_rel_agg.columns))
+
+    return df_rel_agg
 
 
 def exp_01_06_opt(sbo=True, post_process=False):
