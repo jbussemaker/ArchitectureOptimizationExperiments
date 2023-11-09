@@ -288,8 +288,8 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         np_counts = df_cnts.iloc[:, -2:].values
         i_good = np.where(np_counts[:, 1] == np.max(np_counts[:, 1]))[0]
         i_best = i_good[np_counts[i_good, 0] == np.max(np_counts[i_good, 0])]
-        print(f'Best perf ({rank_col}): {df[cat_col].iloc[i_best].values}')
-        i_best_idx = df.index.get_level_values(1)[i_best].values
+        print(f'Best perf ({rank_col}): {df_rank.index[i_best].values}')
+        i_best_idx = df_rank.index[i_best].values
 
         df_rank.iloc[:, -2:] = np.nan
         df_rank_latex = pd.concat([df_rank.iloc[:, :-2], df_cnts.iloc[:, -2:]], axis=1)
