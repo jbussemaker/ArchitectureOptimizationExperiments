@@ -819,7 +819,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
             # 'Eager Closest Rnd Euc': sbo_eager_samplers,  # Not selected because samplers also have better correctors
             'Lazy Closest': lazy_samplers,  # Best lazy
         }
-        correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in enumerate(correctors) if name in sbo_corr]
+        correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
 
     prob_data = {}
 
