@@ -755,7 +755,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
     folder = set_results_folder(_exp_01_05_folder+folder_post)
     n_infill = 100
     n_gen = 25
-    n_repeat = 8 if sbo else 100
+    n_repeat = 16 if sbo else 100
     doe_k = 10
     n_sub, n_opts = 9, 3
     i_opt_test = [0, n_sub-1]

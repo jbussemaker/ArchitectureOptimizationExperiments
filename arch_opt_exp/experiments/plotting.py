@@ -476,7 +476,7 @@ def analyze_perf_rank(df: pd.DataFrame, perf_col: str, n_repeat: int, perf_min=T
             return ser_grp_res, ser_grp_res
         expanded_series = pd.Series(
             index=df.index, data=np.zeros((len(df),), dtype=bool) if is_bool else np.zeros((len(df),))*np.nan)
-        expanded_series[df_subset] = ser_grp_res
+        expanded_series[df_subset] = ser_grp_res.iloc[0, :] if isinstance(ser_grp_res, pd.DataFrame) else ser_grp_res
         return expanded_series, ser_grp_res
 
     prefix = '' if prefix is None else f'{prefix}_'
