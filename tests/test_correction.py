@@ -52,7 +52,8 @@ class DummyArchDesignSpace(ArchDesignSpace):
         i_valid = eager_corr.get_valid_idx(np.array([xi]))[0]
         if i_valid == -1:
             return
-        return eager_corr.is_active_valid[i_valid, :]
+        _, is_active_valid = eager_corr.x_valid_active
+        return is_active_valid[i_valid, :]
 
 
 def test_corrector():
