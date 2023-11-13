@@ -250,7 +250,7 @@ def sb_theme():
 
 
 def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_map=None, prefix=None, save_path=None,
-                   add_counts=True, n_col_split=None, h_factor=.3):
+                   add_counts=True, hide_ranks=False, n_col_split=None, n_col_idx=1, h_factor=.3):
     prefix = '' if prefix is None else f'{prefix}_'
     rank_col = prefix+'perf_rank'
     if rank_col not in df.columns:
@@ -293,6 +293,8 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
 
         df_rank.iloc[:, -2:] = np.nan
         df_rank_latex = pd.concat([df_rank.iloc[:, :-2], df_cnts.iloc[:, -2:]], axis=1)
+        df_rank_latex.index = [val.replace(' & ', '} & \\underline{') if i in i_best else val
+                               for i, val in enumerate(df_rank_latex.index)]
 
     if save_path:
         rank_columns = df_rank_latex.columns
@@ -300,13 +302,16 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         if add_counts:
             rank_columns = df_rank_latex.columns[:-2]
             count_columns = df_rank_latex.columns[-2:]
+            if hide_ranks:
+                rank_columns = []
+                df_rank_latex = df_rank_latex.iloc[:, -2:]
 
         if n_col_split is None:
-            n_col_split = len(df_rank_latex.columns)+1
+            n_col_split = len(df_rank_latex.columns)+n_col_idx
 
         col_fmt = 'l'+'c'*len(df_rank_latex.columns)
         buffer = io.StringIO()
-        for i_start_col in range(-1, len(df_rank_latex.columns), n_col_split):
+        for i_start_col in range(-n_col_idx, len(df_rank_latex.columns), n_col_split):
             if i_start_col >= 0:
                 buffer.write('\\vspace{15pt}\n')
 
@@ -323,13 +328,15 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
                 columns = [col for col in df_sub.columns if col in count_columns]
                 if len(columns) > 0:
                     s.format('{:.0f}\%', subset=columns)
+                    s.background_gradient(cmap='Blues', subset=columns, vmin=0, vmax=100)
 
             sub_rank_columns = [col for col in df_sub.columns if col in rank_columns]
             if len(sub_rank_columns) > 0:
                 s.background_gradient(cmap='Greens_r', subset=sub_rank_columns, vmin=1, vmax=max(df_rank_orig.max()))
+                s.format('{:.0f}', subset=sub_rank_columns)
 
             if i_best is not None:
-                s.set_properties(subset=pd.IndexSlice[df_rank_latex.index[i_best], :], **{'underline': '--rwrap--latex'})
+                s.set_properties(subset=pd.IndexSlice[df_sub.index[i_best], :], **{'underline': '--rwrap--latex'})
                 def style_idx_(s):
                     styles = np.array(['']*len(s), dtype=object)
                     styles[i_best] = 'underline: --rwrap--latex;'

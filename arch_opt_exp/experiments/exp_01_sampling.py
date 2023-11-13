@@ -813,13 +813,13 @@ def exp_01_05_correction(sbo=True, post_process=False):
         ]
         sbo_corr = {
             'Eager Rnd': sbo_eager_samplers,  # Best eager
-            'Eager Rnd Cval': sbo_eager_samplers,  # Worst eager
+            # 'Eager Rnd Cval': sbo_eager_samplers,  # Worst eager
             'Eager Greedy': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Greedy LHS --> custom correct_x
             # 'Eager Closest': sbo_eager_samplers,  # Not selected because HierActWt also has other good correctors
             'Eager Closest Euc': sbo_eager_samplers,  # Best eager
             # 'Eager Closest Rnd Euc': sbo_eager_samplers,  # Not selected because samplers also have better correctors
             'Lazy Closest': lazy_samplers,  # Best lazy
-            'Lazy Rnd Cval': lazy_samplers,  # Worst lazy
+            # 'Lazy Rnd Cval': lazy_samplers,  # Worst lazy
         }
         correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
 
@@ -925,6 +925,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
 
     def _add_cols(df_agg_):
         df_agg_['cls_sampler'] = [f'{df_agg_["corr_cls"].values[ii]} {samp}' for ii, samp in enumerate(df_agg_.sampler)]
+        df_agg_['corr_only'] = [' '.join(val.split(' ')[:-1]) for val in df_agg_['corr']]
 
         analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat)
         for corr_cls_ in df_agg_['corr_cls'].unique():
@@ -937,31 +938,65 @@ def exp_01_05_correction(sbo=True, post_process=False):
         return df_agg_
 
     df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+    if sbo:
+        df_agg = df_agg[~df_agg.corr_only.isin(['Eager Rnd Cval', 'Lazy Rnd Cval'])]
 
-    # cat_names = [
-    #     # 'Random',
-    #     'LHS',
-    #     'Hier.: No Grouping',
-    #     # 'Hier.: By $n_{act}$', 'Hier.: By $n_{act}$ (wt.)',
-    #     'Hier.: By $x_{act}$', 'Hier.: By $x_{act}$ (wt.)',
-    # ]
-    # cat_name_map = {sampler: cat_names[i] for i, (_, sampler) in enumerate(_samplers)}
+    sampler_map = {
+        'LHS': 'LHS',
+        'HierNoGroup': 'Hier',
+        'HierNrAct': 'Hier $n_{act}$', 'HierNrActWt': 'Hier $n_{act}$ wt.',
+        'HierAct': 'Hier $x_{act}$', 'HierActWt': 'Hier $x_{act}$ wt.',
+    }
+    algo_map = {
+        'Rnd': 'Any-select',
+        'Greedy': 'Greedy',
+        'Closest': 'Similar',
+    }
     cat_name_map = {}
+    for cls_sampler in df_agg.index.get_level_values(1).unique():
+        parts = cls_sampler.split(' ')
+        corr_type = parts[0]
+        algo_type = parts[1]
+        algo_name = algo_map.get(algo_type, algo_type)
+
+        mod = parts[2:-1]
+        rand_str = '$\\checkmark$' if 'Rnd' in mod else ''
+        cval_str = '$\\checkmark$' if 'Cval' in mod else ''
+        config_str = ''
+        if algo_type == 'Closest':
+            config_str = 'Euc' if 'Euc' in mod else 'Manh'
+            if corr_type == 'Lazy':
+                if 'Dist' in mod:
+                    config_str += '; Dist-f.'
+                else:
+                    config_str = 'Depth-f.'
+
+        sampler = sampler_map.get(parts[-1], parts[-1])
+
+        if sbo:
+            cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {config_str} & {sampler}'
+        else:
+            cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {rand_str} & {cval_str} & {config_str} & {sampler}'
+    df_agg['idx_name'] = [cat_name_map.get(val, val) for val in df_agg.index.get_level_values(1)]
+
+    n_col_split, hide_ranks = 9, True
+    n_col_idx = 3 if sbo else 5
     plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
-                   save_path=f'{folder}/rank{folder_post}')
+                   save_path=f'{folder}/rank{folder_post}', n_col_split=n_col_split, n_col_idx=n_col_idx,
+                   hide_ranks=hide_ranks)
     for corr_cls in df_agg['corr_cls'].unique():
         plot_perf_rank(df_agg[df_agg.corr_cls == corr_cls], 'corr', cat_name_map=cat_name_map,
                        idx_name_map=prob_name_map, save_path=f'{folder}/rank_{corr_cls}{folder_post}',
-                       prefix=corr_cls)
+                       prefix=corr_cls, n_col_split=n_col_split, n_col_idx=n_col_idx)
 
     i_best_eager = []
     i_best_all = []
     for cls_sampler in df_agg.cls_sampler.unique():
         i_best_ = plot_perf_rank(df_agg[df_agg.cls_sampler == cls_sampler], 'corr', cat_name_map=cat_name_map,
                                  idx_name_map=prob_name_map, save_path=f'{folder}/rank_{cls_sampler}{folder_post}',
-                                 prefix=cls_sampler)
+                                 prefix=cls_sampler, n_col_split=n_col_split, n_col_idx=n_col_idx)
 
-        i_best_glob, = np.where(df_agg.index.get_level_values(1).isin(i_best_))
+        i_best_glob, = np.where(df_agg.idx_name.isin(i_best_))
         i_best_all += list(i_best_glob)
         if cls_sampler.startswith('Eager'):
             i_best_eager += list(i_best_glob)
@@ -971,16 +1006,18 @@ def exp_01_05_correction(sbo=True, post_process=False):
                       df_subset=best_eager_selector)
     best_eager = plot_perf_rank(df_agg[best_eager_selector], 'corr', cat_name_map=cat_name_map,
                                 idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_eager{folder_post}',
-                                prefix='best_eager', h_factor=.5)
+                                prefix='best_eager', h_factor=.5, n_col_split=n_col_split, n_col_idx=n_col_idx,
+                                hide_ranks=hide_ranks)
 
+    i_best_all += list(np.where(df_agg.index.get_level_values(1) == 'Eager Greedy LHS')[0])
     best_all_selector = pd.Series(index=df_agg.index, data=np.in1d(np.arange(len(df_agg)), i_best_all))
     analyze_perf_rank(df_agg, 'delta_hv_abs_regret', n_repeat, prefix='best_all',
                       df_subset=best_all_selector)
     plot_perf_rank(df_agg[best_all_selector], 'corr', cat_name_map=cat_name_map,
                    idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_all{folder_post}',
-                   prefix='best_all', h_factor=.5)
+                   prefix='best_all', h_factor=.5, n_col_split=n_col_split, n_col_idx=n_col_idx, hide_ranks=hide_ranks)
 
-    ref_df = df_agg[df_agg.index.get_level_values(1) == best_eager[0]]
+    ref_df = df_agg[df_agg.idx_name == best_eager[0]]
     df_rel_stats: pd.DataFrame = _sampling_rel_stats_table(
         None, df_agg[best_all_selector], None, ref_df=ref_df, incl_q=True)
     df_rel_stats.to_csv(f'{folder}/best_rel_perf.csv')
@@ -1267,7 +1304,7 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
-    # exp_01_05_correction(sbo=False)
-    exp_01_05_correction()
+    exp_01_05_correction(sbo=False, post_process=True)
+    exp_01_05_correction(post_process=True)
     # exp_01_06_opt()
     # exp_01_06_opt(sbo=False)
