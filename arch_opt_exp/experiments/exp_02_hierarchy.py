@@ -37,6 +37,7 @@ from sb_arch_opt.problems.discrete import *
 from sb_arch_opt.problems.continuous import *
 from sb_arch_opt.problems.hierarchical import *
 from sb_arch_opt.problems.turbofan_arch import *
+from sb_arch_opt.correction import ClosestEagerCorrector
 
 from sb_arch_opt.algo.arch_sbo import *
 from sb_arch_opt.algo.tpe_interface import *
@@ -54,7 +55,7 @@ from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.md_mo_hier.infill import *
 from arch_opt_exp.md_mo_hier.naive import *
-from arch_opt_exp.experiments.exp_01_sampling import agg_opt_exp, agg_prob_exp
+from arch_opt_exp.experiments.exp_01_sampling import agg_opt_exp, agg_prob_exp, CorrectorFactory
 from arch_opt_exp.experiments.experimenter import Experimenter
 
 log = logging.getLogger('arch_opt_exp.02_hier')
@@ -209,7 +210,6 @@ def exp_02_02_hier_strategies(sbo=False):
         (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
         (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
         (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
-        # # (lambda: HierarchicalGoldstein(), '02_SO_HDR', 'Goldstein (H/MRD)'),
         (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
     ]
     # for i, (problem_factory, _, _) in enumerate(problems):
@@ -241,6 +241,8 @@ def exp_02_02_hier_strategies(sbo=False):
 
         metrics, additional_plot = _get_metrics(problem)
         additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
+        metrics.append(CorrectionTimeMetric())
+        additional_plot['corr_time'] = ['mean']
 
         algo_names, prob_and_settings = zip(*[
             ('00_naive', (NaiveProblem(problem), False)),
@@ -282,6 +284,10 @@ def exp_02_02_hier_strategies(sbo=False):
             log.info(f'Naive DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
                      f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
             doe[algo_names[j]] = doe_prob
+
+            # for prob in [problem_, problem_._problem]:
+            #     if 'all_discrete_x' in prob.design_space.__dict__:
+            #         del prob.design_space.__dict__['all_discrete_x']
 
         do_run = not post_process
         exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max, doe=doe,
@@ -836,10 +842,10 @@ if __name__ == '__main__':
 
     # exp_02_01_tpe()
     # exp_02_02a_model_fit()
-    # exp_02_02_hier_strategies()
+    exp_02_02_hier_strategies()
     # exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)
     # exp_02_03_sensitivities(sbo=True, mrd=True)
-    exp_02_04_tunable_hier_dv_examples()
+    # exp_02_04_tunable_hier_dv_examples()

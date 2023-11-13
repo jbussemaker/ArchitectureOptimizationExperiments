@@ -27,6 +27,7 @@ from pymoo.problems.multi.zdt import ZDT1
 from pymoo.util.ref_dirs.energy import RieszEnergyReferenceDirectionFactory
 
 from typing import *
+from arch_opt_exp.md_mo_hier.naive import NaiveProblem, NaiveDesignSpace
 from arch_opt_exp.md_mo_hier.correction import CorrectorBase
 from arch_opt_exp.experiments.metrics_base import *
 
@@ -121,7 +122,9 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
             self._correct_output = {'i_sub_sel': i_sub_selected}
             return
 
+        s = timeit.default_timer()
         super()._correct_x(x, is_active)
+        self.last_corr_times.append(timeit.default_timer()-s)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(imp_ratio={self._imp_ratio}, n_sub={self._n_subproblem}, ' \
@@ -142,10 +145,16 @@ class CorrectionTimeMetric(Metric):
 
     def _calculate_values(self, algorithm) -> List[float]:
         problem = algorithm.problem
-        if isinstance(problem, SelectableTunableMetaProblem):
+        corr_times = []
+        if isinstance(problem, NaiveProblem):
+            design_space = problem.design_space
+            assert isinstance(design_space, NaiveDesignSpace)
+            corr_times = design_space.last_corr_times
+        elif isinstance(problem, SelectableTunableMetaProblem):
             corr_times = problem.last_corr_times
-            if len(corr_times) > 0:
-                return [float(np.mean(corr_times)), float(np.std(corr_times))]
+
+        if len(corr_times) > 0:
+            return [float(np.mean(corr_times)), float(np.std(corr_times))]
 
         return [np.nan]*len(self.value_names)
 

@@ -14,10 +14,28 @@ limitations under the License.
 Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
+import timeit
 import numpy as np
 from sb_arch_opt.problem import *
+from sb_arch_opt.design_space import *
 
 __all__ = ['NaiveProblem']
+
+
+class NaiveDesignSpace(ImplicitArchDesignSpace):
+
+    def __init__(self, *args, **kwargs):
+        self.last_corr_times = []
+        super().__init__(*args, **kwargs)
+
+    def _correct_x_corrector(self, x: np.ndarray, is_active: np.ndarray):
+        s = timeit.default_timer()
+        super()._correct_x_corrector(x, is_active)
+        self.last_corr_times.append(timeit.default_timer()-s)
+
+    @property
+    def all_discrete_x_by_trial_and_imputation(self):
+        raise MemoryError
 
 
 class NaiveProblem(ArchOptProblemBase):
@@ -26,7 +44,17 @@ class NaiveProblem(ArchOptProblemBase):
         if problem.design_space.is_explicit():
             raise RuntimeError('Explicit DS not supported!')
         self._problem = problem
-        super().__init__(problem.des_vars, n_obj=problem.n_obj, n_ieq_constr=problem.n_ieq_constr)
+
+        design_space = NaiveDesignSpace(
+            problem.des_vars,
+            self._correct_x,
+            self._is_conditionally_active,
+            self._get_n_valid_discrete,
+            self._get_n_active_cont_mean,
+            self._gen_all_discrete_x,
+        )
+
+        super().__init__(design_space, n_obj=problem.n_obj, n_ieq_constr=problem.n_ieq_constr)
 
         self._return_mod_x = return_mod_x
         self._do_correct = correct = correct and return_mod_x
