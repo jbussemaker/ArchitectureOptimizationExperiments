@@ -755,7 +755,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
     folder = set_results_folder(_exp_01_05_folder+folder_post)
     n_infill = 100
     n_gen = 25
-    n_repeat = 16 if sbo else 100
+    n_repeat = 8 if sbo else 100
     doe_k = 10
     n_sub, n_opts = 9, 3
     i_opt_test = [0, n_sub-1]
@@ -813,11 +813,13 @@ def exp_01_05_correction(sbo=True, post_process=False):
         ]
         sbo_corr = {
             'Eager Rnd': sbo_eager_samplers,  # Best eager
+            'Eager Rnd Cval': sbo_eager_samplers,  # Worst eager
             'Eager Greedy': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Greedy LHS --> custom correct_x
             # 'Eager Closest': sbo_eager_samplers,  # Not selected because HierActWt also has other good correctors
             'Eager Closest Euc': sbo_eager_samplers,  # Best eager
             # 'Eager Closest Rnd Euc': sbo_eager_samplers,  # Not selected because samplers also have better correctors
             'Lazy Closest': lazy_samplers,  # Best lazy
+            'Lazy Rnd Cval': lazy_samplers,  # Worst lazy
         }
         correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
 
