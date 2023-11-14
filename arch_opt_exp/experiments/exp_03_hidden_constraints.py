@@ -43,9 +43,11 @@ from sb_arch_opt.problems.turbofan_arch import *
 import sb_arch_opt.algo.arch_sbo.infill as sbao_infill
 from sb_arch_opt.problems.hidden_constraints import *
 
+from arch_opt_exp.md_mo_hier.naive import *
 from arch_opt_exp.experiments.runner import *
 from arch_opt_exp.metrics.performance import *
 from arch_opt_exp.experiments.plotting import *
+from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.hc_strategies.metrics import *
 from arch_opt_exp.hc_strategies.rejection import *
 from arch_opt_exp.hc_strategies.prediction import *
@@ -403,7 +405,7 @@ _strategies: List[Tuple[HiddenConstraintStrategy, str]] = [
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population, verbose=False,
              g_aggregation: sbao_infill.ConstraintAggregation = None, kpls_n_dim: int = None, cont=False,
-             infill_pop_size=None, ignore_hierarchy=True, **kwargs):
+             infill_pop_size=None, ignore_hierarchy=True, sampler=None, **kwargs):
     kpls_n_comp = kpls_n_dim if kpls_n_dim is not None and problem.n_var > kpls_n_dim else None
     if cont:
         model = ModelFactory.get_kriging_model(kpls_n_comp=kpls_n_comp, **kwargs)
@@ -415,7 +417,7 @@ def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, do
 
     sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm,
                                verbose=verbose, pop_size=infill_pop_size)\
-        .algorithm(infill_size=n_batch, init_size=len(doe_pop))
+        .algorithm(infill_size=n_batch, init_size=len(doe_pop), init_sampling=sampler)
     sbo.initialization = Initialization(doe_pop)
     return sbo, model
 
@@ -1092,58 +1094,68 @@ def exp_03_07_engine_arch(post_process=False):
     problems = [
         # problem, n_budget, k_doe, strategies
         (SimpleTurbofanArch(), 250, 3, [
-            # Gower, n_kpls (None = Hier GP; False = MD GP), strategies
-            (False, None, reduced_strategies),
-            (True, None, reduced_strategies),
-            (True, False, reduced_strategies),
-            (True, 10, all_strategies),
-            (True, 5, reduced_strategies),
-            (True, 2, reduced_strategies),
+            # Gower, n_kpls (None = Hier GP; False = MD GP), naive, strategies
+            # (False, None, False, reduced_strategies),
+            (True, None, False, reduced_strategies),
+            (True, False, False, reduced_strategies),
+            (True, False, True, reduced_strategies),
+            (True, 10, False, all_strategies),
+            (True, 5, False, reduced_strategies),
+            (True, 2, False, reduced_strategies),
         ]),
         # (RealisticTurbofanArch(), 800, 5, [
-        #     # (True, 20, reduced_strategies),
-        #     # (True, 10, all_strategies),
-        #     (True, 10, [PredictionHCStrategy(RandomForestClassifier(), min_pov=.25)]),
+        #     # (True, 20, False, reduced_strategies),
+        #     # (True, 10, False, all_strategies),
+        #     (True, 10, False, [PredictionHCStrategy(RandomForestClassifier(), min_pov=.25)]),
         # ]),
     ]
 
     problem_paths = []
     problem_names = []
-    doe_folders = []
+    doe_folders = {}
     problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
-    for i, (problem, _, k_doe, _) in enumerate(problems):
+    for i, (problem, _, k_doe, strategies_settings) in enumerate(problems):
         name = f'{problem.__class__.__name__}'
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
-        prob_doe_folder = f'{folder}/doe_{problem.__class__.__name__}'
-        doe_folders.append(prob_doe_folder)
-        if post_process:
-            continue
 
         if isinstance(problem, (SimpleTurbofanArch, RealisticTurbofanArch)):
             problem.verbose = True
             problem.n_parallel = 4
             problem.set_max_iter(30)
 
-        # Rule of thumb: k*n_dim --> corrected for expected fail rate (unknown before running a problem, of course)
-        n_init = int(np.ceil(k_doe*problem.n_var/(1-expected_fail_rate)))
+        for is_naive in {naive for _, _, naive, _ in strategies_settings}:
+            prob_doe_folder = f'{folder}/doe_{problem.__class__.__name__}'
+            if is_naive:
+                prob_doe_folder += '_naive'
+            doe_folders[name, is_naive] = prob_doe_folder
+            if post_process:
+                continue
 
-        log.info(f'Running DOE for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
-        os.makedirs(prob_doe_folder, exist_ok=True)
-        doe_algo = get_doe_algo(doe_size=n_init, results_folder=prob_doe_folder)
-        initialize_from_previous_results(doe_algo, problem, prob_doe_folder)
-        doe_algo.setup(problem)
-        doe_algo.run()
+            doe_problem = problem
+            if is_naive:
+                doe_problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=False)
+
+            # Rule of thumb: k*n_dim --> corrected for expected fail rate (unknown before running a problem, of course)
+            n_init = int(np.ceil(k_doe*problem.n_var/(1-expected_fail_rate)))
+
+            log.info(f'Running DOE for {i+1}/{len(problems)}: {name} (n_init = {n_init}, naive = {is_naive})')
+            os.makedirs(prob_doe_folder, exist_ok=True)
+            doe_algo = get_doe_algo(doe_size=n_init, results_folder=prob_doe_folder)
+            initialize_from_previous_results(doe_algo, problem, prob_doe_folder)
+            doe_algo.setup(doe_problem)
+            doe_algo.run()
 
     def prob_add_cols(strat_data_, df_strat, algo_name):
-        n_theta, kpls_n_dim, agg_g, kernel, strategy_ = model_settings[algo_name]
+        n_theta, kpls_n_dim, agg_g, kernel, strategy_, naive_ = model_settings[algo_name]
 
         strat_data_['nx'] = problem.n_var
         strat_data_['n_theta'] = n_theta
         strat_data_['kpls'] = kpls_n_dim or problem.n_var
         strat_data_['g_agg'] = agg_g.name if agg_g is not None else ''
         strat_data_['kernel'] = kernel
+        strat_data_['naive'] = naive_
 
         strat_data_['strategy'] = str(strategy_)
         strat_data_['is_pred'] = is_pred = isinstance(strategy_, PredictionHCStrategy)
@@ -1151,12 +1163,13 @@ def exp_03_07_engine_arch(post_process=False):
 
     for i, (problem, n_budget, _, strategies_settings) in enumerate(problems):
         name = problem_names[i]
-        prob_doe_folder = doe_folders[i]
         problem_path = problem_paths[i]
 
+        prob_doe_folder = doe_folders[name, False]
         doe = load_from_previous_results(problem, prob_doe_folder)
         n_init = len(doe)
         log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
+        f_pf_known = problem.pareto_front()
 
         # for ii in range(10):
         #     print(ii)
@@ -1166,15 +1179,18 @@ def exp_03_07_engine_arch(post_process=False):
 
         metrics, additional_plot = _get_metrics(problem, allow_evaluate=False)
         # additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
+        metrics.append(CorrectionTimeMetric())
+        additional_plot['corr_time'] = ['mean']
 
         algorithms = []
         algo_names = []
+        problems = []
         i_md_gp_gower = []
         md_gp_gower_algo_name_map = {}
         i_hc_strat = []
         hc_strat_algo_name_map = {}
         model_settings = {}
-        for use_gower, n_kpls, strategies in strategies_settings:
+        for use_gower, n_kpls, naive, strategies in strategies_settings:
             for strategy in strategies:
                 agg_g = sbao_infill.ConstraintAggregation.ELIMINATE if (use_gower or bool(n_kpls)) else None
                 cont = False  # is_heavy
@@ -1198,6 +1214,8 @@ def exp_03_07_engine_arch(post_process=False):
                     algo_name += f' KPLS {kpls_n_dim}'
                 elif md_gp:
                     algo_name += ' MD'
+                if naive:
+                    algo_name += ' Naive'
 
                 if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
                     strategy.predictor._kpls_n_dim = kpls_n_dim
@@ -1207,6 +1225,8 @@ def exp_03_07_engine_arch(post_process=False):
                             md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
                         else:
                             md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier.'
+                        if naive:
+                            md_gp_gower_algo_name_map[algo_name] += ' (naive)'
 
                 if kpls_n_dim == 10:
                     i_hc_strat.append(len(algo_names))
@@ -1218,20 +1238,25 @@ def exp_03_07_engine_arch(post_process=False):
 
                 infill_pop_size = None  # 200 if is_heavy else None
 
-                sbo, model = _get_sbo(problem, strategy, doe, verbose=True, g_aggregation=agg_g,
+                algo_problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=not naive)
+                doe_problem = doe
+                if naive:
+                    doe_problem = load_from_previous_results(problem, doe_folders[name, True])
+
+                sbo, model = _get_sbo(algo_problem, strategy, doe_problem, verbose=True, g_aggregation=agg_g,
                                       infill_pop_size=infill_pop_size, kpls_n_dim=kpls_n_dim, cont=cont, **kwargs)
                 algorithms.append(sbo)
                 algo_names.append(algo_name)
 
                 model_settings[algo_name] = \
-                    (ModelFactory.get_n_theta(problem, model), kpls_n_dim, agg_g, kernel, strategy)
+                    (ModelFactory.get_n_theta(algo_problem, model), kpls_n_dim, agg_g, kernel, strategy, naive)
+                problems.append(algo_problem)
 
         do_run = not post_process
-        exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_budget-n_init,
+        exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_budget-n_init,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   return_exp=post_process, n_parallel=1, run_if_exists=False)
+                   return_exp=post_process, n_parallel=2, run_if_exists=False)
 
-        f_pf_known = problem.pareto_front()
         for exp in exps:
             eff_res = exp.get_effectiveness_results()
             eff_res[0].plot_compare_metrics(
