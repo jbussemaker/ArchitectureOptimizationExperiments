@@ -315,21 +315,27 @@ class Experimenter:
 
     # ## EFFECTIVENESS EXPERIMENTATION ## #
 
-    def run_effectiveness_parallel(self, n_repeat: int, keep_history=False, n_parallel=None, run_if_exists=True):
-        with concurrent.futures.ProcessPoolExecutor(max_workers=n_parallel) as executor:
-            futures = []
-            for i in range(n_repeat):
-                if not run_if_exists:
-                    result_path = self._get_effectiveness_result_path(repeat_idx=i)
-                    if os.path.exists(result_path):
-                        log.info(f'Not running repetition index {i}, because result already exists')
-                        continue
+    def run_effectiveness_parallel(self, n_repeat: int, keep_history=False, n_parallel=None, run_if_exists=True,
+                                   restart_pool=False):
+        n_batch_pool = n_parallel if n_parallel is not None and restart_pool else n_repeat
+        i_execute = list(range(n_repeat))
 
-                futures.append(executor.submit(self.run_effectiveness, i, keep_history=keep_history))
+        while len(i_execute) > 0:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=n_parallel) as executor:
+                futures = []
+                while len(futures) < n_batch_pool and len(i_execute) > 0:
+                    i = i_execute.pop(0)
+                    if not run_if_exists:
+                        result_path = self._get_effectiveness_result_path(repeat_idx=i)
+                        if os.path.exists(result_path):
+                            log.info(f'Not running repetition index {i}, because result already exists')
+                            continue
 
-            concurrent.futures.wait(futures)
-            for fut in futures:
-                fut.result()
+                    futures.append(executor.submit(self.run_effectiveness, i, keep_history=keep_history))
+
+                concurrent.futures.wait(futures)
+                for fut in futures:
+                    fut.result()
 
     def run_effectiveness(self, repeat_idx: int = 0, seed=None, keep_history=False) -> ExperimenterResult:
         """
@@ -374,6 +380,7 @@ class Experimenter:
         if not keep_history:
             result.algorithm = None
             result.history = None
+            result.problem = None
 
         # Store results and return
         with open(result_path, 'wb') as fp:
@@ -381,7 +388,7 @@ class Experimenter:
 
         # log.info('Effectiveness experiment finished: %s / %s / %d' %
         #          (self.problem_name, self.algorithm_name, repeat_idx))
-        return result
+        # return result
 
     def get_effectiveness_result(self, repeat_idx: int) -> Optional[ExperimenterResult]:
         result_path = self._get_effectiveness_result_path(repeat_idx=repeat_idx)

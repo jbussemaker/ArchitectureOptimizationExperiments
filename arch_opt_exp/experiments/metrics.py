@@ -25,8 +25,9 @@ from arch_opt_exp.metrics.performance import *
 __all__ = ['get_exp_metrics']
 
 
-def get_exp_metrics(problem: Problem, including_convergence=True) -> List[Metric]:
-    pf = problem.pareto_front()
+def get_exp_metrics(problem: Problem, including_convergence=True, pf=None) -> List[Metric]:
+    if pf is None:
+        pf = problem.pareto_front()
 
     convergence = [
         # Convergence detection
