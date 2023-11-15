@@ -154,7 +154,9 @@ class CorrectionTimeMetric(Metric):
             corr_times = problem.last_corr_times
 
         if len(corr_times) > 0:
-            return [float(np.mean(corr_times)), float(np.std(corr_times))]
+            res = [float(np.mean(corr_times)), float(np.std(corr_times))]
+            corr_times.clear()
+            return res
 
         return [np.nan]*len(self.value_names)
 
