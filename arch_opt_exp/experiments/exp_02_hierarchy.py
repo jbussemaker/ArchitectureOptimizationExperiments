@@ -752,12 +752,16 @@ def exp_02_04_tunable_hier_dv_examples():
 
     x_cart = np.array(list(itertools.product(*[range(2) for _ in range(4)])))
     is_act_cart = (x_cart*0+1).astype(bool)
+    is_corr_cart = np.zeros(x_cart.shape, dtype=bool)
     is_cont_mask = np.array([False]*4, dtype=bool)
 
     x_corr = x_cart.copy()
     x_corr[x_corr[:, 0] == 0, 2:] = 0
     is_act_corr = is_act_cart.copy()
     is_act_corr[x_corr[:, 1] == 0, 3] = False
+    x_corr[~is_act_corr] = -1
+    is_corr_corr = is_corr_cart.copy()
+    is_corr_corr[x_corr[:, 0] == 0, 2:] = True
 
     x_imp = x_corr.copy()
     x_imp[~is_act_corr] = 0
@@ -765,24 +769,25 @@ def exp_02_04_tunable_hier_dv_examples():
 
     additional = [
         # x, is_active, is_cont_mask, name
-        (x_cart, is_act_cart, is_cont_mask, 'example_0_cartesian'),
-        (x_corr, is_act_corr, is_cont_mask, 'example_1_corrected'),
-        (x_imp, is_act_cart, is_cont_mask, 'example_2_imputed'),
-        (x_imp[i_unique, :], is_act_cart[i_unique, :], is_cont_mask, 'example_3_valid'),
+        (x_cart, is_act_cart, is_cont_mask, is_corr_cart, 'example_0_cartesian'),
+        (x_corr, is_act_corr, is_cont_mask, is_corr_corr, 'example_1_corrected'),
+        (x_imp, is_act_corr, is_cont_mask, is_corr_corr, 'example_2_imputed'),
+        (x_imp[i_unique, :], is_act_corr[i_unique, :], is_cont_mask, is_corr_corr[i_unique, :], 'example_3_valid'),
     ]
 
     def _store_dvs(problem: ArchOptProblemBase, name: str, incl_cont=False):
         x, is_active = problem.all_discrete_x
         assert x is not None
         is_cont_mask = problem.is_cont_mask
-        _store_x(x, is_active, is_cont_mask, name, incl_cont=incl_cont)
+        _store_x(x, is_active, is_cont_mask, None, name, incl_cont=incl_cont)
 
-    def _store_x(x, is_active, is_cont_mask, name: str, incl_cont=False, i_col_name=None):
-        data = [[i+1]+[('cont' if is_cont_mask[j] else xij) if is_active[i, j] else ' ' for j, xij in enumerate(xi)
+    def _store_x(x, is_active, is_cont_mask, is_corr_mask, name: str, incl_cont=False, i_col_name=None):
+        data = [[i+1]+[('cont' if is_cont_mask[j] else xij) for j, xij in enumerate(xi)
                        if incl_cont or (not incl_cont and not is_cont_mask[j])]
                 for i, xi in enumerate(x)]
         x_cols = [f'x{i}' for i in range(len(is_cont_mask) if incl_cont else int(np.sum(~is_cont_mask)))]
         df = pd.DataFrame(data=data, columns=[i_col_name or '$i_{sub}$']+x_cols)
+        df[df == -1] = ''
         df.iloc[:, 1:].to_excel(writer, sheet_name=name)
 
         # https://stackoverflow.com/a/54110153
@@ -795,9 +800,28 @@ def exp_02_04_tunable_hier_dv_examples():
         x_cols = [col_rename_map.get(col, col) for col in x_cols]
         df = df.rename(columns=col_rename_map)
         styler = df.style
-        if np.any(df.values == ' '):
+
+        if is_corr_mask is None:
+            is_corr_mask = np.zeros(is_active.shape, dtype=bool)
+        if not incl_cont:
+            is_active = is_active[:, ~is_cont_mask]
+        df_is_act = pd.DataFrame(
+            data=np.column_stack([np.array([[True]*is_active.shape[0]]).T, is_active]), columns=df.columns)
+
+        if not incl_cont:
+            is_corr_mask = is_corr_mask[:, ~is_cont_mask]
+        df_is_corr = pd.DataFrame(
+            data=np.column_stack([np.array([[False]*is_corr_mask.shape[0]]).T, is_corr_mask]), columns=df.columns)
+
+        # if np.any(df.values == ' '):
+        #     styler.apply(lambda df_: np.where(
+        #         df_.values == ' ', 'background-color:#FFC7CE;color:#9C0006;', ''), axis=None, subset=x_cols)
+        if np.any(~is_corr_mask):
             styler.apply(lambda df_: np.where(
-                df_.values == ' ', 'background-color:#FFC7CE;color:#9C0006;', ''), axis=None, subset=x_cols)
+                df_is_corr & df_is_act, 'background-color:#B3E5FC;color:#01579B;', ''), axis=None)  #, subset=x_cols)
+        if np.any(~is_active):
+            styler.apply(lambda df_: np.where(
+                ~df_is_act, 'background-color:#FFC7CE;color:#9C0006;', ''), axis=None)  #, subset=x_cols)
         if np.any(df.values == 'cont'):
             styler.apply(lambda df_: np.where(
                 df_.values == 'cont', f'background-color:{hx(blue(.25))};color:{hx(blue(.75))};', ''),
@@ -807,7 +831,7 @@ def exp_02_04_tunable_hier_dv_examples():
         i_max = np.max(x)
         for col in x_cols:
             styler.background_gradient(cmap='Greens', low=.25, high=.5, axis=0, vmin=0, vmax=i_max,
-                                       subset=pd.IndexSlice[(df[col] != ' ') & (df[col] != 'cont'), col])
+                                       subset=pd.IndexSlice[~df_is_corr[col] & df_is_act[col] & (df[col] != 'cont'), col])
 
         styler.hide()
         styler.to_latex(f'{folder}/{name}.tex', hrules=True, convert_css=True, column_format='l'*len(df.columns))
