@@ -28,6 +28,15 @@ class NaiveDesignSpace(ImplicitArchDesignSpace):
         self.last_corr_times = []
         super().__init__(*args, **kwargs)
 
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
+
+        # Do not deepcopy, otherwise for some reason the NaiveProblem
+        # object of the bound functions loses its underlying problem...
+        memodict[id(self)] = self
+        return self
+
     def _correct_x_corrector(self, x: np.ndarray, is_active: np.ndarray):
         s = timeit.default_timer()
         super()._correct_x_corrector(x, is_active)
