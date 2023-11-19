@@ -54,7 +54,7 @@ class HiddenConstraintsSBO(SBOInfill):
 
         figs = []
 
-        def _plot_sfc(z, z_name, path_post, is_g=False, ax=None):
+        def _plot_sfc(z, z_name, path_post, is_g=False, plot_pts=True, ax=None):
             fig = None
             if ax is None:
                 fig = plt.figure()
@@ -66,13 +66,14 @@ class HiddenConstraintsSBO(SBOInfill):
                              norm=CenteredNorm() if is_g else None)
             if ax is None:
                 plt.colorbar(c).set_label(z_name)
-            if is_g:
+            if is_g and plot_pts:
                 ax_.contour(xx1, xx2, zz, [0], linewidths=1, colors='k')
-            ax_.contour(xx1, xx2, pov_ref, [.5], linewidths=.5, colors='r')
-            ax_.scatter(x_train[is_failed_train, 0], x_train[is_failed_train, 1], s=25, c='r', marker='x')
-            ax_.scatter(x_train[~is_failed_train, 0], x_train[~is_failed_train, 1], s=25, color=(0, 1, 0), marker='x')
-            if x_infill is not None:
-                ax_.scatter([x_infill[0]], [x_infill[1]], s=50, c='m', marker='P')
+            if plot_pts:
+                ax_.contour(xx1, xx2, pov_ref, [.5], linewidths=.5, colors='r')
+                ax_.scatter(x_train[is_failed_train, 0], x_train[is_failed_train, 1], s=25, c='r', marker='x')
+                ax_.scatter(x_train[~is_failed_train, 0], x_train[~is_failed_train, 1], s=25, color=(0, 1, 0), marker='x')
+                if x_infill is not None:
+                    ax_.scatter([x_infill[0]], [x_infill[1]], s=100, c='m', marker='P')
             if ax is None:
                 plt.xlabel('$x_0$'), plt.ylabel('$x_1$')
                 if save_path is not None:
@@ -103,6 +104,14 @@ class HiddenConstraintsSBO(SBOInfill):
         for i in range(g_infill.shape[1]):
             plot_ax = (plot_axes or {}).get(f'g{i}')
             _plot_sfc(g_infill[:, i], f'Infill $g_{i}$', f'infill_g{i}', is_g=True, ax=plot_ax)
+
+        if plot_axes is not None:
+            if 'true_f' in plot_axes:
+                f_true = out_plot['F'][:, 0].reshape(xx1.shape)
+                _plot_sfc(f_true, 'True f', 'true_f', plot_pts=False, ax=plot_axes['true_f'])
+            if 'true_failed' in plot_axes:
+                failed_true = (is_failed_ref.astype(float)-.5).reshape(xx1.shape)
+                _plot_sfc(failed_true, 'True Failed', 'true_failed', is_g=True, plot_pts=False, ax=plot_axes['true_failed'])
 
         if show:
             plt.show()

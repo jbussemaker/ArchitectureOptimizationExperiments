@@ -447,7 +447,8 @@ def exp_03_04_simple_optimization():
     folder = set_results_folder(_exp_03_04_folder)
     n_init = 30
     n_infill = 30
-    n_infill_aggregate = [0, 1, 2, 9, 16, 24]
+    # n_infill_aggregate = [0, 2, 9, 19, -1]  # [0, 1, 2, 16, 24]
+    n_infill_aggregate = [0, 4, 18, -1]  # [0, 1, 2, 16, 24]
     np.random.seed(43)
     # for problem, f_known_best in [(Alimo(), -1.0474), (AlimoEdge(), -1.0468)]:
     for problem, f_known_best in [(AlimoEdge(), -1.0468)]:
@@ -456,6 +457,7 @@ def exp_03_04_simple_optimization():
         doe.setup(problem)
         doe.run()
         doe_pop = doe.pop
+        x_best = problem.pareto_set()[0, :]
         log.info(f'Best of initial DOE: {np.nanmin(doe_pop.get("F")[:, 0])} (best: {f_known_best})')
 
         fig_agg, agg_ax = plt.subplots(
@@ -497,10 +499,20 @@ def exp_03_04_simple_optimization():
                 elif fig_agg is not None:
                     agg_ax[0, 0].set_title('Predicted $f$')
                     agg_ax[0, 1].set_title('Infill $g_{PoV}$')
+
+                    sbo_infill.plot_state(x_infill=infills.get('X')[0, :], plot_std=False,
+                                          plot_axes={'true_f': agg_ax[-1, 0], 'true_failed': agg_ax[-1, 1]}, show=False)
+                    for ii in [0, 1]:
+                        agg_ax[-1, ii].scatter([x_best[0]], [x_best[1]], s=100, c='m', marker='P')
+                    agg_ax[-1, 0].set_title('True $f$')
+                    agg_ax[-1, 1].set_title('True viable region')
+                    # agg_ax[-1, 0].set(ylabel='True function')
+
                     # for ax in agg_ax[-1, :]:
                     #     ax.set(xlabel='$x_0$')
                     for i_iter, ax in enumerate(agg_ax[:, 0]):
-                        ax.set(ylabel=f'Infill {n_infill_aggregate[i_iter]+1}')
+                        if i_iter < agg_ax.shape[0]-1:
+                            ax.set(ylabel=f'Infill {n_infill_aggregate[i_iter]+1}')
                     for ax in agg_ax.flat:
                         ax.set(xticklabels=[], xticks=[], yticklabels=[], yticks=[])
                     plt.tight_layout(h_pad=1.2, w_pad=1.2)
@@ -509,6 +521,7 @@ def exp_03_04_simple_optimization():
                     fig_agg.savefig(f'{strategy_folder}/opt_sequence.svg')
                     plt.close(fig_agg)
                     fig_agg = None
+                    log.info('Opt sequence plotted')
 
                 if i_infill == 0:
                     sbo_infill.plot_state(save_path=f'{strategy_folder}/doe', show=False)
@@ -1187,6 +1200,8 @@ def exp_03_07_engine_arch(post_process=False):
         problems = []
         i_md_gp_gower = []
         md_gp_gower_algo_name_map = {}
+        i_md_gp_naive = []
+        md_gp_naive_algo_name_map = {}
         i_hc_strat = []
         hc_strat_algo_name_map = {}
         model_settings = {}
@@ -1220,13 +1235,15 @@ def exp_03_07_engine_arch(post_process=False):
                 if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
                     strategy.predictor._kpls_n_dim = kpls_n_dim
                     if use_gower:
-                        i_md_gp_gower.append(len(algo_names))
-                        if kpls_n_dim is not None:
-                            md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
-                        else:
-                            md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier.'
-                        if naive:
-                            md_gp_gower_algo_name_map[algo_name] += ' (naive)'
+                        if (md_gp or kpls_n_dim is not None) and not naive:
+                            i_md_gp_gower.append(len(algo_names))
+                            if kpls_n_dim is not None:
+                                md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
+                            else:
+                                md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier.'
+                        if md_gp and kpls_n_dim is None:
+                            i_md_gp_naive.append(len(algo_names))
+                            md_gp_naive_algo_name_map[algo_name] = 'Naive' if naive else 'Hierarchical'
 
                 if kpls_n_dim == 10:
                     i_hc_strat.append(len(algo_names))
@@ -1271,7 +1288,8 @@ def exp_03_07_engine_arch(post_process=False):
 
         df_prob = _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
-        df_md_gp_gower = df_prob[(df_prob.kernel == 'Gower') & (df_prob.pred == 'MD-GP')]
+        df_md_gp_gower = df_prob[(df_prob.kernel == 'Gower') & (df_prob.pred == 'MD-GP') &
+                                 (df_prob.index.isin(md_gp_gower_algo_name_map))]
         df_md_gp_gower['prob'] = [name for _ in range(len(df_md_gp_gower))]
         df_md_gp_gower['idx'] = df_md_gp_gower.index
         df_md_gp_gower = df_md_gp_gower.set_index(['prob', 'idx'])
@@ -1284,6 +1302,11 @@ def exp_03_07_engine_arch(post_process=False):
         plot_for_pub_sb(exps_md_gp_gower, met_plot_map={
             'delta_hv': ['ratio'],
         }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower')
+
+        exps_md_gp_naive = [exp for i_exp, exp in enumerate(exps) if i_exp in i_md_gp_naive]
+        plot_for_pub_sb(exps_md_gp_naive, met_plot_map={
+            'delta_hv': ['ratio'],
+        }, algo_name_map=md_gp_naive_algo_name_map, prefix='md_gp_naive')
 
         exps_hc_strat = [exp for i_exp, exp in enumerate(exps) if i_exp in i_hc_strat]
         plot_for_pub_sb(exps_hc_strat, met_plot_map={
