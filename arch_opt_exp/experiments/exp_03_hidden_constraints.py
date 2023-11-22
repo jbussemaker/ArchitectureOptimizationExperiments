@@ -1200,6 +1200,7 @@ def exp_03_07_engine_arch(post_process=False):
         problems = []
         i_md_gp_gower = []
         md_gp_gower_algo_name_map = {}
+        i_hier_gp = None
         i_md_gp_naive = []
         md_gp_naive_algo_name_map = {}
         i_hc_strat = []
@@ -1235,12 +1236,14 @@ def exp_03_07_engine_arch(post_process=False):
                 if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
                     strategy.predictor._kpls_n_dim = kpls_n_dim
                     if use_gower:
-                        if (md_gp or kpls_n_dim is not None) and not naive:
+                        if not naive:
                             i_md_gp_gower.append(len(algo_names))
                             if kpls_n_dim is not None:
                                 md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
                             else:
-                                md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier.'
+                                md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
+                                if not md_gp:
+                                    i_hier_gp = len(algo_names)
                         if md_gp and kpls_n_dim is None:
                             i_md_gp_naive.append(len(algo_names))
                             md_gp_naive_algo_name_map[algo_name] = 'Naive' if naive else 'Hierarchical'
