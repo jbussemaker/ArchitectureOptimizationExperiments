@@ -1314,7 +1314,7 @@ def exp_03_07_engine_arch(post_process=False):
         exps_hc_strat = [exp for i_exp, exp in enumerate(exps) if i_exp in i_hc_strat]
         plot_for_pub_sb(exps_hc_strat, met_plot_map={
             'delta_hv': ['ratio'],
-        }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat', cycle_style=False)
+        }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat')
 
         plt.close('all')
 

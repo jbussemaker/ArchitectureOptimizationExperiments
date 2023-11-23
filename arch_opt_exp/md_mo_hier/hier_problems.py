@@ -135,6 +135,10 @@ class SelectableTunableMetaProblem(TunableHierarchicalMetaProblem):
 class CorrectionTimeMetric(Metric):
     """Record the time that correction takes"""
 
+    def __init__(self):
+        super().__init__()
+        self._is_first = True
+
     @property
     def name(self):
         return 'corr_time'
@@ -154,7 +158,13 @@ class CorrectionTimeMetric(Metric):
             corr_times = problem.last_corr_times
 
         if len(corr_times) > 0:
-            res = [float(np.mean(corr_times)), float(np.std(corr_times))]
+            if self._is_first:
+                # First sample is always an outlier
+                self._is_first = False
+                res = [np.nan, np.nan]
+            else:
+                res = [float(np.mean(corr_times)), float(np.std(corr_times))]
+
             corr_times.clear()
             return res
 

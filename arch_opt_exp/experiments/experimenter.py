@@ -247,10 +247,10 @@ class ExperimenterResult(Result):
         if self.history is not None:
             for i, algo_step in enumerate(self.history):
                 f_pareto = algo_step.opt.get('F')
-                plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=3, label=f'Step {i}')
+                plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=10, label=f'Step {i}')
         else:
             f_pareto = self.opt.get('F')
-            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=3, label='Pareto')
+            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=10, label='Pareto')
 
         if f_pf_known is not None:
             plt.scatter(f_pf_known[:, 0], f_pf_known[:, 1], s=3, label='Known PF')

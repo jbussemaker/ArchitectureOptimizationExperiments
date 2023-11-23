@@ -59,6 +59,7 @@ _col_names = {
     'is_ck_lt': 'Is light categorical kernel',
     'n_cat': 'Cat vars',
     'n_theta': 'Nr of hyperparameters',
+    'corr_time_mean': 'Correction time [s]',
 }
 
 
@@ -202,7 +203,7 @@ def plot_for_pub(exps, met_plot_map, algo_name_map=None, colors=None, styles=Non
             plot_callback=_plot_callback, save_svg=True, colors=colors, styles=styles, show=False)
 
 
-def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', cycle_style=True):
+def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_log=False, palette=None):
     if algo_name_map is None:
         algo_name_map = {}
 
@@ -228,11 +229,14 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', cyc
 
             df = pd.DataFrame(index=np.tile(n_eval[0], 3), data=np.column_stack(data), columns=cols)
             with sb_theme():
-                palette = sns.color_palette('mako', n_colors=len(df.columns))
+                if palette is None:
+                    palette = sns.color_palette('mako', n_colors=len(df.columns))
                 plt.figure(figsize=(5, 3))
                 ax = sns.lineplot(data=df, estimator=lambda s: s.iloc[0], errorbar=lambda s: (s.iloc[1], s.iloc[2]),
                                   palette=palette, sort=False)
                 ax.set(xlabel='Infill points', ylabel=metric_name)
+                if y_log:
+                    ax.set(yscale='log')
                 sns.despine()
                 sns.move_legend(ax, 'center left', bbox_to_anchor=(1, .5), frameon=False)
                 plt.tight_layout()
