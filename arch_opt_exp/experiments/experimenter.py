@@ -240,20 +240,26 @@ class ExperimenterResult(Result):
         if show:
             plt.show()
 
-    def plot_obj_progress(self, f_pf_known=None, save_filename=None, show=True):
+    def plot_obj_progress(self, f_pf_known=None, save_filename=None, show=True, known_pf=False):
         plt.figure()
         plt.title(f'Objective progress: {self.plot_name}')
 
-        if self.history is not None:
+        has_color = False
+        if self.history is not None and not known_pf:
             for i, algo_step in enumerate(self.history):
                 f_pareto = algo_step.opt.get('F')
                 plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=10, label=f'Step {i}')
         else:
-            f_pareto = self.opt.get('F')
-            plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=10, label='Pareto')
+            f_pareto = f_pf_known if known_pf else self.opt.get('F')
+            c = f_pareto[:, 2] if f_pareto.shape[1] >= 2 else None
+            sc = plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=10, c=c, label='Pareto')
+            if c is not None:
+                has_color = True
+                plt.colorbar(sc)
 
-        if f_pf_known is not None:
-            plt.scatter(f_pf_known[:, 0], f_pf_known[:, 1], s=3, label='Known PF')
+        if f_pf_known is not None and not known_pf:
+            c = 'r' if has_color else None
+            plt.scatter(f_pf_known[:, 0], f_pf_known[:, 1], s=3, c=c, marker='.', label='Known PF')
         plt.legend()
 
         if save_filename is not None:

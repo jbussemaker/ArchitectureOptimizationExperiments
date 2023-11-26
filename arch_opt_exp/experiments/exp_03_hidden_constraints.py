@@ -405,7 +405,7 @@ _strategies: List[Tuple[HiddenConstraintStrategy, str]] = [
 
 def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population, verbose=False,
              g_aggregation: sbao_infill.ConstraintAggregation = None, kpls_n_dim: int = None, cont=False,
-             infill_pop_size=None, ignore_hierarchy=True, sampler=None, **kwargs):
+             infill_pop_size=None, ignore_hierarchy=True, sampler=None, min_pof=None, **kwargs):
     kpls_n_comp = kpls_n_dim if kpls_n_dim is not None and problem.n_var > kpls_n_dim else None
     if cont:
         model = ModelFactory.get_kriging_model(kpls_n_comp=kpls_n_comp, **kwargs)
@@ -413,7 +413,7 @@ def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, do
     else:
         model, norm = ModelFactory(problem).get_md_kriging_model(
             kpls_n_comp=kpls_n_comp, ignore_hierarchy=ignore_hierarchy, **kwargs)
-    infill, n_batch = sbao_infill.get_default_infill(problem, g_aggregation=g_aggregation)
+    infill, n_batch = sbao_infill.get_default_infill(problem, g_aggregation=g_aggregation, min_pof=min_pof)
 
     sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm,
                                verbose=verbose, pop_size=infill_pop_size)\
@@ -1191,7 +1191,7 @@ def exp_03_07_engine_arch(post_process=False):
         # exit()
 
         metrics, additional_plot = _get_metrics(problem, allow_evaluate=False)
-        # additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
+        additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
         metrics.append(CorrectionTimeMetric())
         additional_plot['corr_time'] = ['mean']
 
@@ -1210,6 +1210,10 @@ def exp_03_07_engine_arch(post_process=False):
             for strategy in strategies:
                 agg_g = sbao_infill.ConstraintAggregation.ELIMINATE if (use_gower or bool(n_kpls)) else None
                 cont = False  # is_heavy
+
+                min_pof = None
+                if isinstance(problem, RealisticTurbofanArch):
+                    min_pof = .25
 
                 md_gp = n_kpls is False
                 kpls_n_dim = n_kpls if not md_gp else None
@@ -1264,7 +1268,8 @@ def exp_03_07_engine_arch(post_process=False):
                     doe_problem = load_from_previous_results(problem, doe_folders[name, True])
 
                 sbo, model = _get_sbo(algo_problem, strategy, doe_problem, verbose=True, g_aggregation=agg_g,
-                                      infill_pop_size=infill_pop_size, kpls_n_dim=kpls_n_dim, cont=cont, **kwargs)
+                                      infill_pop_size=infill_pop_size, kpls_n_dim=kpls_n_dim, cont=cont,
+                                      min_pof=min_pof, **kwargs)
                 algorithms.append(sbo)
                 algo_names.append(algo_name)
 
@@ -1286,6 +1291,9 @@ def exp_03_07_engine_arch(post_process=False):
             for i_res, metric in enumerate(eff_res):
                 if metric.opt is None or problem.n_obj < 2:
                     continue
+                if i_res == 0:
+                    metric.plot_obj_progress(f_pf_known=f_pf_known, show=False, known_pf=True,
+                                             save_filename=exp.get_problem_algo_results_path('pf'))
                 metric.plot_obj_progress(
                     f_pf_known=f_pf_known, save_filename=exp.get_problem_algo_results_path(f'pf_{i_res}'), show=False)
 
@@ -1296,25 +1304,29 @@ def exp_03_07_engine_arch(post_process=False):
         df_md_gp_gower['prob'] = [name for _ in range(len(df_md_gp_gower))]
         df_md_gp_gower['idx'] = df_md_gp_gower.index
         df_md_gp_gower = df_md_gp_gower.set_index(['prob', 'idx'])
-        plot_multi_idx_lines(df_md_gp_gower, exps[0].get_problem_results_path(),
-                             ['delta_hv_regret', 'time_train', 'time_infill'],
-                             y_log=[False, True, True], y_fmt='{x:.0f}', sort_by='kpls', save_prefix='j',
-                             x_ticks=md_gp_gower_algo_name_map, legend_title=False, height=1.5, aspect=3)
+        if len(df_md_gp_gower) > 0:
+            plot_multi_idx_lines(df_md_gp_gower, exps[0].get_problem_results_path(),
+                                 ['delta_hv_regret', 'time_train', 'time_infill'],
+                                 y_log=[False, True, True], y_fmt='{x:.0f}', sort_by='kpls', save_prefix='j',
+                                 x_ticks=md_gp_gower_algo_name_map, legend_title=False, height=1.5, aspect=3)
 
         exps_md_gp_gower = [exp for i_exp, exp in enumerate(exps) if i_exp in i_md_gp_gower]
-        plot_for_pub_sb(exps_md_gp_gower, met_plot_map={
-            'delta_hv': ['ratio'],
-        }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower')
+        if len(exps_md_gp_gower) > 0:
+            plot_for_pub_sb(exps_md_gp_gower, met_plot_map={
+                'delta_hv': ['ratio'],
+            }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower')
 
         exps_md_gp_naive = [exp for i_exp, exp in enumerate(exps) if i_exp in i_md_gp_naive]
-        plot_for_pub_sb(exps_md_gp_naive, met_plot_map={
-            'delta_hv': ['ratio'],
-        }, algo_name_map=md_gp_naive_algo_name_map, prefix='md_gp_naive')
+        if len(exps_md_gp_naive) > 0:
+            plot_for_pub_sb(exps_md_gp_naive, met_plot_map={
+                'delta_hv': ['ratio'],
+            }, algo_name_map=md_gp_naive_algo_name_map, prefix='md_gp_naive')
 
         exps_hc_strat = [exp for i_exp, exp in enumerate(exps) if i_exp in i_hc_strat]
-        plot_for_pub_sb(exps_hc_strat, met_plot_map={
-            'delta_hv': ['ratio'],
-        }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat')
+        if len(exps_hc_strat) > 0:
+            plot_for_pub_sb(exps_hc_strat, met_plot_map={
+                'delta_hv': ['ratio'],
+            }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat')
 
         plt.close('all')
 

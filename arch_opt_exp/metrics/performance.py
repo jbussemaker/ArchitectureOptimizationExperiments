@@ -85,8 +85,10 @@ class DeltaHVMetric(Metric):
         self.is_one_dim = pf.shape[0] == 1
         self.max_f = np.max(pf, axis=0)
         self.pf_0 = pf[0, :]
-        self._hv = hv = Hypervolume(pf=pf, normalize=True)
+        self._hv = hv = Hypervolume(pf=pf, zero_to_one=True)  # TODO
         self.hv_true = hv.do(pf)
+        if self.hv_true > 1.:
+            raise RuntimeError(f'Check normalization: HV = {self.hv_true}')
         self.delta_hv0 = None
 
         self.perc_pass = perc_pass if perc_pass is not None else []
