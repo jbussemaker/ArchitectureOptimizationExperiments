@@ -1116,11 +1116,9 @@ def exp_03_07_engine_arch(post_process=False):
             (True, 5, False, reduced_strategies),
             (True, 2, False, reduced_strategies),
         ]),
-        # (RealisticTurbofanArch(), 800, 5, [
-        #     # (True, 20, False, reduced_strategies),
-        #     # (True, 10, False, all_strategies),
-        #     (True, 10, False, [PredictionHCStrategy(RandomForestClassifier(), min_pov=.25)]),
-        # ]),
+        (RealisticTurbofanArch(noise_obj=False), 813, 5, [
+            (True, 10, False, reduced_strategies),
+        ]),
     ]
 
     problem_paths = []
@@ -1129,6 +1127,8 @@ def exp_03_07_engine_arch(post_process=False):
     problem: Union[ArchOptProblemBase, SampledFailureRateMixin]
     for i, (problem, _, k_doe, strategies_settings) in enumerate(problems):
         name = f'{problem.__class__.__name__}'
+        if isinstance(problem, RealisticTurbofanArch) and not problem.noise_obj:
+            name += ' 2obj'
         problem_names.append(name)
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
@@ -1267,6 +1267,9 @@ def exp_03_07_engine_arch(post_process=False):
                 if naive:
                     doe_problem = load_from_previous_results(problem, doe_folders[name, True])
 
+                if isinstance(problem, RealisticTurbofanArch) and not problem.noise_obj:
+                    doe_problem.set('F', doe_problem.get('F')[:, :2])
+
                 sbo, model = _get_sbo(algo_problem, strategy, doe_problem, verbose=True, g_aggregation=agg_g,
                                       infill_pop_size=infill_pop_size, kpls_n_dim=kpls_n_dim, cont=cont,
                                       min_pof=min_pof, **kwargs)
@@ -1346,4 +1349,4 @@ if __name__ == '__main__':
     # exp_03_05_optimization()
     # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    exp_03_07_engine_arch()
+    exp_03_07_engine_arch(post_process=True)
