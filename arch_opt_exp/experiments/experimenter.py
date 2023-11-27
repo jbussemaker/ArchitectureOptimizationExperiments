@@ -251,7 +251,7 @@ class ExperimenterResult(Result):
                 plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=10, label=f'Step {i}')
         else:
             f_pareto = f_pf_known if known_pf else self.opt.get('F')
-            c = f_pareto[:, 2] if f_pareto.shape[1] >= 2 else None
+            c = f_pareto[:, 2] if f_pareto.shape[1] > 2 else None
             sc = plt.scatter(f_pareto[:, 0], f_pareto[:, 1], s=10, c=c, label='Pareto')
             if c is not None:
                 has_color = True
