@@ -254,7 +254,7 @@ def sb_theme():
 
 
 def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_map=None, prefix=None, save_path=None,
-                   add_counts=True, hide_ranks=False, n_col_split=None, n_col_idx=1, h_factor=.3):
+                   add_counts=True, hide_ranks=False, n_col_split=None, n_col_idx=1, h_factor=.3, quant_perf_col=None):
     prefix = '' if prefix is None else f'{prefix}_'
     rank_col = prefix+'perf_rank'
     if rank_col not in df.columns:
@@ -267,18 +267,24 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
     df['idx'] = [idx_name_map.get(v[0], v[0]) for v in df.index]
     df['cat_names'] = [cat_name_map.get(v, v) for v in df[cat_col]]
     df_rank = df.pivot(index='cat_names', columns='idx', values=rank_col)
+    df_perf = df.pivot(index='cat_names', columns='idx', values=quant_perf_col) if quant_perf_col is not None else None
+    qpc_name = 'Penalty'
 
     if len(cat_name_map) > 0:
         cat_names = [cat_name for cat_name in cat_name_map.values() if cat_name in df_rank.index]
         df_rank = df_rank.loc[cat_names]
+        df_perf = df_perf.loc[cat_names] if df_perf is not None else None
     if len(idx_name_map) > 0:
         idx_names = [idx_name for idx_name in idx_name_map.values() if idx_name in df_rank.columns]
         df_rank = df_rank[idx_names]
+        df_perf = df_perf[idx_names] if df_perf is not None else None
 
     df_cnts = df_counts_an = None
     df_rank_latex = df_rank
     df_rank_orig = df_rank.copy()
     i_best = i_best_idx = None
+    n_col_counts = 2
+    vmax_perf = 100
     if add_counts:
         n_idx = len(df_rank.columns)
         df_rank['Rank 1'] = (df_rank_orig == 1).sum(axis=1)
@@ -287,7 +293,6 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         df_cnts = df_rank.copy()
         df_cnts.iloc[:, :-2] = np.nan
         df_cnts *= 100/n_idx
-        df_counts_an = df_cnts.applymap(lambda v: f'{v:.0f}%').to_numpy()
 
         np_counts = df_cnts.iloc[:, -2:].values
         i_good = np.where(np_counts[:, 1] == np.max(np_counts[:, 1]))[0]
@@ -295,20 +300,33 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         print(f'Best perf ({rank_col}): {df_rank.index[i_best].values}')
         i_best_idx = df_rank.index[i_best].values
 
-        df_rank.iloc[:, -2:] = np.nan
-        df_rank_latex = pd.concat([df_rank.iloc[:, :-2], df_cnts.iloc[:, -2:]], axis=1)
+        if df_perf is not None:
+            ref_perf = df_perf.iloc[i_best, :].min(axis=0)
+            mean_rel_perf = ((df_perf / ref_perf).mean(axis=1) - 1)*100
+            vmax_perf = min(100, max(20, np.max(mean_rel_perf)))
+            df_cnts[qpc_name] = mean_rel_perf
+            df_rank[qpc_name] = mean_rel_perf*np.nan
+            n_col_counts += 1
+        df_counts_an = df_cnts.applymap(lambda v: f'{v:.0f}%').to_numpy()
+
+        df_rank.iloc[:, -n_col_counts:] = np.nan
+        df_rank_latex = pd.concat([df_rank.iloc[:, :-n_col_counts], df_cnts.iloc[:, -n_col_counts:]], axis=1)
         df_rank_latex.index = [val.replace(' & ', '} & \\underline{') if i in i_best else val
                                for i, val in enumerate(df_rank_latex.index)]
 
     if save_path:
         rank_columns = df_rank_latex.columns
         count_columns = None
+        perf_columns = None
         if add_counts:
-            rank_columns = df_rank_latex.columns[:-2]
-            count_columns = df_rank_latex.columns[-2:]
+            rank_columns = df_rank_latex.columns[:-n_col_counts]
+            count_columns = df_rank_latex.columns[-n_col_counts:]
+            if df_perf is not None:
+                perf_columns = count_columns[2:]
+                count_columns = count_columns[:2]
             if hide_ranks:
                 rank_columns = []
-                df_rank_latex = df_rank_latex.iloc[:, -2:]
+                df_rank_latex = df_rank_latex.iloc[:, -n_col_counts:]
 
         if n_col_split is None:
             n_col_split = len(df_rank_latex.columns)+n_col_idx
@@ -333,6 +351,11 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
                 if len(columns) > 0:
                     s.format('{:.0f}\%', subset=columns)
                     s.background_gradient(cmap='Blues', subset=columns, vmin=0, vmax=100)
+            if perf_columns is not None:
+                columns = [col for col in df_sub.columns if col in perf_columns]
+                if len(columns) > 0:
+                    s.format('{:.0f}\%', subset=columns)
+                    s.background_gradient(cmap='Greens_r', subset=columns, vmin=0, vmax=vmax_perf)
 
             sub_rank_columns = [col for col in df_sub.columns if col in rank_columns]
             if len(sub_rank_columns) > 0:
@@ -364,13 +387,22 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
     with sb_theme():
         cmap = sns.light_palette('seagreen', reverse=True, as_cmap=True)
         cmap_cnt = sns.light_palette('b', as_cmap=True)
+        cmap_perf = sns.light_palette('seagreen', as_cmap=True, reverse=True)
         plt.figure(figsize=(w, h))
 
         df_rank.index = [val.replace('$', '') for val in df_rank.index]
         ax = sns.heatmap(df_rank, annot=True, fmt='.0f', linewidths=0, cmap=cmap, cbar=False)
         if df_cnts is not None:
+            if df_perf is not None:
+                df_perf_heatmap = df_cnts.copy()
+                df_perf_heatmap.iloc[:, :-1] = np.nan
+                sns.heatmap(df_perf_heatmap, annot=df_counts_an, fmt='s', linewidths=0, cmap=cmap_perf,
+                            cbar=False, vmin=0, vmax=vmax_perf)
+                df_cnts.iloc[:, -1:] = np.nan
+
             df_cnts.index = [val.replace('$', '') for val in df_cnts.index]
-            sns.heatmap(df_cnts, annot=df_counts_an, fmt='s', linewidths=0, cmap=cmap_cnt, cbar=False, vmin=0, vmax=100)
+            sns.heatmap(df_cnts, annot=df_counts_an, fmt='s', linewidths=0, cmap=cmap_cnt,
+                        cbar=False, vmin=0, vmax=100)
 
         ax.set(xlabel="", ylabel="")
         sns.despine()

@@ -317,9 +317,9 @@ def exp_00_02_infill(post_process=False):
         (df_agg[df_agg.is_mo & df_agg.is_md], 'mo_md', mo_cat_map),
     ]:
         plot_perf_rank(df_rank, 'infill', cat_name_map=cat_map, idx_name_map=p_name_map,
-                       save_path=f'{folder}/rank_{rank_cat}')
+                       save_path=f'{folder}/rank_{rank_cat}', quant_perf_col='delta_hv_regret')
         plot_perf_rank(df_rank, 'infill', cat_name_map=cat_map, idx_name_map=p_name_map,
-                       prefix='iter', save_path=f'{folder}/rank_{rank_cat}_iter')
+                       prefix='iter', save_path=f'{folder}/rank_{rank_cat}_iter', quant_perf_col='iter_delta_hv_regret')
 
     green = matplotlib.cm.get_cmap('Greens')
     blue = matplotlib.cm.get_cmap('Blues')
@@ -615,11 +615,11 @@ def exp_00_03_constraints(post_process=False):
 
     cat_map = {strategy_name: title for _, strategy_name, _, _, title in strategies}
     plot_perf_rank(df_agg[~df_agg.is_mo], 'strategy', cat_name_map=cat_map, idx_name_map=p_name_map,
-                   save_path=f'{folder}/rank_so')
+                   save_path=f'{folder}/rank_so', quant_perf_col='delta_hv_regret')
     plot_perf_rank(df_agg[df_agg.is_mo], 'strategy', cat_name_map=cat_map, idx_name_map=p_name_map,
-                   save_path=f'{folder}/rank_mo')
+                   save_path=f'{folder}/rank_mo', quant_perf_col='delta_hv_regret')
     plot_perf_rank(df_agg, 'strategy', cat_name_map=cat_map, idx_name_map=p_name_map,
-                   save_path=f'{folder}/rank', n_col_split=5)
+                   save_path=f'{folder}/rank', n_col_split=5, quant_perf_col='delta_hv_regret')
 
     green = matplotlib.cm.get_cmap('Greens')
     blue = matplotlib.cm.get_cmap('Blues')

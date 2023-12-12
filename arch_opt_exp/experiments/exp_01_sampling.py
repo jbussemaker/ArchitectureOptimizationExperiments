@@ -979,11 +979,11 @@ def exp_01_05_correction(sbo=True, post_process=False):
             cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {rand_str} & {cval_str} & {config_str} & {sampler}'
     df_agg['idx_name'] = [cat_name_map.get(val, val) for val in df_agg.index.get_level_values(1)]
 
-    n_col_split, hide_ranks = 9, True
+    n_col_split, hide_ranks, qpc_name = 9, True, 'delta_hv_regret'
     n_col_idx = 3 if sbo else 5
     plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
                    save_path=f'{folder}/rank{folder_post}', n_col_split=n_col_split, n_col_idx=n_col_idx,
-                   hide_ranks=hide_ranks)
+                   hide_ranks=hide_ranks, quant_perf_col=qpc_name)
     for corr_cls in df_agg['corr_cls'].unique():
         plot_perf_rank(df_agg[df_agg.corr_cls == corr_cls], 'corr', cat_name_map=cat_name_map,
                        idx_name_map=prob_name_map, save_path=f'{folder}/rank_{corr_cls}{folder_post}',
@@ -1007,7 +1007,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
     best_eager = plot_perf_rank(df_agg[best_eager_selector], 'corr', cat_name_map=cat_name_map,
                                 idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_eager{folder_post}',
                                 prefix='best_eager', h_factor=.5, n_col_split=n_col_split, n_col_idx=n_col_idx,
-                                hide_ranks=hide_ranks)
+                                hide_ranks=hide_ranks, quant_perf_col=qpc_name)
 
     i_best_all += list(np.where(df_agg.index.get_level_values(1) == 'Eager Greedy LHS')[0])
     best_all_selector = pd.Series(index=df_agg.index, data=np.in1d(np.arange(len(df_agg)), i_best_all))
@@ -1015,7 +1015,8 @@ def exp_01_05_correction(sbo=True, post_process=False):
                       df_subset=best_all_selector)
     plot_perf_rank(df_agg[best_all_selector], 'corr', cat_name_map=cat_name_map,
                    idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_all{folder_post}',
-                   prefix='best_all', h_factor=.5, n_col_split=n_col_split, n_col_idx=n_col_idx, hide_ranks=hide_ranks)
+                   prefix='best_all', h_factor=.5, n_col_split=n_col_split, n_col_idx=n_col_idx, hide_ranks=hide_ranks,
+                   quant_perf_col=qpc_name)
 
     ref_df = df_agg[df_agg.idx_name == best_eager[0]]
     df_rel_stats: pd.DataFrame = _sampling_rel_stats_table(

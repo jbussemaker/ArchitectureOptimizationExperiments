@@ -319,7 +319,8 @@ def exp_02_02_hier_strategies(sbo=False):
     df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
 
     cat_name_map = {val: val for val in strat_map.values()}
-    plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, cat_name_map=cat_name_map, save_path=f'{folder}/rank')
+    plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, cat_name_map=cat_name_map, save_path=f'{folder}/rank',
+                   quant_perf_col='delta_hv_regret')
 
 
 def _compare_first_last_model_fit(exps: List[Experimenter], algo_models, does: List[List[Population]],
