@@ -1104,20 +1104,24 @@ def exp_03_07_engine_arch(post_process=False):
     reduced_strategies: List[HiddenConstraintStrategy] = [
         PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
+    aggressive_strategies: List[HiddenConstraintStrategy] = [
+        PredictionHCStrategy(MDGPRegressor(), min_pov=.1),
+        PredictionHCStrategy(RandomForestClassifier(), min_pov=.1),
+    ]
     problems = [
         # problem, n_budget, k_doe, strategies
-        (SimpleTurbofanArch(), 250, 3, [
-            # Gower, n_kpls (None = Hier GP; False = MD GP), naive, strategies
-            # (False, None, False, reduced_strategies),
-            (True, None, False, reduced_strategies),
-            (True, False, False, reduced_strategies),
-            (True, False, True, reduced_strategies),
-            (True, 10, False, all_strategies),
-            (True, 5, False, reduced_strategies),
-            (True, 2, False, reduced_strategies),
-        ]),
-        (RealisticTurbofanArch(noise_obj=False), 813, 5, [
-            (True, 10, False, reduced_strategies),
+        # (SimpleTurbofanArch(), 250, 3, [
+        #     # Gower, n_kpls (None = Hier GP; False = MD GP), naive, strategies
+        #     # (False, None, False, reduced_strategies),
+        #     (True, None, False, reduced_strategies),
+        #     (True, False, False, reduced_strategies),
+        #     (True, False, True, reduced_strategies),
+        #     (True, 10, False, all_strategies),
+        #     (True, 5, False, reduced_strategies),
+        #     (True, 2, False, reduced_strategies),
+        # ]),
+        (RealisticTurbofanArch(noise_obj=False), 913, 5, [
+            (True, 10, False, aggressive_strategies),
         ]),
     ]
 
@@ -1349,4 +1353,4 @@ if __name__ == '__main__':
     # exp_03_05_optimization()
     # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    exp_03_07_engine_arch(post_process=True)
+    exp_03_07_engine_arch()
