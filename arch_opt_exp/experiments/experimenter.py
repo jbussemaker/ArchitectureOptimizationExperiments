@@ -310,6 +310,7 @@ class Experimenter:
         self.problem_name = problem_name or problem.name()
         self.n_eval_max = n_eval_max
         self.doe = doe
+        self.verbose = False
 
         if metrics is None:
             from arch_opt_exp.experiments.metrics import get_exp_metrics
@@ -374,6 +375,7 @@ class Experimenter:
             copy_algorithm=False, copy_termination=True,
             seed=seed,
             save_history=True,
+            verbose=self.verbose,
         )
 
         # Prepare experimenter results by including metrics
