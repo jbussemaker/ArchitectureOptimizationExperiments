@@ -58,6 +58,7 @@ capture_log()
 
 _exp_00_01_folder = '00_md_mo_01_md_gp'
 _exp_00_02_folder = '00_md_mo_02_infill'
+_exp_00_02a_folder = '00_md_mo_02a_infill_impr'
 _exp_00_03a_folder = '00_md_mo_03a_plot_g'
 _exp_00_03b_folder = '00_md_mo_03b_multi_y'
 _exp_00_03_folder = '00_md_mo_03_constraints'
@@ -345,6 +346,167 @@ def exp_00_02_infill(post_process=False):
                       cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names, y_log=True)
     plot_problem_bars(df_agg[df_agg.is_mo], folder, 'infill', 'iter_delta_hv_regret', prefix='mo_iter', prob_name_map=p_name_map,
                       cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names, y_log=True)
+
+    plt.close('all')
+
+
+def exp_00_02a_infill_improve(post_process=False):
+    """
+    Test whether the improvement step improves optimizer performance for mixed-discrete problems.
+    """
+    folder = set_results_folder(_exp_00_02a_folder)
+    n_infill = 40
+    n_iter_compare_at = 4  # * max(n_batch) = n_infill
+    n_repeat = 40
+
+    so_ensemble = [ExpectedImprovementInfill(), LowerConfidenceBoundInfill(alpha=2.), ProbabilityOfImprovementInfill()]
+    so_infills = [
+        (EnsembleInfill(infills=so_ensemble), 'Ensemble', 1, 'With Improvement Step'),
+        (EnsembleInfill(infills=so_ensemble, select_improve_infills=False), 'Ensemble_no_impr', 1, 'No Improvement Step'),
+    ]
+
+    mo_ensemble = [MinimumPoIInfill(), MinimumPoIInfill(euclidean=True)]  # , LowerConfidenceBoundInfill(alpha=2.)]
+    mo_infills = [
+        (EnsembleInfill(infills=mo_ensemble), 'Ensemble', 1, 'With Improvement Step'),
+        (EnsembleInfill(infills=mo_ensemble, select_improve_infills=False), 'Ensemble_no_impr', 1, 'No Improvement Step'),
+    ]
+
+    def prob_add_cols(strat_data_, df_strat, algo_name):
+        strat_data_['n_batch'] = n_batch_ = int(algo_name.split('_')[-1])
+
+        row_compare = df_strat.iloc[n_iter_compare_at, :]
+        for col_eval_compare, factor in [('delta_hv_ratio', 1), ('delta_hv_regret', n_batch_)]:
+            for col in [col_eval_compare, col_eval_compare+'_q25', col_eval_compare+'_q75']:
+                strat_data_[f'iter_{col}'] = row_compare[col]/factor
+
+    problems = [(prob, category, title) for prob, category, title in _test_problems()
+                if '_G' not in category and '_MD' in category]
+    from sb_arch_opt.problems.hierarchical import HierarchicalRosenbrock, MOHierarchicalRosenbrock, HierCarside, HierCantileveredBeam
+    problems += [
+        (HierarchicalRosenbrock(), '10_H_SO', 'H. Rosenbr.'),
+        (MOHierarchicalRosenbrock(), '10_H_MO', 'MO/H. Rosenbr.'),
+        (HierCarside(), '10_H_SO', 'H Carside'),
+        (HierCantileveredBeam(), '10_H_MO', 'H CBeam'),
+    ]
+
+    problem_paths = []
+    problem_names = []
+    p_name_map = {}
+    problem: Union[ArchOptProblemBase]
+    for i, (problem, category, title) in enumerate(problems):
+        name = f'{category} {problem.__class__.__name__}'
+        p_name_map[name] = title
+        problem_names.append(name)
+        problem_path = f'{folder}/{secure_filename(name)}'
+        problem_paths.append(problem_path)
+        if post_process:
+            continue
+
+        n_init = int(np.ceil(2*problem.n_var))
+
+        log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
+        problem.pareto_front()
+
+        doe, doe_delta_hvs = _create_does(problem, n_init, n_repeat)
+        log.info(f'DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
+                 f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
+
+        metrics, additional_plot = _get_metrics(problem)
+
+        algorithms = []
+        algo_names = []
+        for infill, infill_name, n_batch, _ in (so_infills if problem.n_obj == 1 else mo_infills):
+            model, norm = ModelFactory(problem).get_md_kriging_model(multi=True)
+            sbo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm, verbose=False)
+            sbo_algo = sbo.algorithm(infill_size=n_batch, init_size=n_init)
+            algorithms.append(sbo_algo)
+            algo_names.append(f'{infill_name}_{n_batch}')
+
+        do_run = not post_process
+        exps = run(folder, problem, algorithms, algo_names, doe=doe, n_repeat=n_repeat, n_eval_max=n_infill,
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                   run_if_exists=False)
+
+        _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+
+        plot_for_pub(exps, met_plot_map={
+            'delta_hv': ['ratio'],
+        }, algo_name_map={})
+        plt.close('all')
+
+    def _add_cols(df_agg_):
+        df_agg_['is_mo'] = ['_MO' in val[0] for val in df_agg_.index]
+        df_agg_['is_md'] = ['_MD_' in val[0] for val in df_agg_.index]
+        df_agg_['infill'] = [val[1] for val in df_agg_.index]
+
+        df_agg_so = analyze_perf_rank(df_agg_[~df_agg_.is_mo].copy(), 'delta_hv_regret', n_repeat)
+        df_agg_mo = analyze_perf_rank(df_agg_[df_agg_.is_mo].copy(), 'delta_hv_regret', n_repeat)
+
+        df_agg_so = analyze_perf_rank(df_agg_so, 'iter_delta_hv_regret', n_repeat, prefix='iter')
+        df_agg_mo = analyze_perf_rank(df_agg_mo, 'iter_delta_hv_regret', n_repeat, prefix='iter')
+
+        df_agg_ = pd.concat([df_agg_so, df_agg_mo])
+        return df_agg_
+
+    df_agg = _agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    def _mod_compare(df_compare_val, col):
+        df_compare_val.insert(0, '$n_{batch}$', [int(idx.split('_')[-1]) for idx in df_compare_val.index])
+        idx_replace = {idx: '_'.join(idx.split('_')[:-1]) for idx in df_compare_val.index}
+        idx_replace = {key: strategy_map.get(value, value) for key, value in idx_replace.items()}
+        return df_compare_val.rename(index=idx_replace)
+
+    strategy_map = {}
+    prob_map = {}
+    kwargs = dict(strategy_map=strategy_map, prob_map=prob_map, mod_compare=_mod_compare)
+    _make_comparison_df(df_agg, 'delta_hv_regret', 'Regret', folder, **kwargs)
+    _make_comparison_df(df_agg[~df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='so', **kwargs)
+    _make_comparison_df(df_agg[df_agg.is_mo], 'delta_hv_regret', 'Regret', folder, key='mo', **kwargs)
+    # _make_comparison_df(df_agg[~df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='so', **kwargs)
+    # _make_comparison_df(df_agg[df_agg.is_mo], 'iter_delta_hv_regret', 'Regret', folder, key='mo', **kwargs)
+
+    so_cat_map = {f'{infill_name}_{n_batch}': title for _, infill_name, n_batch, title in so_infills}
+    mo_cat_map = {f'{infill_name}_{n_batch}': title for _, infill_name, n_batch, title in mo_infills}
+    for df_rank, rank_cat, cat_map in [
+        (df_agg, 'all', so_cat_map),
+        (df_agg[~df_agg.is_mo], 'so', so_cat_map),
+        # (df_agg[~df_agg.is_mo & ~df_agg.is_md], 'so_c', so_cat_map),
+        # (df_agg[~df_agg.is_mo & df_agg.is_md], 'so_md', so_cat_map),
+        (df_agg[df_agg.is_mo], 'mo', mo_cat_map),
+        # (df_agg[df_agg.is_mo & ~df_agg.is_md], 'mo_c', mo_cat_map),
+        # (df_agg[df_agg.is_mo & df_agg.is_md], 'mo_md', mo_cat_map),
+    ]:
+        plot_perf_rank(df_rank, 'infill', cat_name_map=cat_map, idx_name_map=p_name_map,
+                       save_path=f'{folder}/rank_{rank_cat}')
+        # plot_perf_rank(df_rank, 'infill', cat_name_map=cat_map, idx_name_map=p_name_map,
+        #                prefix='iter', save_path=f'{folder}/rank_{rank_cat}_iter')
+
+    # green = matplotlib.cm.get_cmap('Greens')
+    # blue = matplotlib.cm.get_cmap('Blues')
+    # orange = matplotlib.cm.get_cmap('Oranges')
+    #
+    # so_cat_names = [inf_data[3] for inf_data in so_infills]
+    # so_cat_colors = [
+    #     green(.5), orange(.5),
+    #     blue(.25), blue(.5), blue(.75),
+    # ]
+    # plot_problem_bars(df_agg, folder, 'infill', 'delta_hv_regret', prob_name_map=p_name_map,
+    #                   cat_colors=so_cat_colors, label_rot=0, label_i=2, cat_names=so_cat_names, y_log=True)
+    # # plot_problem_bars(df_agg[~df_agg.is_mo], folder, 'infill', 'delta_hv_regret', prefix='so', prob_name_map=p_name_map,
+    # #                   cat_colors=so_cat_colors, label_rot=0, label_i=2, cat_names=so_cat_names, y_log=True)
+    # # plot_problem_bars(df_agg[~df_agg.is_mo], folder, 'infill', 'iter_delta_hv_regret', prefix='so_iter', prob_name_map=p_name_map,
+    # #                   cat_colors=so_cat_colors, label_rot=0, label_i=2, cat_names=so_cat_names, y_log=True)
+
+    # mo_cat_names = [inf_data[3] for inf_data in mo_infills]
+    # mo_cat_colors = [
+    #     green(.25), green(.5), green(.75),
+    #     orange(.33), orange(.66),
+    #     blue(.25), blue(.5), blue(.75),
+    # ]
+    # plot_problem_bars(df_agg[df_agg.is_mo], folder, 'infill', 'delta_hv_regret', prefix='mo', prob_name_map=p_name_map,
+    #                   cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names, y_log=True)
+    # plot_problem_bars(df_agg[df_agg.is_mo], folder, 'infill', 'iter_delta_hv_regret', prefix='mo_iter', prob_name_map=p_name_map,
+    #                   cat_colors=mo_cat_colors, label_rot=0, label_i=3, cat_names=mo_cat_names, y_log=True)
 
     plt.close('all')
 
@@ -990,7 +1152,8 @@ def _plot_for_sbo_figure():
 if __name__ == '__main__':
     # exp_00_01_md_gp()
     # exp_00_02_infill()
+    exp_00_02a_infill_improve()
     # exp_00_03a_plot_constraints()
     # exp_00_03b_multi_y()
     # exp_00_03_constraints()
-    exp_00_04_high_dim()
+    # exp_00_04_high_dim()

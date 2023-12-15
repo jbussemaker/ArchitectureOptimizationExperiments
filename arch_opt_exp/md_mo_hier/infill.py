@@ -249,9 +249,11 @@ class EnsembleInfill(ConstrainedInfill):
     of Artificial Intelligence Research, 74, pp.1269-1349.
     """
 
-    def __init__(self, infills: List[ConstrainedInfill] = None, constraint_strategy: ConstraintStrategy = None):
+    def __init__(self, infills: List[ConstrainedInfill] = None, constraint_strategy: ConstraintStrategy = None,
+                 select_improve_infills: bool = True):
         self.infills = infills
         super().__init__(constraint_strategy=constraint_strategy)
+        self.select_improve_infills = select_improve_infills
 
     def _initialize(self):
         # Get set of default infills if none given
