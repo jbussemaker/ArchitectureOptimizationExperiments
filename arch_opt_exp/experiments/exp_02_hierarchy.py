@@ -171,7 +171,7 @@ def exp_02_02_hier_strategies(sbo=False):
       - Especially from level 2 (repair) performance greatly improves
       - For SBO, activeness (3) doesn't necessarily perform better than repair (2)
     """
-    post_process = False
+    post_process = True
     folder_post = 'sbo' if sbo else 'nsga2'
     folder = set_results_folder(f'{_exp_02_02_folder}_{folder_post}')
     n_infill = 100
@@ -206,14 +206,32 @@ def exp_02_02_hier_strategies(sbo=False):
         for key, value in data.items():
             strat_data_[key] = value
 
+    # problems = [
+    #     (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
+    #     (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
+    #     (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
+    #     (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
+    # ]
+
+    from sb_arch_opt.problems.turbofan_arch import SimpleTurbofanArchModel
+    from sb_arch_opt.problems.rocket import LCRocketArch, SOLCRocketArch, RocketObj
+    from sb_arch_opt.problems.gnc import MDGNCNoAct, SOMDGNCNoAct, MDGNCNoNr
     problems = [
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin'),
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts, diversity_range=0), '01_SO_LDR', 'Branin (H)'),
-        (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
-        (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
+        (lambda: SOLCRocketArch(obj=RocketObj.OBJ_COST), '01_SO_MRD_G', 'RCost'),
+        # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
+        (lambda: SOLCRocketArch(obj=RocketObj.OBJ_WEIGHTED), '01_SO_MRD_G', 'RWt'),
+        (lambda: SOMDGNCNoAct(), '01_SO_HRD', 'SO/MD GNC'),
+        (lambda: LCRocketArch(), '02_MO_MRD_G', 'Rocket'),
+        (lambda: MDGNCNoAct(), '02_MO_HRD', 'MD GNC'),
+        # (lambda: MDGNCNoNr(), '02_MO_HRD', 'MD GNC Act'),
+        (lambda: SimpleTurbofanArchModel(), '03_SO_HRD_G_HC', 'Jet SM'),
     ]
+
     # for i, (problem_factory, _, _) in enumerate(problems):
-    #     problem_factory().print_stats()
+    #     problem = problem_factory()
+    #     problem.print_stats()
+    #     print(f'Has all_discrete_x: {problem.all_discrete_x[0] is not None}')
+    #     print('')
     # exit()
 
     problem_paths = []
@@ -223,7 +241,7 @@ def exp_02_02_hier_strategies(sbo=False):
     problem: ArchOptProblemBase
     for i, (problem_factory, category, title) in enumerate(problems):
         problem = problem_factory()
-        name = f'{category} {problem.__class__.__name__}'
+        name = f'{category} {problem.__class__.__name__} {title}'
         problem_names.append(name)
         p_name_map[name] = title
         problem_path = f'{folder}/{secure_filename(name)}'

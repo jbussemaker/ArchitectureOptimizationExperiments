@@ -301,7 +301,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         i_best_idx = df_rank.index[i_best].values
 
         if df_perf is not None:
-            ref_perf = df_perf.iloc[i_best, :].min(axis=0)
+            ref_perf = df_perf.iloc[i_best, :].mean(axis=0)
             mean_rel_perf = ((df_perf / ref_perf).mean(axis=1) - 1)*100
             vmax_perf = min(100, max(20, np.max(mean_rel_perf)))
             df_cnts[qpc_name] = mean_rel_perf
