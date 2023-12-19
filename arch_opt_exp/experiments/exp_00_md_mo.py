@@ -355,7 +355,7 @@ def exp_00_02a_infill_improve(post_process=False):
     Test whether the improvement step improves optimizer performance for mixed-discrete problems.
     """
     folder = set_results_folder(_exp_00_02a_folder)
-    n_infill = 40
+    n_infill = 200
     n_iter_compare_at = 4  # * max(n_batch) = n_infill
     n_repeat = 40
 
@@ -402,7 +402,7 @@ def exp_00_02a_infill_improve(post_process=False):
         if post_process:
             continue
 
-        n_init = int(np.ceil(2*problem.n_var))
+        n_init = int(np.ceil(3*problem.n_var))
 
         log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
         problem.pareto_front()

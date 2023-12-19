@@ -1110,19 +1110,21 @@ def exp_03_07_engine_arch(post_process=False):
     ]
     problems = [
         # problem, n_budget, k_doe, strategies
-        # (SimpleTurbofanArch(), 250, 3, [
-        #     # Gower, n_kpls (None = Hier GP; False = MD GP), naive, strategies
-        #     # (False, None, False, reduced_strategies),
-        #     (True, None, False, reduced_strategies),
-        #     (True, False, False, reduced_strategies),
-        #     (True, False, True, reduced_strategies),
-        #     (True, 10, False, all_strategies),
-        #     (True, 5, False, reduced_strategies),
-        #     (True, 2, False, reduced_strategies),
-        # ]),
-        (RealisticTurbofanArch(noise_obj=False), 913, 5, [
-            (True, 10, False, aggressive_strategies),
+        (SimpleTurbofanArch(), 300, 3, [
+            # Gower, n_kpls (None = Hier GP; False = MD GP), naive, strategies
+            # (False, None, False, reduced_strategies),
+            (True, None, False, reduced_strategies),
+            (True, False, False, reduced_strategies),
+            (True, False, True, reduced_strategies),
+            (True, False, 2, reduced_strategies),
+            (True, False, 3, reduced_strategies),
+            (True, 10, False, all_strategies),
+            (True, 5, False, reduced_strategies),
+            (True, 2, False, reduced_strategies),
         ]),
+        # (RealisticTurbofanArch(noise_obj=False), 913, 5, [
+        #     (True, 10, False, aggressive_strategies),
+        # ]),
     ]
 
     problem_paths = []
@@ -1146,13 +1148,16 @@ def exp_03_07_engine_arch(post_process=False):
             prob_doe_folder = f'{folder}/doe_{problem.__class__.__name__}'
             if is_naive:
                 prob_doe_folder += '_naive'
+            if is_naive > 1:
+                prob_doe_folder += str(is_naive)
             doe_folders[name, is_naive] = prob_doe_folder
             if post_process:
                 continue
 
             doe_problem = problem
             if is_naive:
-                doe_problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=False)
+                doe_problem = NaiveProblem(
+                    problem, return_mod_x=is_naive < 3, correct=is_naive < 2, return_activeness=False)
 
             # Rule of thumb: k*n_dim --> corrected for expected fail rate (unknown before running a problem, of course)
             n_init = int(np.ceil(k_doe*problem.n_var/(1-expected_fail_rate)))
@@ -1239,7 +1244,7 @@ def exp_03_07_engine_arch(post_process=False):
                 elif md_gp:
                     algo_name += ' MD'
                 if naive:
-                    algo_name += ' Naive'
+                    algo_name += ' '+['Naive', 'Naive (mod x)', 'Naive (none)'][int(naive)-1]
 
                 if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
                     strategy.predictor._kpls_n_dim = kpls_n_dim
@@ -1252,9 +1257,13 @@ def exp_03_07_engine_arch(post_process=False):
                                 md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
                                 if not md_gp:
                                     i_hier_gp = len(algo_names)
-                        if md_gp and kpls_n_dim is None:
+                        if kpls_n_dim is None:
                             i_md_gp_naive.append(len(algo_names))
-                            md_gp_naive_algo_name_map[algo_name] = 'Naive' if naive else 'Hierarchical'
+                            if naive:
+                                md_gp_naive_algo_name_map[algo_name] = ['Naive (repair)', 'Naive (mod $x$)', 'Naive'][int(naive)-1]
+                            else:
+                                md_gp_naive_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
+                                # md_gp_naive_algo_name_map[algo_name] = 'Hierarchical'
 
                 if kpls_n_dim == 10:
                     i_hc_strat.append(len(algo_names))
