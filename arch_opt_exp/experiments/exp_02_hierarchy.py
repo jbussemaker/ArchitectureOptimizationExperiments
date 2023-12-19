@@ -55,7 +55,7 @@ from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.md_mo_hier.infill import *
 from arch_opt_exp.md_mo_hier.naive import *
-from arch_opt_exp.experiments.exp_01_sampling import agg_opt_exp, agg_prob_exp, CorrectorFactory
+from arch_opt_exp.experiments.exp_01_sampling import agg_opt_exp, agg_prob_exp, get_hier_test_problems
 from arch_opt_exp.experiments.experimenter import Experimenter
 
 log = logging.getLogger('arch_opt_exp.02_hier')
@@ -212,20 +212,7 @@ def exp_02_02_hier_strategies(sbo=False):
     #     (lambda: SelectableTunableBranin(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '02_SO_HDR', 'Branin (H/MRD)'),  # High diversity range
     #     (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
     # ]
-
-    from sb_arch_opt.problems.turbofan_arch import SimpleTurbofanArchModel
-    from sb_arch_opt.problems.rocket import LCRocketArch, SOLCRocketArch, RocketObj
-    from sb_arch_opt.problems.gnc import MDGNCNoAct, SOMDGNCNoAct, MDGNCNoNr
-    problems = [
-        (lambda: SOLCRocketArch(obj=RocketObj.OBJ_COST), '01_SO_MRD_G', 'RCost'),
-        # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
-        (lambda: SOLCRocketArch(obj=RocketObj.OBJ_WEIGHTED), '01_SO_MRD_G', 'RWt'),
-        (lambda: SOMDGNCNoAct(), '01_SO_HRD', 'SO/MD GNC'),
-        (lambda: LCRocketArch(), '02_MO_MRD_G', 'Rocket'),
-        (lambda: MDGNCNoAct(), '02_MO_HRD', 'MD GNC'),
-        # (lambda: MDGNCNoNr(), '02_MO_HRD', 'MD GNC Act'),
-        (lambda: SimpleTurbofanArchModel(), '03_SO_HRD_G_HC', 'Jet SM'),
-    ]
+    problems = get_hier_test_problems()
 
     # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem = problem_factory()

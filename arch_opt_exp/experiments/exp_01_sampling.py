@@ -747,18 +747,35 @@ class CorrectorFactory:
         return self.klass(ds, **self.kw)
 
 
+def get_hier_test_problems():
+    from sb_arch_opt.problems.turbofan_arch import SimpleTurbofanArchModel
+    from sb_arch_opt.problems.rocket import LCRocketArch, SOLCRocketArch, RocketObj
+    from sb_arch_opt.problems.gnc import MDGNCNoAct, SOMDGNCNoAct, MDGNCNoNr
+    problems = [
+        (lambda: SOLCRocketArch(obj=RocketObj.OBJ_COST), '01_SO_MRD_G', 'RCost'),
+        # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
+        (lambda: SOLCRocketArch(obj=RocketObj.OBJ_WEIGHTED), '01_SO_MRD_G', 'RWt'),
+        (lambda: SOMDGNCNoAct(), '01_SO_HRD', 'SO/MD GNC'),
+        (lambda: LCRocketArch(), '02_MO_MRD_G', 'Rocket'),
+        (lambda: MDGNCNoAct(), '02_MO_HRD', 'MD GNC'),
+        # (lambda: MDGNCNoNr(), '02_MO_HRD', 'MD GNC Act'),
+        (lambda: SimpleTurbofanArchModel(), '03_SO_HRD_G_HC', 'Jet SM'),
+    ]
+    return problems
+
+
 def exp_01_05_correction(sbo=True, post_process=False):
     """
     Run optimizations with different correction strategies for different sub-problem properties and optimum locations.
     """
-    folder_post = '' if sbo else '_nsga2'
+    folder_post = '_sbo' if sbo else '_nsga2'
     folder = set_results_folder(_exp_01_05_folder+folder_post)
     n_infill = 100
     n_gen = 25
     n_repeat = 8 if sbo else 100
     doe_k = 10
     n_sub, n_opts = 9, 3
-    i_opt_test = [0, n_sub-1]
+    i_opt_test = [0]  # [0, n_sub-1]
 
     eager_samplers = [
         (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
@@ -781,26 +798,26 @@ def exp_01_05_correction(sbo=True, post_process=False):
     # else:
     correctors = [
         (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),  # 0
-        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=True), 'Eager Rnd Cval', eager_samplers),
+        # (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=True), 'Eager Rnd Cval', eager_samplers),
         (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),  # 2
-        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
+        # (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=False, euclidean=False), 'Eager Closest', eager_samplers),  # 4
         (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=False, euclidean=True), 'Eager Closest Euc', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest Cval', eager_samplers),  # 8
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Cval Euc', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Cval Rnd', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Cval Rnd Euc', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest Cval', eager_samplers),  # 8
+        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Cval Euc', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Cval Rnd', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Cval Rnd Euc', eager_samplers),
 
         (CorrectorFactory(RandomLazyCorrector, correct_valid_x=False), 'Lazy Rnd', lazy_samplers),  # 12
-        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=True), 'Lazy Rnd Cval', lazy_samplers),
+        # (CorrectorFactory(RandomLazyCorrector, correct_valid_x=True), 'Lazy Rnd Cval', lazy_samplers),
         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Closest', lazy_samplers),  # 14
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=False), 'Lazy Closest Cval', lazy_samplers),
+        # (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=False), 'Lazy Closest Cval', lazy_samplers),
         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=True, euclidean=False), 'Lazy Closest Dist', lazy_samplers),  # 16
         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=True, euclidean=True), 'Lazy Closest Dist Euc', lazy_samplers),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist', lazy_samplers),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc', lazy_samplers),
+        # (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist', lazy_samplers),
+        # (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc', lazy_samplers),
     ]
     if sbo:
         sbo_eager_samplers = [
@@ -855,15 +872,16 @@ def exp_01_05_correction(sbo=True, post_process=False):
         for key, value in data.items():
             strat_data_[key] = value
 
-    problems = [
-        (lambda i_opt_: SelectableTunableBranin(
-            n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin ('),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR', 'Branin (H/'),
-        (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin (H/MRD/'),  # High diversity range
-        (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 (H/MRD/'),
-    ]
+    # problems = [
+    #     (lambda i_opt_: SelectableTunableBranin(
+    #         n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, imp_ratio=1., diversity_range=0), '00_SO_NO_HIER', 'Branin ('),
+    #     (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_, diversity_range=0), '01_SO_LDR', 'Branin (H/'),
+    #     (lambda i_opt_: SelectableTunableBranin(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '02_SO_HDR', 'Branin (H/MRD/'),  # High diversity range
+    #     (lambda i_opt_: SelectableTunableZDT1(n_sub=n_sub, n_opts=n_opts, i_sub_opt=i_opt_), '03_MO_HDR', 'ZDT1 (H/MRD/'),
+    # ]
+    problems = get_hier_test_problems()
     # for i, (problem_factory, _, _) in enumerate(problems):
-    #     problem_factory(0).print_stats()
+    #     problem_factory().print_stats()  # problem_factory(0).print_stats()
     # exit()
     problem_paths = []
     problem_names = []
@@ -872,10 +890,10 @@ def exp_01_05_correction(sbo=True, post_process=False):
     problem: ArchOptProblemBase
     for i, (problem_factory, category, title) in enumerate(problems):
         for i_opt in i_opt_test:
-            problem = problem_factory(i_opt)
-            name = f'{category} {problem.__class__.__name__} opt={i_opt}'
+            problem = problem_factory()  # problem_factory(i_opt)
+            name = f'{category} {problem.__class__.__name__} {title} opt={i_opt}'
             problem_names.append(name)
-            prob_name_map[name] = f'{title}{"L" if i_opt == 0 else "S"})'
+            prob_name_map[name] = title  # f'{title}{"L" if i_opt == 0 else "S"})'
             problem_path = f'{folder}/{secure_filename(name)}'
             problem_paths.append(problem_path)
             if post_process:
@@ -899,7 +917,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
             algo_names = []
             for corrector_factory, corr_name, samplers in correctors:
                 for cls_sampler, sampler_name in samplers:
-                    problem: SelectableTunableMetaProblem = problem_factory(i_opt)
+                    problem: SelectableTunableMetaProblem = problem_factory()  # problem_factory(i_opt)
                     problem.corrector_factory = corrector_factory
                     problems.append(problem)
 
@@ -1305,7 +1323,7 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
-    exp_01_05_correction(sbo=False, post_process=True)
-    exp_01_05_correction(post_process=True)
+    exp_01_05_correction(sbo=False, post_process=False)
+    # exp_01_05_correction(post_process=False)
     # exp_01_06_opt()
     # exp_01_06_opt(sbo=False)
