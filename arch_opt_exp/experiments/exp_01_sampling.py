@@ -755,7 +755,7 @@ def get_hier_test_problems():
         (lambda: SOLCRocketArch(obj=RocketObj.OBJ_COST), '01_SO_MRD_G', 'RCost'),
         # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
         (lambda: SOLCRocketArch(obj=RocketObj.OBJ_WEIGHTED), '01_SO_MRD_G', 'RWt'),
-        (lambda: SOMDGNCNoAct(), '01_SO_HRD', 'SO/MD GNC'),
+        (lambda: SOMDGNCNoAct(), '01_SO_HRD', 'SO GNC'),
         (lambda: LCRocketArch(), '02_MO_MRD_G', 'Rocket'),
         (lambda: MDGNCNoAct(), '02_MO_HRD', 'MD GNC'),
         # (lambda: MDGNCNoNr(), '02_MO_HRD', 'MD GNC Act'),
@@ -772,7 +772,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
     folder = set_results_folder(_exp_01_05_folder+folder_post)
     n_infill = 100
     n_gen = 25
-    n_repeat = 8 if sbo else 100
+    n_repeat = 8 if sbo else 40
     doe_k = 10
     n_sub, n_opts = 9, 3
     i_opt_test = [0]  # [0, n_sub-1]
@@ -997,7 +997,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
             cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {rand_str} & {cval_str} & {config_str} & {sampler}'
     df_agg['idx_name'] = [cat_name_map.get(val, val) for val in df_agg.index.get_level_values(1)]
 
-    n_col_split, hide_ranks, qpc_name = 9, True, 'delta_hv_regret'
+    n_col_split, hide_ranks, qpc_name = 9, False, 'delta_hv_regret'
     n_col_idx = 3 if sbo else 5
     plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
                    save_path=f'{folder}/rank{folder_post}', n_col_split=n_col_split, n_col_idx=n_col_idx,

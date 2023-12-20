@@ -363,7 +363,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
                 s.format('{:.0f}', subset=sub_rank_columns)
 
             if i_best is not None:
-                s.set_properties(subset=pd.IndexSlice[df_sub.index[i_best], :], **{'underline': '--rwrap--latex'})
+                # s.set_properties(subset=pd.IndexSlice[df_sub.index[i_best], :], **{'underline': '--rwrap--latex'})
                 def style_idx_(s):
                     styles = np.array(['']*len(s), dtype=object)
                     styles[i_best] = 'underline: --rwrap--latex;'
