@@ -791,33 +791,33 @@ def exp_01_05_correction(sbo=True, post_process=False):
 
     # if sbo:
     #     correctors = [
-    #         (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),
-    #         (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
-    #         (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False), 'Lazy Closest', lazy_samplers),
+    #         (CorrectorFactory(AnyEagerCorrector, correct_correct_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),
+    #         (CorrectorFactory(GreedyEagerCorrector, correct_correct_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
+    #         (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=False), 'Lazy Closest', lazy_samplers),
     #     ]
     # else:
     correctors = [
-        (CorrectorFactory(AnyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),  # 0
-        # (CorrectorFactory(AnyEagerCorrector, correct_valid_x=True, random_if_multiple=True), 'Eager Rnd Cval', eager_samplers),
-        (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),  # 2
-        # (CorrectorFactory(GreedyEagerCorrector, correct_valid_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=False, euclidean=False), 'Eager Closest', eager_samplers),  # 4
-        (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=False, euclidean=True), 'Eager Closest Euc', eager_samplers),
-        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd', eager_samplers),
-        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=False, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc', eager_samplers),
-        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest Cval', eager_samplers),  # 8
-        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Cval Euc', eager_samplers),
-        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Cval Rnd', eager_samplers),
-        # (CorrectorFactory(ClosestEagerCorrector, correct_valid_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Cval Rnd Euc', eager_samplers),
+        (CorrectorFactory(AnyEagerCorrector, correct_correct_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),  # 0
+        # (CorrectorFactory(AnyEagerCorrector, correct_correct_x=True, random_if_multiple=True), 'Eager Rnd Cval', eager_samplers),
+        (CorrectorFactory(GreedyEagerCorrector, correct_correct_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),  # 2
+        # (CorrectorFactory(GreedyEagerCorrector, correct_correct_x=False, random_if_multiple=True), 'Eager Greedy Rnd', eager_samplers),
+        (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=False, random_if_multiple=False, euclidean=False), 'Eager Closest', eager_samplers),  # 4
+        (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=False, random_if_multiple=False, euclidean=True), 'Eager Closest Euc', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=False, random_if_multiple=True, euclidean=False), 'Eager Closest Rnd', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=False, random_if_multiple=True, euclidean=True), 'Eager Closest Rnd Euc', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=True, random_if_multiple=False, euclidean=False), 'Eager Closest Cval', eager_samplers),  # 8
+        # (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=True, random_if_multiple=False, euclidean=True), 'Eager Closest Cval Euc', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=True, random_if_multiple=True, euclidean=False), 'Eager Closest Cval Rnd', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=True, random_if_multiple=True, euclidean=True), 'Eager Closest Cval Rnd Euc', eager_samplers),
 
-        (CorrectorFactory(RandomLazyCorrector, correct_valid_x=False), 'Lazy Rnd', lazy_samplers),  # 12
-        # (CorrectorFactory(RandomLazyCorrector, correct_valid_x=True), 'Lazy Rnd Cval', lazy_samplers),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=False), 'Lazy Closest', lazy_samplers),  # 14
-        # (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=False), 'Lazy Closest Cval', lazy_samplers),
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=True, euclidean=False), 'Lazy Closest Dist', lazy_samplers),  # 16
-        (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=False, by_dist=True, euclidean=True), 'Lazy Closest Dist Euc', lazy_samplers),
-        # (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist', lazy_samplers),
-        # (CorrectorFactory(ClosestLazyCorrector, correct_valid_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc', lazy_samplers),
+        (CorrectorFactory(RandomLazyCorrector, correct_correct_x=False), 'Lazy Rnd', lazy_samplers),  # 12
+        # (CorrectorFactory(RandomLazyCorrector, correct_correct_x=True), 'Lazy Rnd Cval', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=False, by_dist=False), 'Lazy Closest', lazy_samplers),  # 14
+        # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=True, by_dist=False), 'Lazy Closest Cval', lazy_samplers),
+        (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=False, by_dist=True, euclidean=False), 'Lazy Closest Dist', lazy_samplers),  # 16
+        (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=False, by_dist=True, euclidean=True), 'Lazy Closest Dist Euc', lazy_samplers),
+        # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist', lazy_samplers),
+        # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc', lazy_samplers),
     ]
     if sbo:
         sbo_eager_samplers = [

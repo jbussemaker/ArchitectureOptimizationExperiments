@@ -49,7 +49,7 @@ class DummyArchDesignSpace(ArchDesignSpace):
 
     def is_valid(self, xi: np.ndarray) -> Optional[np.ndarray]:
         eager_corr = EagerCorrectorBase(self)
-        i_valid = eager_corr.get_valid_idx(np.array([xi]))[0]
+        i_valid = eager_corr.get_correct_idx(np.array([xi]))[0]
         if i_valid == -1:
             return
         _, is_active_valid = eager_corr.x_valid_active
@@ -91,7 +91,7 @@ def test_eager_corrector():
                       [2, 0],  # Canonical, 5
                       [2, 1]])  # Valid, non-canonical, 5
 
-    assert np.all(corr.get_valid_idx(x_try) == np.array([3, -1, 5, 5]))
+    assert np.all(corr.get_correct_idx(x_try) == np.array([3, -1, 5, 5]))
     assert np.all(corr.get_canonical_idx(x_try) == np.array([3, -1, 5, -1]))
 
 
@@ -106,10 +106,10 @@ def test_any_eager_corrector():
     is_act_all[-1, 1] = False
     ds = DummyArchDesignSpace(x_all=x_all, is_act_all=is_act_all)
 
-    for correct_valid_x in [False, True]:
+    for correct_correct_x in [False, True]:
         for random_if_multiple in [False, True]:
             ds.corrector = corr = \
-                AnyEagerCorrector(ds, correct_valid_x=correct_valid_x, random_if_multiple=random_if_multiple)
+                AnyEagerCorrector(ds, correct_correct_x=correct_correct_x, random_if_multiple=random_if_multiple)
             assert repr(corr)
 
             x_corr, is_act_corr = ds.correct_x(np.array([[1, 0],
@@ -125,7 +125,7 @@ def test_any_eager_corrector():
             if not random_if_multiple:
                 assert np.all(x_corr[1, :] == np.array([0, 0]))
             assert np.all(x_corr[2, :] == np.array([2, 0]))
-            if correct_valid_x:
+            if correct_correct_x:
                 if not random_if_multiple:
                     assert np.all(x_corr[3, :] == np.array([0, 0]))
             else:
@@ -147,10 +147,10 @@ def test_greedy_eager_corrector():
     is_act_all[-1, 1:] = False
     ds = DummyArchDesignSpace(x_all=x_all, is_act_all=is_act_all)
 
-    for correct_valid_x in [False, True]:
+    for correct_correct_x in [False, True]:
         for random_if_multiple in [False, True]:
             ds.corrector = corr = \
-                GreedyEagerCorrector(ds, correct_valid_x=correct_valid_x, random_if_multiple=random_if_multiple)
+                GreedyEagerCorrector(ds, correct_correct_x=correct_correct_x, random_if_multiple=random_if_multiple)
             assert repr(corr)
 
             x_corr, is_act_corr = ds.correct_x(np.array([[0, 0, 0],
@@ -196,12 +196,12 @@ def test_closest_eager_corrector():
     is_act_all[-2, 1:] = False
     ds = DummyArchDesignSpace(x_all=x_all, is_act_all=is_act_all)
 
-    for correct_valid_x in [False, True]:
+    for correct_correct_x in [False, True]:
         for random_if_multiple in [False, True]:
             for _ in range(10 if random_if_multiple else 1):
                 for euclidean in [False, True]:
                     ds.corrector = corr = ClosestEagerCorrector(
-                        ds, euclidean=euclidean, correct_valid_x=correct_valid_x, random_if_multiple=random_if_multiple)
+                        ds, euclidean=euclidean, correct_correct_x=correct_correct_x, random_if_multiple=random_if_multiple)
                     assert repr(corr)
 
                     x_corr, is_act_corr = ds.correct_x(np.array([[0, 0, 0],
@@ -223,7 +223,7 @@ def test_closest_eager_corrector():
                                            [2, 0, 0]])
                     if euclidean:
                         corr_first[1, :] = [0, 1, 2]
-                    if correct_valid_x:
+                    if correct_correct_x:
                         corr_first[-2, :] = [1, 0, 2]
                         corr_first[-1, :] = [1, 0, 2]
                     corr_second = corr_first.copy()
@@ -260,7 +260,7 @@ def test_lazy_corrector():
                     np.array([True, False])]
     is_canon_try = [True, False, True, False]
     for i, xi_try in enumerate(x_try):
-        is_valid = corr.is_valid(xi_try)
+        is_valid = corr.is_correct(xi_try)
         is_valid_, is_canon = corr.is_canonical(xi_try)
         if is_valid_try[i] is None:
             assert is_valid is None
@@ -287,8 +287,8 @@ def test_first_lazy_corrector():
     is_act_all[-2, 1:] = False
     ds = DummyArchDesignSpace(x_all=x_all, is_act_all=is_act_all)
 
-    for correct_valid_x in [False, True]:
-        ds.corrector = corr = FirstLazyCorrector(ds, ds.is_valid, correct_valid_x=correct_valid_x)
+    for correct_correct_x in [False, True]:
+        ds.corrector = corr = FirstLazyCorrector(ds, ds.is_valid, correct_correct_x=correct_correct_x)
         assert repr(corr)
 
         x_corr, is_act_corr = ds.correct_x(np.array([[0, 0, 1],
@@ -304,7 +304,7 @@ def test_first_lazy_corrector():
                                [0, 0, 1],
                                [0, 0, 1],
                                [2, 0, 0]])
-        if correct_valid_x:
+        if correct_correct_x:
             x_corr_tgt[-1, :] = [0, 0, 1]
         assert np.all(x_corr == x_corr_tgt)
 
@@ -324,9 +324,9 @@ def test_random_lazy_corrector():
     is_act_all[-2, 1:] = False
     ds = DummyArchDesignSpace(x_all=x_all, is_act_all=is_act_all)
 
-    for correct_valid_x in [False, True]:
+    for correct_correct_x in [False, True]:
         for _ in range(10):
-            ds.corrector = corr = FirstLazyCorrector(ds, ds.is_valid, correct_valid_x=correct_valid_x)
+            ds.corrector = corr = FirstLazyCorrector(ds, ds.is_valid, correct_correct_x=correct_correct_x)
             assert repr(corr)
 
             x_corr, is_act_corr = ds.correct_x(np.array([[0, 0, 1],
@@ -340,7 +340,7 @@ def test_random_lazy_corrector():
 
             x_corr_tgt = np.array([[0, 0, 1],
                                    [2, 0, 0]])
-            if correct_valid_x:
+            if correct_correct_x:
                 assert np.all(x_corr[[0], :] == x_corr_tgt[[0], :])
             else:
                 assert np.all(x_corr[[0, 3], :] == x_corr_tgt)
@@ -362,13 +362,13 @@ def test_closest_lazy_corrector():
     is_act_all[-2, 1:] = False
     ds = DummyArchDesignSpace(x_all=x_all, is_act_all=is_act_all)
 
-    for correct_valid_x in [False, True]:
+    for correct_correct_x in [False, True]:
         for by_dist in [False, True]:
             for euclidean in [False, True]:
                 if not by_dist and euclidean:
                     continue
                 ds.corrector = corr = ClosestLazyCorrector(
-                    ds, ds.is_valid, by_dist=by_dist, euclidean=euclidean, correct_valid_x=correct_valid_x)
+                    ds, ds.is_valid, by_dist=by_dist, euclidean=euclidean, correct_correct_x=correct_correct_x)
                 assert repr(corr)
 
                 x_corr, is_act_corr = ds.correct_x(np.array([[0, 0, 0],
@@ -390,10 +390,10 @@ def test_closest_lazy_corrector():
                                        [2, 0, 0]])
                 if euclidean:
                     x_corr_tgt[1, :] = [0, 1, 2]
-                if correct_valid_x:
+                if correct_correct_x:
                     if by_dist:
                         x_corr_tgt[-2, :] = [1, 0, 2]
-                        if euclidean and not correct_valid_x:
+                        if euclidean and not correct_correct_x:
                             x_corr_tgt[-1, :] = [2, 1, 3]
                         else:
                             x_corr_tgt[-1, :] = [1, 0, 2]

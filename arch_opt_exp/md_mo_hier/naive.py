@@ -79,6 +79,11 @@ class NaiveProblem(ArchOptProblemBase):
             return self._problem.get_n_valid_discrete()
         return self.get_n_declared_discrete()
 
+    def _get_n_correct_discrete(self) -> int:
+        if self._return_activeness:
+            return self._problem.get_n_correct_discrete()
+        return self.get_n_declared_discrete()
+
     def _gen_all_discrete_x(self):
         if self._return_activeness:
             return self._problem.all_discrete_x

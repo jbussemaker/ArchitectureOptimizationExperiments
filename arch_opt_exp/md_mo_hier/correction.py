@@ -25,7 +25,7 @@ from sb_arch_opt.correction import CorrectorBase, EagerCorrectorBase, ClosestEag
 from typing import Callable, Optional, Tuple, Generator, List
 
 __all__ = ['CorrectorBase', 'EagerCorrectorBase', 'AnyEagerCorrector', 'GreedyEagerCorrector',
-           'ClosestEagerCorrector', 'IsValidFuncType', 'LazyCorrectorBase', 'FirstLazyCorrector', 'RandomLazyCorrector',
+           'ClosestEagerCorrector', 'IsCorrectFuncType', 'LazyCorrectorBase', 'FirstLazyCorrector', 'RandomLazyCorrector',
            'ClosestLazyCorrector']
 
 
@@ -82,7 +82,7 @@ class GreedyEagerCorrector(EagerCorrectorBase):
         return matched_dv_idx[0]
 
 
-IsValidFuncType = Callable[[np.ndarray], Optional[np.ndarray]]
+IsCorrectFuncType = Callable[[np.ndarray], Optional[np.ndarray]]
 
 
 class LazyCorrectorBase(CorrectorBase):
@@ -91,9 +91,9 @@ class LazyCorrectorBase(CorrectorBase):
     """
     n_try_max = 10000
 
-    def __init__(self, design_space: ArchDesignSpace, is_valid_func: IsValidFuncType = None, correct_valid_x=None):
-        self.is_valid_func = is_valid_func
-        super().__init__(design_space, correct_valid_x=correct_valid_x)
+    def __init__(self, design_space: ArchDesignSpace, is_correct_func: IsCorrectFuncType = None, correct_correct_x=None):
+        self.is_correct_func = is_correct_func
+        super().__init__(design_space, correct_correct_x=correct_correct_x)
 
     @cached_property
     def x_opts(self) -> List[List[float]]:
@@ -107,12 +107,12 @@ class LazyCorrectorBase(CorrectorBase):
         return x_opts
 
     def _correct_x(self, x: np.ndarray, is_active: np.ndarray):
-        correct_valid_x = self.correct_valid_x
+        correct_correct_x = self.correct_correct_x
         for i, xi in enumerate(x):
             # Check if the vector is canonical: no need to correct if this is already the case
             is_active_i, is_canonical = self.is_canonical(xi)
             if is_active_i is not None:
-                if not correct_valid_x or (correct_valid_x and is_canonical):
+                if not correct_correct_x or (correct_correct_x and is_canonical):
                     is_active[i, :] = is_active_i
                     continue
 
@@ -127,7 +127,7 @@ class LazyCorrectorBase(CorrectorBase):
         - Returns whether the design vector is also canonical
         """
         # Check whether the design vector is valid
-        is_active_i = self.is_valid(xi)
+        is_active_i = self.is_correct(xi)
         if is_active_i is None:
             return None, False
 
@@ -135,15 +135,15 @@ class LazyCorrectorBase(CorrectorBase):
         is_canonical = self._is_canonical_inactive(xi, is_active_i)
         return is_active_i, is_canonical
 
-    def is_valid(self, xi: np.ndarray) -> Optional[np.ndarray]:
+    def is_correct(self, xi: np.ndarray) -> Optional[np.ndarray]:
         """
-        Function that returns whether a given single design vector x (of length nx) is valid.
+        Function that returns whether a given single design vector x (of length nx) is correct.
         If valid, returns the activeness vector, otherwise None.
         """
         if len(xi.shape) != 1:
             raise ValueError(f'Expecting vector of length nx, got {xi.shape}')
 
-        is_active_i = self._is_valid(xi)
+        is_active_i = self._is_correct(xi)
         if is_active_i is None:
             return
 
@@ -151,14 +151,14 @@ class LazyCorrectorBase(CorrectorBase):
             raise ValueError(f'Expecting return vector of length {xi.shape[0]}, got {is_active_i.shape}')
         return is_active_i
 
-    def _is_valid(self, xi: np.ndarray) -> Optional[np.ndarray]:
+    def _is_correct(self, xi: np.ndarray) -> Optional[np.ndarray]:
         """
-        Function that returns whether a given single design vector x (of length nx) is valid.
+        Function that returns whether a given single design vector x (of length nx) is correct.
         If valid, the function should return the activeness vector, otherwise None.
         """
-        if self.is_valid_func is None:
-            raise RuntimeError('Either provide is_valid_func or override _is_valid!')
-        return self.is_valid_func(xi)
+        if self.is_correct_func is None:
+            raise RuntimeError('Either provide is_correct_func or override _is_correct!')
+        return self.is_correct_func(xi)
 
     def _correct_single_x(self, xi: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -166,17 +166,17 @@ class LazyCorrectorBase(CorrectorBase):
         Should generate possible design vectors and use is_valid to check whether generated vectors are valid and get
         activeness information.
         """
-        correct_valid_x = self.correct_valid_x
+        correct_correct_x = self.correct_correct_x
 
         n_try = 0
         for xi_try in self._generate_x_try(xi):
             # If we originally want to correct also valid vectors, we are looking for a generated canonical vector
-            if correct_valid_x:
+            if correct_correct_x:
                 xi_active, is_canonical = self.is_canonical(xi_try)
                 if not is_canonical:
                     xi_active = None
             else:
-                xi_active = self.is_valid(xi_try)
+                xi_active = self.is_correct(xi_try)
 
             if xi_active is not None:
                 return xi_try, xi_active
@@ -194,7 +194,7 @@ class LazyCorrectorBase(CorrectorBase):
         raise NotImplementedError
 
     def __repr__(self):
-        return f'{self.__class__.__name__}(correct_valid_x={self.correct_valid_x})'
+        return f'{self.__class__.__name__}(correct_correct_x={self.correct_correct_x})'
 
 
 class FirstLazyCorrector(LazyCorrectorBase):
@@ -281,4 +281,4 @@ class ClosestLazyCorrector(LazyCorrectorBase):
 
     def __repr__(self):
         euc_str = f', euclidean={self.euclidean}' if self.by_dist else ''
-        return f'{self.__class__.__name__}(correct_valid_x={self.correct_valid_x}, by_dist={self.by_dist}{euc_str})'
+        return f'{self.__class__.__name__}(correct_correct_x={self.correct_correct_x}, by_dist={self.by_dist}{euc_str})'
