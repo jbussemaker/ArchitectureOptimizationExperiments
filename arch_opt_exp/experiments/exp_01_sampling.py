@@ -755,8 +755,8 @@ def get_hier_test_problems():
         (lambda: SOLCRocketArch(obj=RocketObj.OBJ_COST), '01_SO_MRD_G', 'RCost'),
         # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
         (lambda: SOLCRocketArch(obj=RocketObj.OBJ_WEIGHTED), '01_SO_MRD_G', 'RWt'),
-        (lambda: SOMDGNCNoAct(), '01_SO_HRD', 'SO GNC'),
         (lambda: LCRocketArch(), '02_MO_MRD_G', 'Rocket'),
+        (lambda: SOMDGNCNoAct(), '01_SO_HRD', 'SO GNC'),
         (lambda: MDGNCNoAct(), '02_MO_HRD', 'MD GNC'),
         # (lambda: MDGNCNoNr(), '02_MO_HRD', 'MD GNC Act'),
         (lambda: SimpleTurbofanArchModel(train=False), '03_SO_HRD_G_HC', 'Jet SM'),
@@ -821,22 +821,18 @@ def exp_01_05_correction(sbo=True, post_process=False):
     ]
     if sbo:
         sbo_eager_samplers = [
-            (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
-            # (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
-            (NrActiveHierarchicalSampling(), 'HierNrAct'),
-            # (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
-            # (ActiveVarHierarchicalSampling(), 'HierAct'),
+            (RepairedSampler(LatinHypercubeSampling()), 'LHS'),  # In case all_discrete_x is not available
+            # (NoGroupingHierarchicalSampling(), 'HierNoGroup'),  # Performs bad on RCost (optimum in small sub-problem)
+            # (NrActiveHierarchicalSampling(), 'HierNrAct'),  # Performs bad on GNC problems
+            (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
+            # (ActiveVarHierarchicalSampling(), 'HierAct'),  # Performs bad on GNC problems
             (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
         ]
         sbo_corr = {
             'Eager Rnd': sbo_eager_samplers,  # Best eager
-            # 'Eager Rnd Cval': sbo_eager_samplers,  # Worst eager
             'Eager Greedy': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Greedy LHS --> custom correct_x
-            # 'Eager Closest': sbo_eager_samplers,  # Not selected because HierActWt also has other good correctors
-            'Eager Closest Euc': sbo_eager_samplers,  # Best eager
-            # 'Eager Closest Rnd Euc': sbo_eager_samplers,  # Not selected because samplers also have better correctors
-            'Lazy Closest': lazy_samplers,  # Best lazy
-            # 'Lazy Rnd Cval': lazy_samplers,  # Worst lazy
+            'Eager Closest': sbo_eager_samplers,  # Close follow up to the best eager
+            'Lazy Closest Dist Euc': lazy_samplers,  # Best lazy
         }
         correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
 
@@ -901,6 +897,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
 
             n_init = int(np.ceil(doe_k*problem.n_var))
             n_kpls = None
+            ignore_hierarchy = True
             # n_kpls = n_kpls if problem.n_var > n_kpls else None
             i_prob += 1
             log.info(f'Running optimizations for {i_prob}/{len(problems)*len(i_opt_test)}: {name} '
@@ -923,7 +920,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
 
                     if sbo:
                         model, norm = ModelFactory(problem).get_md_kriging_model(
-                            kpls_n_comp=n_kpls, ignore_hierarchy=True)
+                            kpls_n_comp=n_kpls, ignore_hierarchy=ignore_hierarchy)
                         infill, n_batch = get_default_infill(problem)
                         sbo_algo = SBOInfill(
                             model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
@@ -937,7 +934,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
             n_eval_max = (n_init+n_infill) if sbo else ((n_gen-1)*n_init)
             exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max,
                        metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                       run_if_exists=False)
+                       run_if_exists=False, restart_pool=True)
             agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
             plt.close('all')
 
@@ -991,14 +988,14 @@ def exp_01_05_correction(sbo=True, post_process=False):
 
         sampler = sampler_map.get(parts[-1], parts[-1])
 
-        if sbo:
-            cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {config_str} & {sampler}'
-        else:
-            cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {rand_str} & {cval_str} & {config_str} & {sampler}'
+        # if sbo:
+        cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {config_str} & {sampler}'
+        # else:
+        #     cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {rand_str} & {cval_str} & {config_str} & {sampler}'
     df_agg['idx_name'] = [cat_name_map.get(val, val) for val in df_agg.index.get_level_values(1)]
 
-    n_col_split, hide_ranks, qpc_name = 9, False, 'delta_hv_regret'
-    n_col_idx = 3 if sbo else 5
+    n_col_split, hide_ranks, qpc_name = None, False, 'delta_hv_regret'
+    n_col_idx = 3  # if sbo else 5
     plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
                    save_path=f'{folder}/rank{folder_post}', n_col_split=n_col_split, n_col_idx=n_col_idx,
                    hide_ranks=hide_ranks, quant_perf_col=qpc_name)
@@ -1323,7 +1320,7 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
-    exp_01_05_correction(sbo=False, post_process=False)
+    exp_01_05_correction(sbo=False, post_process=True)
     # exp_01_05_correction(post_process=False)
     # exp_01_06_opt()
     # exp_01_06_opt(sbo=False)
