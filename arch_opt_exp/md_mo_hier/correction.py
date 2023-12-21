@@ -224,7 +224,8 @@ class RandomLazyCorrector(LazyCorrectorBase):
 
     def _generate_x_try(self, xi: np.ndarray) -> Generator[np.ndarray, None, None]:
         x_opts = self.x_opts
-        yield np.array([np.random.choice(opts) if len(opts) > 1 else opts[0] for opts in x_opts])
+        while True:
+            yield np.array([np.random.choice(opts) if len(opts) > 1 else opts[0] for opts in x_opts])
 
 
 class ClosestLazyCorrector(LazyCorrectorBase):

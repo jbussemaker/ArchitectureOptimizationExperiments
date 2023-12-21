@@ -31,6 +31,7 @@ from arch_opt_exp.hc_strategies.metrics import *
 from arch_opt_exp.md_mo_hier.correction import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.md_mo_hier.hierarchical_comb import *
+from arch_opt_exp.md_mo_hier.naive import *
 
 from pymoo.problems.multi.omnitest import OmniTest
 from pymoo.operators.sampling.rnd import FloatRandomSampling
@@ -773,7 +774,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
     n_infill = 100
     n_gen = 25
     n_repeat = 8 if sbo else 40
-    doe_k = 10
+    doe_k = 3 if sbo else 10
     n_sub, n_opts = 9, 3
     i_opt_test = [0]  # [0, n_sub-1]
 
@@ -914,8 +915,9 @@ def exp_01_05_correction(sbo=True, post_process=False):
             algo_names = []
             for corrector_factory, corr_name, samplers in correctors:
                 for cls_sampler, sampler_name in samplers:
-                    problem: SelectableTunableMetaProblem = problem_factory()  # problem_factory(i_opt)
-                    problem.corrector_factory = corrector_factory
+                    problem = problem_factory()  # problem_factory(i_opt)
+                    problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)
+                    problem.design_space.corrector_factory = corrector_factory
                     problems.append(problem)
 
                     if sbo:
@@ -1320,7 +1322,7 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
-    exp_01_05_correction(sbo=False, post_process=True)
+    exp_01_05_correction(sbo=False, post_process=False)
     # exp_01_05_correction(post_process=False)
     # exp_01_06_opt()
     # exp_01_06_opt(sbo=False)

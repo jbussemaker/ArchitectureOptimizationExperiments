@@ -27,6 +27,7 @@ class NaiveDesignSpace(ImplicitArchDesignSpace):
     def __init__(self, *args, **kwargs):
         self.last_corr_times = []
         super().__init__(*args, **kwargs)
+        self.corrector_factory = None
 
     def __deepcopy__(self, memodict=None):
         if memodict is None:
@@ -41,6 +42,23 @@ class NaiveDesignSpace(ImplicitArchDesignSpace):
         s = timeit.default_timer()
         super()._correct_x_corrector(x, is_active)
         self.last_corr_times.append(timeit.default_timer()-s)
+
+    def _get_corrector(self):
+        if self.corrector_factory is not None:
+            return self.corrector_factory(self, self._is_correct)
+        return super()._get_corrector()
+
+    def _is_correct(self, xi: np.ndarray):
+        x_corr = np.array([xi.copy()])
+        is_active_corr = np.ones(x_corr.shape, dtype=bool)
+
+        self._correct_x(x_corr, is_active_corr)
+
+        # If none of the active discrete variables were changed, the design vector was correct
+        is_discrete_mask = self.is_discrete_mask
+        is_active = is_active_corr[0, :]
+        if np.all(x_corr[0, is_active & is_discrete_mask] == xi[is_active & is_discrete_mask]):
+            return is_active
 
     @property
     def all_discrete_x_by_trial_and_imputation(self):
@@ -61,6 +79,8 @@ class NaiveProblem(ArchOptProblemBase):
             self._get_n_valid_discrete,
             self._get_n_active_cont_mean,
             self._gen_all_discrete_x,
+            self._get_n_correct_discrete,
+            self._get_n_active_cont_mean_correct,
         )
 
         super().__init__(design_space, n_obj=problem.n_obj, n_ieq_constr=problem.n_ieq_constr)
