@@ -759,7 +759,7 @@ def get_hier_test_problems():
         (lambda: LCRocketArch(), '02_MO_MRD_G', 'Rocket'),
         (lambda: MDGNCNoAct(), '02_MO_HRD', 'MD GNC'),
         # (lambda: MDGNCNoNr(), '02_MO_HRD', 'MD GNC Act'),
-        (lambda: SimpleTurbofanArchModel(), '03_SO_HRD_G_HC', 'Jet SM'),
+        (lambda: SimpleTurbofanArchModel(train=False), '03_SO_HRD_G_HC', 'Jet SM'),
     ]
     return problems
 
