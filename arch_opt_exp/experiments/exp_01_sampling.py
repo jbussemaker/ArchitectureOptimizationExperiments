@@ -771,7 +771,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
     """
     folder_post = '_sbo' if sbo else '_nsga2'
     folder = set_results_folder(_exp_01_05_folder+folder_post)
-    n_infill = 100
+    n_infill = 40
     n_gen = 25
     n_repeat = 8 if sbo else 40
     doe_k = 3 if sbo else 10
