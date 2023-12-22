@@ -754,7 +754,7 @@ def get_hier_test_problems():
     from sb_arch_opt.problems.gnc import MDGNCNoAct, SOMDGNCNoAct, MDGNCNoNr, GNCObjective
     problems = [
         # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_COST), '01_SO_MRD_G', 'RCost'),
-        # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
+        # # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
         # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_WEIGHTED), '01_SO_MRD_G', 'RWt'),
         (lambda: LCRocketArch(), '02_MO_MRD_G', 'Rocket'),
         (lambda: SOMDGNCNoAct(obj=GNCObjective.WEIGHTED), '01_SO_HRD', 'SO GNC'),
@@ -831,9 +831,10 @@ def exp_01_05_correction(sbo=True, post_process=False):
             (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
         ]
         sbo_corr = {
-            'Eager Rnd': sbo_eager_samplers,  # Best eager
+            # 'Eager Rnd': sbo_eager_samplers,  # Best eager
             'Eager Greedy': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Greedy LHS --> custom correct_x
             'Eager Closest': sbo_eager_samplers,  # Close follow up to the best eager
+            'Eager Closest Euc': sbo_eager_samplers,  # Best eager
             'Lazy Closest Dist Euc': lazy_samplers,  # Best lazy
         }
         correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
