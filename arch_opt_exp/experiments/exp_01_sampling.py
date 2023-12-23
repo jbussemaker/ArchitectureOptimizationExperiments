@@ -837,7 +837,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
             'Eager Closest': sbo_eager_samplers,  # Close follow up to the best eager
             'Eager Closest Euc': sbo_eager_samplers,  # Best eager
             'Lazy Closest Dist Euc': lazy_samplers,  # Best lazy
-            'Specific': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Problem-specific LHS
+            'Specific ': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Problem-specific LHS
         }
         correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
 
