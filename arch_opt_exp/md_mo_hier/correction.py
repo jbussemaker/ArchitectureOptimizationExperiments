@@ -20,13 +20,23 @@ import itertools
 import numpy as np
 from scipy.spatial import distance
 from cached_property import cached_property
-from sb_arch_opt.design_space import ArchDesignSpace
+from sb_arch_opt.design_space import ArchDesignSpace, CorrectorUnavailableError
 from sb_arch_opt.correction import CorrectorBase, EagerCorrectorBase, ClosestEagerCorrector
 from typing import Callable, Optional, Tuple, Generator, List
 
 __all__ = ['CorrectorBase', 'EagerCorrectorBase', 'AnyEagerCorrector', 'GreedyEagerCorrector',
            'ClosestEagerCorrector', 'IsCorrectFuncType', 'LazyCorrectorBase', 'FirstLazyCorrector', 'RandomLazyCorrector',
-           'ClosestLazyCorrector']
+           'ClosestLazyCorrector', 'ProblemSpecificCorrector']
+
+
+class ProblemSpecificCorrector(EagerCorrectorBase):
+
+    def correct_x(self, x: np.ndarray, is_active: np.ndarray):
+        self.design_space.use_auto_corrector = False
+        raise CorrectorUnavailableError('Force problem-specific correction')
+
+    def _get_corrected_x_idx(self, x: np.ndarray) -> np.ndarray:
+        raise CorrectorUnavailableError('Force problem-specific correction')
 
 
 class AnyEagerCorrector(EagerCorrectorBase):

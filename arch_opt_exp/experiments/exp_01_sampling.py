@@ -820,6 +820,8 @@ def exp_01_05_correction(sbo=True, post_process=False):
         (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=False, by_dist=True, euclidean=True), 'Lazy Closest Dist Euc', lazy_samplers),
         # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist', lazy_samplers),
         # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc', lazy_samplers),
+
+        (CorrectorFactory(ProblemSpecificCorrector), 'Specific ', eager_samplers),  # 20
     ]
     if sbo:
         sbo_eager_samplers = [
@@ -832,10 +834,10 @@ def exp_01_05_correction(sbo=True, post_process=False):
         ]
         sbo_corr = {
             # 'Eager Rnd': sbo_eager_samplers,  # Best eager
-            'Eager Greedy': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Greedy LHS --> custom correct_x
             'Eager Closest': sbo_eager_samplers,  # Close follow up to the best eager
             'Eager Closest Euc': sbo_eager_samplers,  # Best eager
             'Lazy Closest Dist Euc': lazy_samplers,  # Best lazy
+            'Specific': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Problem-specific LHS
         }
         correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
 
@@ -1003,17 +1005,25 @@ def exp_01_05_correction(sbo=True, post_process=False):
     plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
                    save_path=f'{folder}/rank{folder_post}', n_col_split=n_col_split, n_col_idx=n_col_idx,
                    hide_ranks=hide_ranks, quant_perf_col=qpc_name)
+    i_best_all = []
     for corr_cls in df_agg['corr_cls'].unique():
-        plot_perf_rank(df_agg[df_agg.corr_cls == corr_cls], 'corr', cat_name_map=cat_name_map,
-                       idx_name_map=prob_name_map, save_path=f'{folder}/rank_{corr_cls}{folder_post}',
-                       prefix=corr_cls, n_col_split=n_col_split, n_col_idx=n_col_idx)
+        i_best_ = plot_perf_rank(df_agg[df_agg.corr_cls == corr_cls], 'corr', cat_name_map=cat_name_map,
+                                 idx_name_map=prob_name_map, save_path=f'{folder}/rank_{corr_cls}{folder_post}',
+                                 prefix=corr_cls, n_col_split=n_col_split, n_col_idx=n_col_idx, quant_perf_col=qpc_name)
+
+        if corr_cls == 'Specific':
+            lhs_name = ' & '.join(list(i_best_)[0].split(' & ')[:-1]+['LHS'])
+            i_best_glob, = np.where(df_agg.idx_name.isin(list(i_best_)+[lhs_name]))
+            i_best_all += list(i_best_glob)
 
     i_best_eager = []
-    i_best_all = []
     for cls_sampler in df_agg.cls_sampler.unique():
+        if cls_sampler.startswith('Specific'):
+            continue
         i_best_ = plot_perf_rank(df_agg[df_agg.cls_sampler == cls_sampler], 'corr', cat_name_map=cat_name_map,
                                  idx_name_map=prob_name_map, save_path=f'{folder}/rank_{cls_sampler}{folder_post}',
-                                 prefix=cls_sampler, n_col_split=n_col_split, n_col_idx=n_col_idx)
+                                 prefix=cls_sampler, n_col_split=n_col_split, n_col_idx=n_col_idx,
+                                 quant_perf_col=qpc_name)
 
         i_best_glob, = np.where(df_agg.idx_name.isin(i_best_))
         i_best_all += list(i_best_glob)
@@ -1058,6 +1068,7 @@ def exp_01_05_correction(sbo=True, post_process=False):
         [_split_prob_name(prob_name_map.get(col, col)) for col in df_corr_times.columns])
     df_corr_times = df_corr_times.groupby(level=0, axis=1).mean()
     df_corr_times.index = [cat_name_map.get(val, val) for val in df_corr_times.index]
+    df_corr_times.to_excel(f'{folder}/best_rel_perf_corr_time.xlsx')
 
     styler = df_corr_times.style
     styler.format(formatter=lambda v: f'{v:.2f}')
