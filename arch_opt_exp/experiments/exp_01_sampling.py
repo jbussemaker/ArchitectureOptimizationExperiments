@@ -755,7 +755,7 @@ def get_hier_test_problems():
     from sb_arch_opt.problems.turbofan_arch import SimpleTurbofanArchModel
     from sb_arch_opt.problems.rocket import LCRocketArch, SOLCRocketArch, RocketObj
     from sb_arch_opt.problems.gnc import MDGNCNoAct, SOMDGNCNoAct, MDGNCNoNr, GNCObjective
-    problems = [  # TODO more
+    problems = [
         (lambda: SOLCRocketArch(obj=RocketObj.OBJ_COST), '01_SO_MRD_G', 'RCost'),
         # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
         (lambda: SOLCRocketArch(obj=RocketObj.OBJ_WEIGHTED), '01_SO_MRD_G', 'RWt'),
