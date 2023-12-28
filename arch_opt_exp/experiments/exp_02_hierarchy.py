@@ -154,7 +154,7 @@ def exp_02_01_tpe():
         plt.close('all')
 
 
-def exp_02_02_hier_strategies(sbo=False):
+def exp_02_02_hier_strategies(sbo=False, post_process=False):
     """
     Demonstrate that at least some level of optimizer integration is needed, by comparing the following levels of
     hierarchy integration:
@@ -171,13 +171,12 @@ def exp_02_02_hier_strategies(sbo=False):
       - Especially from level 2 (repair) performance greatly improves
       - For SBO, activeness (3) doesn't necessarily perform better than repair (2)
     """
-    post_process = True
     folder_post = 'sbo' if sbo else 'nsga2'
     folder = set_results_folder(f'{_exp_02_02_folder}_{folder_post}')
-    n_infill = 100
-    n_gen = 50
-    n_repeat = 16 if sbo else 100
-    doe_k = 10
+    n_infill = 40
+    n_gen = 25
+    n_repeat = 16 if sbo else 40
+    doe_k = 3 if sbo else 10
     # n_sub, n_opts = 8, 2
     n_sub, n_opts = 9, 3
     i_sub_opt = None
@@ -872,8 +871,8 @@ if __name__ == '__main__':
 
     # exp_02_01_tpe()
     # exp_02_02a_model_fit()
-    exp_02_02_hier_strategies()
-    # exp_02_02_hier_strategies(sbo=True)
+    # exp_02_02_hier_strategies()
+    exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)

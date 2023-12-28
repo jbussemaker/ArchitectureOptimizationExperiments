@@ -14,6 +14,7 @@ limitations under the License.
 Copyright: (c) 2023, Deutsches Zentrum fuer Luft- und Raumfahrt e.V.
 Contact: jasper.bussemaker@dlr.de
 """
+import os
 import pickle
 import logging
 import numpy as np
@@ -33,6 +34,7 @@ from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.md_mo_hier.hierarchical_comb import *
 from arch_opt_exp.md_mo_hier.naive import *
 
+from pymoo.core.population import Population
 from pymoo.problems.multi.omnitest import OmniTest
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 from pymoo.operators.sampling.lhs import LatinHypercubeSampling
@@ -56,6 +58,7 @@ _exp_01_02_folder = '01_sampling_02_sampling_similarity'
 _exp_01_03_folder = '01_sampling_03_doe_accuracy'
 _exp_01_04_folder = '01_sampling_04_activeness_diversity'
 _exp_01_05_folder = '01_sampling_05_correction'
+_exp_01_05a_folder = '01_sampling_05a_freq'
 _exp_01_06_folder = '01_sampling_06_optimization'
 
 _all_problems = lambda: [
@@ -752,12 +755,13 @@ def get_hier_test_problems():
     from sb_arch_opt.problems.turbofan_arch import SimpleTurbofanArchModel
     from sb_arch_opt.problems.rocket import LCRocketArch, SOLCRocketArch, RocketObj
     from sb_arch_opt.problems.gnc import MDGNCNoAct, SOMDGNCNoAct, MDGNCNoNr, GNCObjective
-    problems = [
-        # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_COST), '01_SO_MRD_G', 'RCost'),
-        # # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
-        # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_WEIGHTED), '01_SO_MRD_G', 'RWt'),
+    problems = [  # TODO more
+        (lambda: SOLCRocketArch(obj=RocketObj.OBJ_COST), '01_SO_MRD_G', 'RCost'),
+        # (lambda: SOLCRocketArch(obj=RocketObj.OBJ_PAYLOAD), '01_SO_MRD_G', 'RPay'),
+        (lambda: SOLCRocketArch(obj=RocketObj.OBJ_WEIGHTED), '01_SO_MRD_G', 'RWt'),
         (lambda: LCRocketArch(), '02_MO_MRD_G', 'Rocket'),
         (lambda: SOMDGNCNoAct(obj=GNCObjective.WEIGHTED), '01_SO_HRD', 'SO GNC'),
+        (lambda: SOMDGNCNoAct(obj=GNCObjective.FAILURE), '01_SO_HRD', 'FR GNC'),
         (lambda: SOMDGNCNoAct(obj=GNCObjective.WEIGHT), '01_SO_HRD', 'Wt GNC'),
         (lambda: MDGNCNoAct(), '02_MO_HRD', 'MD GNC'),
         # (lambda: MDGNCNoNr(), '02_MO_HRD', 'MD GNC Act'),
@@ -766,27 +770,46 @@ def get_hier_test_problems():
     return problems
 
 
-def exp_01_05_correction(sbo=True, post_process=False):
+def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
     """
     Run optimizations with different correction strategies for different sub-problem properties and optimum locations.
+    Sampling parameter:
+    - sampling=None  --> run matrix of sampling/correction algorithms
+    - sampling=True  --> run sampling algorithms with problem-specific correction
+    - sampling=False --> run correction algorithms with best sampling algorithm
     """
     folder_post = '_sbo' if sbo else '_nsga2'
     folder = set_results_folder(_exp_01_05_folder+folder_post)
+    out_pre = 'sampling_' if sampling is True else 'corr_' if sampling is False else ''
     n_infill = 40
     n_gen = 25
-    n_repeat = 8 if sbo else 40
+    n_repeat = 16 if sbo else 40
     doe_k = 3 if sbo else 10
     n_sub, n_opts = 9, 3
     i_opt_test = [0]  # [0, n_sub-1]
 
     eager_samplers = [
         (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+        (HierarchicalRandomSampling(), 'HierRnd'),
         (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
         (NrActiveHierarchicalSampling(), 'HierNrAct'),
         (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
         (ActiveVarHierarchicalSampling(), 'HierAct'),
         (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
     ]
+    if not sbo:
+        eager_samplers += [
+            (ArchVarHierarchicalSampling([]), 'HierArch'),
+            (ArchVarHierarchicalSampling([], weight_by_nr_active=True), 'HierArchWt'),
+        ]
+    specific_samplers = eager_samplers.copy()
+    if sampling is False:
+        eager_samplers = [
+            (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
+        ]
+        specific_samplers += [
+            (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+        ]
     lazy_samplers = [
         (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
     ]
@@ -799,6 +822,8 @@ def exp_01_05_correction(sbo=True, post_process=False):
     #     ]
     # else:
     correctors = [
+        (CorrectorFactory(ProblemSpecificCorrector), 'Specific ', eager_samplers),
+    ] if sampling is True else [
         (CorrectorFactory(AnyEagerCorrector, correct_correct_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),  # 0
         # (CorrectorFactory(AnyEagerCorrector, correct_correct_x=True, random_if_multiple=True), 'Eager Rnd Cval', eager_samplers),
         (CorrectorFactory(GreedyEagerCorrector, correct_correct_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),  # 2
@@ -821,10 +846,10 @@ def exp_01_05_correction(sbo=True, post_process=False):
         # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=True, by_dist=True, euclidean=False), 'Lazy Closest Cval Dist', lazy_samplers),
         # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=True, by_dist=True, euclidean=True), 'Lazy Closest Cval Dist Euc', lazy_samplers),
 
-        (CorrectorFactory(ProblemSpecificCorrector), 'Specific ', eager_samplers),  # 20
+        (CorrectorFactory(ProblemSpecificCorrector), 'Specific ', specific_samplers),  # 20
     ]
     if sbo:
-        sbo_eager_samplers = [
+        sbo_eager_samplers = eager_samplers if sampling is not None else [
             (RepairedSampler(LatinHypercubeSampling()), 'LHS'),  # In case all_discrete_x is not available
             # (NoGroupingHierarchicalSampling(), 'HierNoGroup'),  # Performs bad on RCost (optimum in small sub-problem)
             # (NrActiveHierarchicalSampling(), 'HierNrAct'),  # Performs bad on GNC problems
@@ -832,12 +857,18 @@ def exp_01_05_correction(sbo=True, post_process=False):
             # (ActiveVarHierarchicalSampling(), 'HierAct'),  # Performs bad on GNC problems
             (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
         ]
+        sbo_specific_samplers = [
+            (RepairedSampler(LatinHypercubeSampling()), 'LHS')] if sampling is None else sbo_eager_samplers.copy()
+        if sampling is False:
+            sbo_specific_samplers += [
+                (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+            ]
         sbo_corr = {
             # 'Eager Rnd': sbo_eager_samplers,  # Best eager
             'Eager Closest': sbo_eager_samplers,  # Close follow up to the best eager
             'Eager Closest Euc': sbo_eager_samplers,  # Best eager
             'Lazy Closest Dist Euc': lazy_samplers,  # Best lazy
-            'Specific ': [(RepairedSampler(LatinHypercubeSampling()), 'LHS')],  # Problem-specific LHS
+            'Specific ': sbo_specific_samplers,
         }
         correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
 
@@ -884,6 +915,22 @@ def exp_01_05_correction(sbo=True, post_process=False):
     # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem_factory().print_stats()  # problem_factory(0).print_stats()
     # exit()
+    if sbo:
+        # Wt GNC problem is too easy, therefore gives skewed performance numbers
+        problems = [prob_data for prob_data in problems if prob_data[2] != 'Wt GNC']
+
+    problems_i_x_arch = {
+        'Rocket': np.array([0, 2, 4, 6]),  # nr stages, nr of engines (x3)
+        'RCost': np.array([0, 2, 4, 6]),  # nr stages, nr of engines (x3)
+        'RPay': np.array([0, 2, 4, 6]),  # nr stages, nr of engines (x3)
+        'RWt': np.array([0, 2, 4, 6]),  # nr stages, nr of engines (x3)
+        'MD GNC': np.array([0, 1]),  # nr sensors, nr comp
+        'SO GNC': np.array([0, 1]),  # nr sensors, nr comp
+        'FR GNC': np.array([0, 1]),  # nr sensors, nr comp
+        'Wt GNC': np.array([0, 1]),  # nr sensors, nr comp
+        'Jet SM': np.array([0, 3, 10, 12]),  # fan, nr shafts, gearbox, mixed nozzle
+    }
+
     problem_paths = []
     problem_names = []
     prob_name_map = {}
@@ -924,6 +971,9 @@ def exp_01_05_correction(sbo=True, post_process=False):
                     problem.design_space.corrector_factory = corrector_factory
                     problems.append(problem)
 
+                    if isinstance(cls_sampler, ArchVarHierarchicalSampling):
+                        cls_sampler.arch_var_idx = problems_i_x_arch.get(title)
+
                     if sbo:
                         model, norm = ModelFactory(problem).get_md_kriging_model(
                             kpls_n_comp=n_kpls, ignore_hierarchy=ignore_hierarchy)
@@ -958,15 +1008,16 @@ def exp_01_05_correction(sbo=True, post_process=False):
 
         return df_agg_
 
-    df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+    df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols, output_prefix=out_pre)
     if sbo:
         df_agg = df_agg[~df_agg.corr_only.isin(['Eager Rnd Cval', 'Lazy Rnd Cval'])]
 
     sampler_map = {
-        'LHS': 'LHS',
+        'LHS': 'LHS', 'HierRnd': 'Random',
         'HierNoGroup': 'Hier',
         'HierNrAct': 'Hier $n_{act}$', 'HierNrActWt': 'Hier $n_{act}$ wt.',
         'HierAct': 'Hier $x_{act}$', 'HierActWt': 'Hier $x_{act}$ wt.',
+        'HierArch': 'Hier $x_{arch}$', 'HierArchWt': 'Hier $x_{arch}$ wt.',
     }
     algo_map = {
         'Rnd': 'Any-select',
@@ -1002,56 +1053,61 @@ def exp_01_05_correction(sbo=True, post_process=False):
 
     n_col_split, hide_ranks, qpc_name = None, False, 'delta_hv_regret'
     n_col_idx = 3  # if sbo else 5
-    plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
-                   save_path=f'{folder}/rank{folder_post}', n_col_split=n_col_split, n_col_idx=n_col_idx,
-                   hide_ranks=hide_ranks, quant_perf_col=qpc_name)
-    i_best_all = []
-    for corr_cls in df_agg['corr_cls'].unique():
-        i_best_ = plot_perf_rank(df_agg[df_agg.corr_cls == corr_cls], 'corr', cat_name_map=cat_name_map,
-                                 idx_name_map=prob_name_map, save_path=f'{folder}/rank_{corr_cls}{folder_post}',
-                                 prefix=corr_cls, n_col_split=n_col_split, n_col_idx=n_col_idx, quant_perf_col=qpc_name)
+    best_overall = plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
+                                  save_path=f'{folder}/{out_pre}rank{folder_post}', n_col_split=n_col_split,
+                                  n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
+    if sampling is None:
+        i_best_all = []
+        for corr_cls in df_agg['corr_cls'].unique():
+            i_best_ = plot_perf_rank(df_agg[df_agg.corr_cls == corr_cls], 'corr', cat_name_map=cat_name_map,
+                                     idx_name_map=prob_name_map, save_path=f'{folder}/{out_pre}rank_{corr_cls}{folder_post}',
+                                     prefix=corr_cls, n_col_split=n_col_split, n_col_idx=n_col_idx, quant_perf_col=qpc_name)
 
-        if corr_cls == 'Specific':
-            lhs_name = ' & '.join(list(i_best_)[0].split(' & ')[:-1]+['LHS'])
-            i_best_glob, = np.where(df_agg.idx_name.isin(list(i_best_)+[lhs_name]))
+            if corr_cls == 'Specific':
+                lhs_name = ' & '.join(list(i_best_)[0].split(' & ')[:-1]+['LHS'])
+                i_best_glob, = np.where(df_agg.idx_name.isin(list(i_best_)+[lhs_name]))
+                i_best_all += list(i_best_glob)
+
+        i_best_eager = []
+        for cls_sampler in df_agg.cls_sampler.unique():
+            if cls_sampler.startswith('Specific'):
+                continue
+            i_best_ = plot_perf_rank(df_agg[df_agg.cls_sampler == cls_sampler], 'corr', cat_name_map=cat_name_map,
+                                     idx_name_map=prob_name_map, save_path=f'{folder}/{out_pre}rank_{cls_sampler}{folder_post}',
+                                     prefix=cls_sampler, n_col_split=n_col_split, n_col_idx=n_col_idx,
+                                     quant_perf_col=qpc_name)
+
+            i_best_glob, = np.where(df_agg.idx_name.isin(i_best_))
             i_best_all += list(i_best_glob)
+            if cls_sampler.startswith('Eager'):
+                i_best_eager += list(i_best_glob)
 
-    i_best_eager = []
-    for cls_sampler in df_agg.cls_sampler.unique():
-        if cls_sampler.startswith('Specific'):
-            continue
-        i_best_ = plot_perf_rank(df_agg[df_agg.cls_sampler == cls_sampler], 'corr', cat_name_map=cat_name_map,
-                                 idx_name_map=prob_name_map, save_path=f'{folder}/rank_{cls_sampler}{folder_post}',
-                                 prefix=cls_sampler, n_col_split=n_col_split, n_col_idx=n_col_idx,
-                                 quant_perf_col=qpc_name)
+        best_eager_selector = pd.Series(index=df_agg.index, data=np.in1d(np.arange(len(df_agg)), i_best_eager))
+        analyze_perf_rank(df_agg, 'delta_hv_abs_regret', n_repeat, prefix='best_eager',
+                          df_subset=best_eager_selector)
+        best_eager = plot_perf_rank(df_agg[best_eager_selector], 'corr', cat_name_map=cat_name_map,
+                                    idx_name_map=prob_name_map, save_path=f'{folder}/{out_pre}rank_best_eager{folder_post}',
+                                    prefix='best_eager', h_factor=.5, n_col_split=n_col_split, n_col_idx=n_col_idx,
+                                    hide_ranks=hide_ranks, quant_perf_col=qpc_name)
 
-        i_best_glob, = np.where(df_agg.idx_name.isin(i_best_))
-        i_best_all += list(i_best_glob)
-        if cls_sampler.startswith('Eager'):
-            i_best_eager += list(i_best_glob)
+        i_best_all += list(np.where(df_agg.index.get_level_values(1) == 'Eager Greedy LHS')[0])
+        best_all_selector = pd.Series(index=df_agg.index, data=np.in1d(np.arange(len(df_agg)), i_best_all))
+        analyze_perf_rank(df_agg, 'delta_hv_abs_regret', n_repeat, prefix='best_all',
+                          df_subset=best_all_selector)
+        plot_perf_rank(df_agg[best_all_selector], 'corr', cat_name_map=cat_name_map,
+                       idx_name_map=prob_name_map, save_path=f'{folder}/{out_pre}rank_best_all{folder_post}',
+                       prefix='best_all', h_factor=.5, n_col_split=n_col_split, n_col_idx=n_col_idx, hide_ranks=hide_ranks,
+                       quant_perf_col=qpc_name)
 
-    best_eager_selector = pd.Series(index=df_agg.index, data=np.in1d(np.arange(len(df_agg)), i_best_eager))
-    analyze_perf_rank(df_agg, 'delta_hv_abs_regret', n_repeat, prefix='best_eager',
-                      df_subset=best_eager_selector)
-    best_eager = plot_perf_rank(df_agg[best_eager_selector], 'corr', cat_name_map=cat_name_map,
-                                idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_eager{folder_post}',
-                                prefix='best_eager', h_factor=.5, n_col_split=n_col_split, n_col_idx=n_col_idx,
-                                hide_ranks=hide_ranks, quant_perf_col=qpc_name)
-
-    i_best_all += list(np.where(df_agg.index.get_level_values(1) == 'Eager Greedy LHS')[0])
-    best_all_selector = pd.Series(index=df_agg.index, data=np.in1d(np.arange(len(df_agg)), i_best_all))
-    analyze_perf_rank(df_agg, 'delta_hv_abs_regret', n_repeat, prefix='best_all',
-                      df_subset=best_all_selector)
-    plot_perf_rank(df_agg[best_all_selector], 'corr', cat_name_map=cat_name_map,
-                   idx_name_map=prob_name_map, save_path=f'{folder}/rank_best_all{folder_post}',
-                   prefix='best_all', h_factor=.5, n_col_split=n_col_split, n_col_idx=n_col_idx, hide_ranks=hide_ranks,
-                   quant_perf_col=qpc_name)
+    else:
+        best_eager = best_overall
+        best_all_selector = pd.Series(index=df_agg.index, data=np.ones((len(df_agg),), dtype=bool))
 
     ref_df = df_agg[df_agg.idx_name == best_eager[0]]
     df_rel_stats: pd.DataFrame = _sampling_rel_stats_table(
         None, df_agg[best_all_selector], None, ref_df=ref_df, incl_q=True)
-    df_rel_stats.to_csv(f'{folder}/best_rel_perf.csv')
-    df_rel_stats.to_excel(f'{folder}/best_rel_perf.xlsx')
+    df_rel_stats.to_csv(f'{folder}/{out_pre}best_rel_perf.csv')
+    df_rel_stats.to_excel(f'{folder}/{out_pre}best_rel_perf.xlsx')
 
     df_corr_times = df_agg[best_all_selector]
     df_corr_times['col'] = df_corr_times.index.get_level_values(0)
@@ -1068,12 +1124,12 @@ def exp_01_05_correction(sbo=True, post_process=False):
         [_split_prob_name(prob_name_map.get(col, col)) for col in df_corr_times.columns])
     df_corr_times = df_corr_times.groupby(level=0, axis=1).mean()
     df_corr_times.index = [cat_name_map.get(val, val) for val in df_corr_times.index]
-    df_corr_times.to_excel(f'{folder}/best_rel_perf_corr_time.xlsx')
+    df_corr_times.to_excel(f'{folder}/{out_pre}best_rel_perf_corr_time.xlsx')
 
     styler = df_corr_times.style
     styler.format(formatter=lambda v: f'{v:.2f}')
     styler.background_gradient(cmap='Reds', vmin=df_corr_times.min().min(), vmax=df_corr_times.max().max())
-    styler.to_latex(f'{folder}/best_rel_perf_corr_time.tex', hrules=True, convert_css=True,
+    styler.to_latex(f'{folder}/{out_pre}best_rel_perf_corr_time.tex', hrules=True, convert_css=True,
                     column_format='ll'+'c'*len(df_corr_times.columns))
 
     plt.close('all')
@@ -1123,6 +1179,182 @@ def _sampling_rel_stats_table(folder, df_agg: pd.DataFrame, cat_name_map, ref_df
                         column_format='ll'+'c'*len(df_rel_agg.columns))
 
     return df_rel_agg
+
+
+def exp_01_05a_arch_freq():
+    from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
+    folder = set_results_folder(_exp_01_05a_folder)
+
+    doe_k = 5
+    n_repeat = 50
+
+    from sb_arch_opt.problems.turbofan_arch import RealisticTurbofanArch
+    from sb_arch_opt.problems.rocket import LCRocketArch
+    from sb_arch_opt.problems.gnc import MDGNCNoAct, MDGNC, GNC, GNCNoAct
+    from sb_arch_opt.problems.hierarchical import MOHierarchicalRosenbrock
+    problems = [
+        (lambda: LCRocketArch(), 'Rocket'),
+        (lambda: MDGNCNoAct(), 'MD GNC'),
+        (lambda: GNCNoAct(), 'GNC'),
+        # (lambda: RealisticTurbofanArch(), 'Turbofan'),
+        # (lambda: MOHierarchicalRosenbrock(), 'HierRosen'),
+    ]
+
+    problems_i_x_an = {
+        'Rocket': np.array([0, 2, 4, 6]),  #, 11]),  # nr stages, nr of engines (x3), head shape
+        'MD GNC': np.array([0, 1]),  # nr sensors, nr comp
+        'GNC': np.array([0, 1]),  # nr sensors, nr comp
+        'MD GNC Act': np.array([0, 1, 2]),  # nr sensors, nr comp, nr act
+        'GNC Act': np.array([0, 1, 2]),  # nr sensors, nr comp, nr act
+    }
+    n_rel_tgt_probs = {
+        # 'Rocket': 3.6,
+        # 'MD GNC': 14.3,
+        # 'MD GNC Act': 11.1,
+        # 'GNC': 14.3,
+        # 'GNC Act': 11.1,
+        # 'HierRosen': 2.1,
+    }
+
+    eager_samplers = [
+        (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+        (HierarchicalRandomSampling(), 'HierRnd'),
+        (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
+        (NrActiveHierarchicalSampling(), 'HierNrAct'),
+        (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
+        (ActiveVarHierarchicalSampling(), 'HierAct'),
+        (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
+        (ActiveVarHierarchicalSampling(weight_by_group_size=True), 'HierActWtGrp'),
+        (ArchVarHierarchicalSampling([]), 'HierArch'),
+        (ArchVarHierarchicalSampling([], weight_by_nr_active=True), 'HierArchWt'),
+    ]
+    lazy_samplers = [
+        (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+    ]
+    correctors = [
+        # (CorrectorFactory(AnyEagerCorrector, correct_correct_x=False, random_if_multiple=True), 'Eager Rnd', eager_samplers),
+        # (CorrectorFactory(GreedyEagerCorrector, correct_correct_x=False, random_if_multiple=False), 'Eager Greedy', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=False, random_if_multiple=False, euclidean=False), 'Eager Closest', eager_samplers),
+        # (CorrectorFactory(ClosestEagerCorrector, correct_correct_x=False, random_if_multiple=False, euclidean=True), 'Eager Closest Euc', eager_samplers),
+        #
+        # (CorrectorFactory(RandomLazyCorrector, correct_correct_x=False), 'Lazy Rnd', lazy_samplers),
+        # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=False, by_dist=False), 'Lazy Closest', lazy_samplers),
+        # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=False, by_dist=True, euclidean=False), 'Lazy Closest Dist', lazy_samplers),
+        # (CorrectorFactory(ClosestLazyCorrector, correct_correct_x=False, by_dist=True, euclidean=True), 'Lazy Closest Dist Euc', lazy_samplers),
+
+        (CorrectorFactory(ProblemSpecificCorrector), 'Specific ', eager_samplers),
+    ]
+
+    problem: ArchOptProblemBase
+    for i, (problem_factory, title) in enumerate(problems):
+        problem = problem_factory()
+        problem_path = f'{folder}/{secure_filename(title)}'
+        os.makedirs(problem_path, exist_ok=True)
+
+        # problem.reset_pf_cache()
+        pf = problem.pareto_front()
+        n_doe = int(np.ceil(doe_k*problem.n_var))
+
+        ps = problem.pareto_set()
+        out = problem.evaluate(ps, return_as_dictionary=True)
+        assert np.all(out['X'] == ps)
+        assert np.all(out['F'] == pf)
+
+        if problem.all_discrete_x[0] is None:
+            log.info(f'{title} does not have all_discrete_x!')
+
+        data = {
+            'corrector': [], 'sampler': [],
+            'n_rel_tgt': [], 'n_rel_min': [], 'n_rel_median': [], 'n_rel_mean': [], 'n_rel_max': [], 'n_rel_std': [],
+            'diff_mean': [], 'diff_rmse': [], 'diff_max': [],
+        }
+        for j, (correction_factory, corr_name, samplers) in enumerate(correctors):
+            for k, (cls_sampler, sampler_name) in enumerate(samplers):
+                log.info(f'Problem / corrector / sampler ({i+1}/{len(problems)}, {j+1}/{len(correctors)}, '
+                         f'{k+1}/{len(samplers)}): {title} / {corr_name} / {sampler_name} ({n_doe} pts)')
+
+                test_problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)
+                test_problem.design_space.correction_factory = correction_factory
+
+                if isinstance(cls_sampler, ArchVarHierarchicalSampling):
+                    cls_sampler.arch_var_idx = problems_i_x_an[title]
+                pops = [cls_sampler.do(test_problem, n_doe) for _ in range(n_repeat)]
+
+                name = f'{title} / {corr_name} / {sampler_name}'
+                os.makedirs(f'{problem_path}/{secure_filename(corr_name)}', exist_ok=True)
+                filename = f'{problem_path}/{secure_filename(corr_name)}/{k:02d}_{secure_filename(sampler_name)}'
+
+                n_ps_rel, n_rel_tgt = _plot_pf_arch_freq(
+                    test_problem, pops, name, filename, i_x_analyze=problems_i_x_an.get(title),
+                    n_rel_target=n_rel_tgt_probs.get(title),
+                )
+
+                data['corrector'].append(corr_name)
+                data['sampler'].append(sampler_name)
+                data['n_rel_tgt'].append(n_rel_tgt)
+                data['n_rel_min'].append(np.min(n_ps_rel))
+                data['n_rel_median'].append(np.median(n_ps_rel))
+                data['n_rel_mean'].append(np.mean(n_ps_rel))
+                data['n_rel_max'].append(np.max(n_ps_rel))
+                data['n_rel_std'].append(np.std(n_ps_rel))
+
+                diff_abs = np.abs(n_ps_rel - n_rel_tgt)
+                data['diff_mean'].append(np.mean(diff_abs))
+                data['diff_rmse'].append(np.sqrt(np.mean(diff_abs**2)))
+                data['diff_max'].append(np.max(diff_abs))
+
+        df = pd.DataFrame(data=data)
+
+        i_pf = NonDominatedSorting().do(df[['n_rel_mean', 'n_rel_std']].values * [-1, 1], only_non_dominated_front=True)
+        is_pf = np.zeros((len(df),), dtype=bool)
+        is_pf[i_pf] = True
+        df['optimal'] = is_pf
+
+        df.to_excel(f'{problem_path}/stats.xlsx')
+        # print(f'{title} n_rel_tgt -- > {df.n_rel_mean.mean()}')
+
+
+def _plot_pf_arch_freq(problem: ArchOptProblemBase, pops: List[Population], name, filename=None, i_x_analyze=None,
+                       n_rel_target=None):
+    import matplotlib.colors as colors
+
+    n_total = sum([len(pop) for pop in pops])
+    ps = problem.pareto_set()
+    pf = problem.pareto_front()
+
+    if i_x_analyze is None:
+        i_x_analyze = problem.is_discrete_mask
+    x_ps, ps_idx = np.unique(ps[:, i_x_analyze], axis=0, return_inverse=True)
+    x_ps_map = {tuple(xi): i for i, xi in enumerate(x_ps)}
+    n_ps = np.zeros((len(x_ps),), dtype=int)
+
+    for pop in pops:
+        for xi in pop.get('X')[:, i_x_analyze]:
+            try:
+                i_ps = x_ps_map[tuple(xi)]
+            except KeyError:
+                continue
+            n_ps[i_ps] += 1
+
+    n_ps_rel = 100*(n_ps / n_total)
+    n_pf = n_ps[ps_idx]
+    n_pf_rel = 100*(n_pf / n_total)
+    if n_rel_target is None:
+        n_rel_target = max(1e-3, float(np.mean(n_pf_rel)))
+
+    if filename is not None:
+        cmap = 'RdYlBu'
+        norm = colors.TwoSlopeNorm(vcenter=n_rel_target, vmin=0, vmax=n_rel_target*2)
+
+        plt.figure(), plt.title(name)
+        c = plt.scatter(pf[:, 0], pf[:, 1], c=n_pf_rel, s=20, cmap=cmap, norm=norm)
+        plt.colorbar(c).set_label('Sampling %')
+
+        # plt.show()
+        plt.savefig(filename+'.png')
+        plt.savefig(filename+'.svg')
+
+    return n_ps_rel, n_rel_target
 
 
 def exp_01_06_opt(sbo=True, post_process=False):
@@ -1303,7 +1535,7 @@ def agg_prob_exp(problem, problem_path, exps, add_cols_callback=None):
         df_prob.to_excel(writer)
 
 
-def agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
+def agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback, output_prefix=''):
     df_probs = []
     for i, problem_name in enumerate(problem_names):
         problem_path = problem_paths[i]
@@ -1322,7 +1554,7 @@ def agg_opt_exp(problem_names, problem_paths, folder, add_cols_callback):
         df_agg = df_agg_
 
     try:
-        with pd.ExcelWriter(f'{folder}/results.xlsx') as writer:
+        with pd.ExcelWriter(f'{folder}/{output_prefix}results.xlsx') as writer:
             df_agg.to_excel(writer)
     except PermissionError:
         pass
@@ -1335,7 +1567,14 @@ if __name__ == '__main__':
     # exp_01_03_doe_accuracy()
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
-    exp_01_05_correction(sbo=False, post_process=False)
-    # exp_01_05_correction(post_process=False)
+
+    # exp_01_05_correction(sbo=False, post_process=False)
+    # exp_01_05_correction(sbo=True, post_process=False)
+    exp_01_05_correction(sampling=True, sbo=False, post_process=False)
+    # exp_01_05_correction(sampling=True, sbo=True, post_process=False)
+    # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
+    # exp_01_05_correction(sampling=False, sbo=True, post_process=False)
+    # exp_01_05a_arch_freq()
+
     # exp_01_06_opt()
     # exp_01_06_opt(sbo=False)

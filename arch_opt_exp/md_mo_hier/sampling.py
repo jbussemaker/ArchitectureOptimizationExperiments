@@ -24,7 +24,8 @@ from sb_arch_opt.sampling import *
 
 __all__ = ['HierarchicalSamplingTestBase', 'NoGroupingHierarchicalSampling', 'NrActiveHierarchicalSampling',
            'ActiveVarHierarchicalSampling', 'RepairedSampler', 'HierarchicalCoveringSampling',
-           'HierarchicalActSepSampling', 'HierarchicalSobolSampling', 'HierarchicalDirectSampling']
+           'HierarchicalActSepSampling', 'HierarchicalSobolSampling', 'HierarchicalDirectSampling',
+           'HierarchicalRandomSampling', 'ArchVarHierarchicalSampling']
 
 
 class RepairedSampler(Sampling):
@@ -45,8 +46,9 @@ class RepairedSampler(Sampling):
 class HierarchicalSamplingTestBase(HierarchicalSampling):
     """Base class for testing random sampling: groups and weights discrete vectors"""
 
-    def __init__(self, weight_by_nr_active=False, sobol=True):
+    def __init__(self, weight_by_nr_active=False, weight_by_group_size=False, sobol=True):
         self.weight_by_nr_active = weight_by_nr_active
+        self.weight_by_group_size = weight_by_group_size
         self.n_iter = 10
         super().__init__(sobol=sobol)
 
@@ -56,6 +58,10 @@ class HierarchicalSamplingTestBase(HierarchicalSampling):
             nr_active = np.sum(is_act_all, axis=1)
             avg_nr_active = [np.sum(nr_active[group])/len(group) for group in groups]
             return avg_nr_active
+
+        if self.weight_by_group_size:
+            exponent = .5
+            return [(len(group))**exponent for group in groups]
 
         # Uniform sampling
         return [1.]*len(groups)
@@ -111,6 +117,17 @@ class HierarchicalSamplingTestBase(HierarchicalSampling):
         return np.column_stack([x_groups, x_weights, x_merged])
 
 
+class HierarchicalRandomSampling(HierarchicalSamplingTestBase):
+    """Applies the fallback random sampling implemented in the hierarchical sampler"""
+
+    @classmethod
+    def get_hierarchical_cartesian_product(cls, *args, **kwargs):
+        return None, None
+
+    def group_design_vectors(self, x_all: np.ndarray, is_act_all: np.ndarray, is_cont_mask) -> List[np.ndarray]:
+        raise RuntimeError('Should not be called')
+
+
 class NoGroupingHierarchicalSampling(HierarchicalSamplingTestBase):
     """Applies no grouping: uniformly sample from all available discrete design vectors"""
 
@@ -132,6 +149,18 @@ class ActiveVarHierarchicalSampling(HierarchicalSamplingTestBase):
 
     def group_design_vectors(self, x_all: np.ndarray, is_act_all: np.ndarray, is_cont_mask) -> List[np.ndarray]:
         is_active_unique, unique_indices = np.unique(is_act_all, axis=0, return_inverse=True)
+        return [np.where(unique_indices == i)[0] for i in range(len(is_active_unique))]
+
+
+class ArchVarHierarchicalSampling(HierarchicalSamplingTestBase):
+    """Groups by problem-specific architecture variables"""
+
+    def __init__(self, arch_var_idx, **kwargs):
+        super().__init__(**kwargs)
+        self.arch_var_idx = arch_var_idx
+
+    def group_design_vectors(self, x_all: np.ndarray, is_act_all: np.ndarray, is_cont_mask) -> List[np.ndarray]:
+        is_active_unique, unique_indices = np.unique(x_all[:, self.arch_var_idx], axis=0, return_inverse=True)
         return [np.where(unique_indices == i)[0] for i in range(len(is_active_unique))]
 
 
