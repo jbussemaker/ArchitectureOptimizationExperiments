@@ -21,11 +21,12 @@ from scipy.spatial.distance import cdist
 from pymoo.core.sampling import Sampling
 from sb_arch_opt.problem import *
 from sb_arch_opt.sampling import *
+from sb_arch_opt.design_space import *
 
 __all__ = ['HierarchicalSamplingTestBase', 'NoGroupingHierarchicalSampling', 'NrActiveHierarchicalSampling',
            'ActiveVarHierarchicalSampling', 'RepairedSampler', 'HierarchicalCoveringSampling',
            'HierarchicalActSepSampling', 'HierarchicalSobolSampling', 'HierarchicalDirectSampling',
-           'HierarchicalRandomSampling', 'ArchVarHierarchicalSampling']
+           'HierarchicalRandomSampling', 'ArchVarHierarchicalSampling', 'MRDHierarchicalSampling']
 
 
 class RepairedSampler(Sampling):
@@ -162,6 +163,41 @@ class ArchVarHierarchicalSampling(HierarchicalSamplingTestBase):
     def group_design_vectors(self, x_all: np.ndarray, is_act_all: np.ndarray, is_cont_mask) -> List[np.ndarray]:
         is_active_unique, unique_indices = np.unique(x_all[:, self.arch_var_idx], axis=0, return_inverse=True)
         return [np.where(unique_indices == i)[0] for i in range(len(is_active_unique))]
+
+
+class MRDHierarchicalSampling(HierarchicalSamplingTestBase):
+    """Groups by recursively inspecting max rate diversity"""
+
+    def __init__(self, min_rd_split=.8, **kwargs):
+        super().__init__(**kwargs)
+        self.min_rd_split = min_rd_split
+
+    def group_design_vectors(self, x_all: np.ndarray, is_act_all: np.ndarray, is_cont_mask) -> List[np.ndarray]:
+        is_discrete_mask = ~is_cont_mask
+        min_rd_split = self.min_rd_split
+
+        def recursive_get_groups(group_i: np.ndarray) -> List[np.ndarray]:
+            x_grp = x_all[group_i, :]
+            x_min = np.min(x_grp, axis=0).astype(int)
+            is_act_grp = is_act_all[group_i, :]
+            counts, diversity, active_diversity, i_opts = \
+                ArchDesignSpace.calculate_discrete_rates_raw(x_grp - x_min, is_act_grp, is_discrete_mask)
+
+            rd_split_rates, = np.where(active_diversity >= min_rd_split)
+            if len(rd_split_rates) == 0:
+                return [group_i]
+
+            xi_split = rd_split_rates[0]  # rd_split_rates[np.argmax(active_diversity[rd_split_rates])]
+            opt_rates = counts[1:, xi_split]
+            i_opt_min = np.nanargmin(opt_rates) + x_min[xi_split]
+
+            min_rate_group = x_grp[:, xi_split] == i_opt_min
+            group_i_min = group_i[min_rate_group]
+            group_i_other = group_i[~min_rate_group]
+
+            return recursive_get_groups(group_i_min) + recursive_get_groups(group_i_other)
+
+        return recursive_get_groups(np.arange(x_all.shape[0]))
 
 
 class HierarchicalActSepSampling(HierarchicalSampling):

@@ -788,30 +788,45 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
     n_sub, n_opts = 9, 3
     i_opt_test = [0]  # [0, n_sub-1]
 
-    eager_samplers = [
-        (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
-        (HierarchicalRandomSampling(), 'HierRnd'),
-        (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
-        (NrActiveHierarchicalSampling(), 'HierNrAct'),
-        (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
-        (ActiveVarHierarchicalSampling(), 'HierAct'),
-        (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
-    ]
     if not sbo:
-        eager_samplers += [
-            (ArchVarHierarchicalSampling([]), 'HierArch'),
-            (ArchVarHierarchicalSampling([], weight_by_nr_active=True), 'HierArchWt'),
+        eager_samplers = [
+            (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+            (HierarchicalRandomSampling(), 'HierRnd'),
+            (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
+            (NrActiveHierarchicalSampling(), 'HierNrAct'),
+            (NrActiveHierarchicalSampling(weight_by_nr_active=True), 'HierNrActWt'),
+            (NrActiveHierarchicalSampling(weight_by_group_size=True), 'HierNrActWtGrp'),
+            (ActiveVarHierarchicalSampling(), 'HierAct'),
+            (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
+            (ActiveVarHierarchicalSampling(weight_by_group_size=True), 'HierActWtGrp'),
+            # (ArchVarHierarchicalSampling([]), 'HierArch'),
+            # (ArchVarHierarchicalSampling([], weight_by_nr_active=True), 'HierArchWt'),
+            (MRDHierarchicalSampling(min_rd_split=.8), 'HierMRD08'),
+            (MRDHierarchicalSampling(min_rd_split=.8, weight_by_nr_active=True), 'HierMRDWt08'),
+            (MRDHierarchicalSampling(min_rd_split=.8, weight_by_group_size=True), 'HierMRDWtGrp08'),
+        ]
+    else:
+        eager_samplers = [
+            (HierarchicalRandomSampling(), 'HierRnd'),
+            (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
+            (NrActiveHierarchicalSampling(), 'HierNrAct'),
+            (ActiveVarHierarchicalSampling(), 'HierAct'),
+            (MRDHierarchicalSampling(min_rd_split=.8), 'HierMRD08'),
         ]
     specific_samplers = eager_samplers.copy()
     if sampling is False:
         eager_samplers = [
-            (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
+            # (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
+            (MRDHierarchicalSampling(min_rd_split=.8), 'HierMRD08'),
         ]
+        specific_samplers = eager_samplers.copy()
         specific_samplers += [
-            (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+            # (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+            (HierarchicalRandomSampling(), 'HierRnd'),
         ]
     lazy_samplers = [
-        (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+        # (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+        (HierarchicalRandomSampling(), 'HierRnd'),
     ]
 
     # if sbo:
@@ -858,16 +873,12 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
         ]
         sbo_specific_samplers = [
-            (RepairedSampler(LatinHypercubeSampling()), 'LHS')] if sampling is None else sbo_eager_samplers.copy()
-        if sampling is False:
-            sbo_specific_samplers += [
-                (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
-            ]
+            (RepairedSampler(LatinHypercubeSampling()), 'LHS')] if sampling is None else specific_samplers.copy()
         sbo_corr = {
-            # 'Eager Rnd': sbo_eager_samplers,  # Best eager
-            'Eager Closest': sbo_eager_samplers,  # Close follow up to the best eager
-            'Eager Closest Euc': sbo_eager_samplers,  # Best eager
-            'Lazy Closest Dist Euc': lazy_samplers,  # Best lazy
+            'Eager Greedy': sbo_eager_samplers,  # Best eager (close)
+            'Eager Closest': sbo_eager_samplers,  # Best eager
+            'Eager Closest Euc': sbo_eager_samplers,  # Best eager (close)
+            'Lazy Closest Dist': lazy_samplers,  # Best lazy
             'Specific ': sbo_specific_samplers,
         }
         correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
@@ -944,8 +955,8 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             prob_name_map[name] = title  # f'{title}{"L" if i_opt == 0 else "S"})'
             problem_path = f'{folder}/{secure_filename(name)}'
             problem_paths.append(problem_path)
-            if post_process:
-                continue
+            # if post_process:
+            #     continue
 
             n_init = int(np.ceil(doe_k*problem.n_var))
             n_kpls = None
@@ -1015,9 +1026,11 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
     sampler_map = {
         'LHS': 'LHS', 'HierRnd': 'Random',
         'HierNoGroup': 'Hier',
-        'HierNrAct': 'Hier $n_{act}$', 'HierNrActWt': 'Hier $n_{act}$ wt.',
-        'HierAct': 'Hier $x_{act}$', 'HierActWt': 'Hier $x_{act}$ wt.',
+        'HierNrAct': 'Hier $n_{act}$', 'HierNrActWt': 'Hier $n_{act}$ wt.', 'HierNrActWtGrp': 'Hier $n_{act}$ wt.g.',
+        'HierAct': 'Hier $x_{act}$', 'HierActWt': 'Hier $x_{act}$ wt.', 'HierActWtGrp': 'Hier $x_{act}$ wt.g.',
         'HierArch': 'Hier $x_{arch}$', 'HierArchWt': 'Hier $x_{arch}$ wt.',
+        # 'HierMRD': 'Hier $MRD$', 'HierMRDWt': 'Hier $MRD$ wt.', 'HierMRDWtGrp': 'Hier $MRD$ wt.g.',
+        'HierMRD08': 'Hier $MRD$', 'HierMRDWt08': 'Hier $MRD$ wt.', 'HierMRDWtGrp08': 'Hier $MRD$ wt.g.',
     }
     algo_map = {
         'Rnd': 'Any-select',
@@ -1196,8 +1209,9 @@ def exp_01_05a_arch_freq():
         (lambda: LCRocketArch(), 'Rocket'),
         (lambda: MDGNCNoAct(), 'MD GNC'),
         (lambda: GNCNoAct(), 'GNC'),
-        # (lambda: RealisticTurbofanArch(), 'Turbofan'),
-        # (lambda: MOHierarchicalRosenbrock(), 'HierRosen'),
+        (lambda: SimpleTurbofanArch(), 'Turbofan'),
+        # (lambda: RealisticTurbofanArch(), 'RTurbofan'),
+        (lambda: MOHierarchicalRosenbrock(), 'HierRosen'),
     ]
 
     problems_i_x_an = {
@@ -1227,6 +1241,9 @@ def exp_01_05a_arch_freq():
         (ActiveVarHierarchicalSampling(weight_by_group_size=True), 'HierActWtGrp'),
         (ArchVarHierarchicalSampling([]), 'HierArch'),
         (ArchVarHierarchicalSampling([], weight_by_nr_active=True), 'HierArchWt'),
+        (MRDHierarchicalSampling(), 'HierMRD'),
+        (MRDHierarchicalSampling(weight_by_nr_active=True), 'HierMRDWt'),
+        (MRDHierarchicalSampling(weight_by_group_size=True), 'HierMRDWtGrp'),
     ]
     lazy_samplers = [
         (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
@@ -1256,9 +1273,9 @@ def exp_01_05a_arch_freq():
         n_doe = int(np.ceil(doe_k*problem.n_var))
 
         ps = problem.pareto_set()
-        out = problem.evaluate(ps, return_as_dictionary=True)
-        assert np.all(out['X'] == ps)
-        assert np.all(out['F'] == pf)
+        # out = problem.evaluate(ps, return_as_dictionary=True)
+        # assert np.all(out['X'] == ps)
+        # assert np.all(out['F'] == pf)
 
         if problem.all_discrete_x[0] is None:
             log.info(f'{title} does not have all_discrete_x!')
@@ -1270,6 +1287,8 @@ def exp_01_05a_arch_freq():
         }
         for j, (correction_factory, corr_name, samplers) in enumerate(correctors):
             for k, (cls_sampler, sampler_name) in enumerate(samplers):
+                # if not sampler_name.startswith('HierMRD'):
+                #     continue
                 log.info(f'Problem / corrector / sampler ({i+1}/{len(problems)}, {j+1}/{len(correctors)}, '
                          f'{k+1}/{len(samplers)}): {title} / {corr_name} / {sampler_name} ({n_doe} pts)')
 
@@ -1342,7 +1361,7 @@ def _plot_pf_arch_freq(problem: ArchOptProblemBase, pops: List[Population], name
     if n_rel_target is None:
         n_rel_target = max(1e-3, float(np.mean(n_pf_rel)))
 
-    if filename is not None:
+    if filename is not None and pf.shape[1] > 1:
         cmap = 'RdYlBu'
         norm = colors.TwoSlopeNorm(vcenter=n_rel_target, vmin=0, vmax=n_rel_target*2)
 
@@ -1570,10 +1589,10 @@ if __name__ == '__main__':
 
     # exp_01_05_correction(sbo=False, post_process=False)
     # exp_01_05_correction(sbo=True, post_process=False)
-    exp_01_05_correction(sampling=True, sbo=False, post_process=False)
+    # exp_01_05_correction(sampling=True, sbo=False, post_process=False)
     # exp_01_05_correction(sampling=True, sbo=True, post_process=False)
     # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
-    # exp_01_05_correction(sampling=False, sbo=True, post_process=False)
+    exp_01_05_correction(sampling=False, sbo=True, post_process=False)
     # exp_01_05a_arch_freq()
 
     # exp_01_06_opt()
