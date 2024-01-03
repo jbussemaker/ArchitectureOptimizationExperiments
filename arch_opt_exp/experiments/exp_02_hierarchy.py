@@ -71,6 +71,7 @@ _exp_02_04_folder = '02_hier_04_dv_examples'
 def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, repair=None, evaluator=None, seed=None):
     doe: Dict[int, Population] = {}
     doe_delta_hvs = []
+    is_eval = False
     for i_rep in range(n_repeat):
         for _ in range(10):
             doe_algo = get_doe_algo(n_doe)
@@ -92,6 +93,7 @@ def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, rep
             break
 
             # doe_algo.run()
+            # is_eval = True
             # pop = doe_algo.pop
             # doe_pf = DeltaHVMetric.get_pareto_front(doe_algo.pop.get('F'))
             # doe_f = DeltaHVMetric.get_valid_pop(doe_algo.pop).get('F')
@@ -102,7 +104,7 @@ def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, rep
 
         doe[i_rep] = pop
         doe_delta_hvs.append(delta_hv)
-    return doe, doe_delta_hvs
+    return doe, doe_delta_hvs, is_eval
 
 
 def _get_metrics(problem):
@@ -135,7 +137,7 @@ def exp_02_01_tpe():
         log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
         problem.pareto_front()
 
-        doe, doe_delta_hvs = _create_does(problem, n_init, n_repeat)
+        doe, doe_delta_hvs, _ = _create_does(problem, n_init, n_repeat)
         log.info(f'DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
                  f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
 
@@ -265,6 +267,10 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
         # sampler = lambda: ActiveVarHierarchicalSampling(weight_by_nr_active=True)
         # sampler = lambda: ActiveVarHierarchicalSampling()
         sampler = lambda: MRDHierarchicalSampling(min_rd_split=.8)
+
+        from arch_opt_exp.experiments.exp_01_sampling import CorrectorFactory, ProblemSpecificCorrector
+        corrector_factory = CorrectorFactory(ProblemSpecificCorrector)
+
         algo_models = []
         if sbo:
             n_eval_max = n_infill
@@ -289,9 +295,13 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
             algorithms = [ArchOptNSGA2(pop_size=pop_size, sampling=sampler()) for _ in range(len(prob_and_settings))]
 
         doe = {}
+        doe_is_eval = False
         problems = [entry[0] for entry in prob_and_settings]
+        problem_: NaiveProblem
         for j, problem_ in enumerate(problems):
-            doe_prob, doe_delta_hvs = _create_does(problem_, n_init, n_repeat, sampler=sampler(), seed=42)
+            problem_.design_space.corrector_factory = corrector_factory
+
+            doe_prob, doe_delta_hvs, doe_is_eval = _create_does(problem_, n_init, n_repeat, sampler=sampler(), seed=42)
             log.info(f'Naive DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
                      f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
             doe[algo_names[j]] = doe_prob
@@ -299,6 +309,9 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
             # for prob in [problem_, problem_._problem]:
             #     if 'all_discrete_x' in prob.design_space.__dict__:
             #         del prob.design_space.__dict__['all_discrete_x']
+
+        if not doe_is_eval:
+            n_eval_max += n_init
 
         do_run = not post_process
         exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max, doe=doe,
@@ -708,7 +721,7 @@ def exp_02_03_sensitivities(sbo=False, mrd=False):
 
         doe = {}
         for j, problem_ in enumerate(problems):
-            doe_prob, doe_delta_hvs = _create_does(problem_, n_init, n_repeat)
+            doe_prob, doe_delta_hvs, _ = _create_does(problem_, n_init, n_repeat)
             log.info(f'Naive DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
                      f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
             doe[algo_names[j]] = doe_prob
