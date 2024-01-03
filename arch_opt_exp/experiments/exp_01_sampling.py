@@ -783,7 +783,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
     out_pre = 'sampling_' if sampling is True else 'corr_' if sampling is False else ''
     n_infill = 40
     n_gen = 25
-    n_repeat = 16 if sbo else 40
+    n_repeat = 24 if sbo else 40
     doe_k = 3 if sbo else 10
     n_sub, n_opts = 9, 3
     i_opt_test = [0]  # [0, n_sub-1]
@@ -982,6 +982,17 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
                     problem.design_space.corrector_factory = corrector_factory
                     problems.append(problem)
 
+                    # import timeit
+                    # from pymoo.operators.sampling.rnd import FloatRandomSampling
+                    # t = []
+                    # for _ in range(10):
+                    #     x = FloatRandomSampling().do(problem, 100).get('X')
+                    #     # x, _ = problem.design_space.quick_sample_discrete_x(100)
+                    #     s = timeit.default_timer()
+                    #     problem.correct_x(x)
+                    #     t.append(timeit.default_timer()-s)
+                    # print(f'Corrector {corr_name}: {np.mean(t)*1000:.0f} ms')
+
                     if isinstance(cls_sampler, ArchVarHierarchicalSampling):
                         cls_sampler.arch_var_idx = problems_i_x_arch.get(title)
 
@@ -996,6 +1007,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
                     else:
                         algorithms.append(ArchOptNSGA2(pop_size=n_init, sampling=cls_sampler))
                     algo_names.append(f'{corr_name} {sampler_name}')
+            # exit()
 
             do_run = not post_process
             n_eval_max = (n_init+n_infill) if sbo else ((n_gen-1)*n_init)

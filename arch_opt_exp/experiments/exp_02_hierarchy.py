@@ -85,16 +85,22 @@ def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, rep
             if evaluator is not None:
                 doe_algo.evaluator = evaluator
             doe_algo.setup(problem)
-            doe_algo.run()
 
-            doe_pf = DeltaHVMetric.get_pareto_front(doe_algo.pop.get('F'))
-            doe_f = DeltaHVMetric.get_valid_pop(doe_algo.pop).get('F')
-            delta_hv = DeltaHVMetric(problem.pareto_front()).calculate_delta_hv(doe_pf, doe_f)[0]
-            if delta_hv < 1e-6:
-                continue
+            doe_algo.has_next()
+            pop = doe_algo.infill()
+            delta_hv = 0
             break
 
-        doe[i_rep] = doe_algo.pop
+            # doe_algo.run()
+            # pop = doe_algo.pop
+            # doe_pf = DeltaHVMetric.get_pareto_front(doe_algo.pop.get('F'))
+            # doe_f = DeltaHVMetric.get_valid_pop(doe_algo.pop).get('F')
+            # delta_hv = DeltaHVMetric(problem.pareto_front()).calculate_delta_hv(doe_pf, doe_f)[0]
+            # if delta_hv < 1e-6:
+            #     continue
+            # break
+
+        doe[i_rep] = pop
         doe_delta_hvs.append(delta_hv)
     return doe, doe_delta_hvs
 
@@ -175,7 +181,7 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
     folder = set_results_folder(f'{_exp_02_02_folder}_{folder_post}')
     n_infill = 40
     n_gen = 25
-    n_repeat = 16 if sbo else 40
+    n_repeat = 16 if sbo else 100
     doe_k = 3 if sbo else 10
     # n_sub, n_opts = 8, 2
     n_sub, n_opts = 9, 3
@@ -256,8 +262,9 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
             ('03_activeness', (NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True), False)),
         ])
 
-        sampler = lambda: ActiveVarHierarchicalSampling(weight_by_nr_active=True)
+        # sampler = lambda: ActiveVarHierarchicalSampling(weight_by_nr_active=True)
         # sampler = lambda: ActiveVarHierarchicalSampling()
+        sampler = lambda: MRDHierarchicalSampling(min_rd_split=.8)
         algo_models = []
         if sbo:
             n_eval_max = n_infill
@@ -866,13 +873,10 @@ def exp_02_04_tunable_hier_dv_examples():
 
 
 if __name__ == '__main__':
-    # from exp_01_sampling import exp_01_06_opt
-    # exp_01_06_opt()
-
     # exp_02_01_tpe()
     # exp_02_02a_model_fit()
-    # exp_02_02_hier_strategies()
-    exp_02_02_hier_strategies(sbo=True)
+    exp_02_02_hier_strategies()
+    # exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)

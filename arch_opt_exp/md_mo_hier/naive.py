@@ -89,6 +89,8 @@ class NaiveProblem(ArchOptProblemBase):
         self._do_correct = correct = correct and return_mod_x
         self._return_activeness = return_activeness and correct
 
+        problem.design_space.use_auto_corrector = False
+
     def _is_conditionally_active(self):
         if self._return_activeness:
             return self._problem.is_conditionally_active
