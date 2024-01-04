@@ -220,6 +220,9 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
     #     (lambda: SelectableTunableZDT1(n_sub=n_sub, i_sub_opt=i_sub_opt, n_opts=n_opts), '03_MO_HDR', 'ZDT1 (H/MRD)'),
     # ]
     problems = get_hier_test_problems()
+    if sbo:
+        # Wt GNC problem is too easy, therefore gives skewed performance numbers
+        problems = [prob_data for prob_data in problems if prob_data[2] != 'Wt GNC']
 
     # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem = problem_factory()
@@ -240,8 +243,8 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
         p_name_map[name] = title
         problem_path = f'{folder}/{secure_filename(name)}'
         problem_paths.append(problem_path)
-        if post_process:
-            continue
+        # if post_process:
+        #     continue
 
         n_init = int(np.ceil(doe_k*problem.n_var))
         n_kpls = None
@@ -290,6 +293,14 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
                 algorithms.append(get_sbo(model, infill, infill_size=n_batch, init_size=n_init, normalization=norm,
                                           init_sampling=sampler()))
         else:
+            algo_names_ = []
+            prob_and_settings_ = []
+            for i, (problem_, ignore_hier) in enumerate(prob_and_settings):
+                if not ignore_hier:
+                    algo_names_.append(algo_names[i])
+                    prob_and_settings_.append((problem_, ignore_hier))
+            algo_names, prob_and_settings = algo_names_, prob_and_settings_
+
             pop_size = n_init
             n_eval_max = (n_gen-1)*pop_size
             algorithms = [ArchOptNSGA2(pop_size=pop_size, sampling=sampler()) for _ in range(len(prob_and_settings))]
@@ -299,6 +310,8 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
         problems = [entry[0] for entry in prob_and_settings]
         problem_: NaiveProblem
         for j, problem_ in enumerate(problems):
+            if post_process:
+                break
             problem_.design_space.corrector_factory = corrector_factory
 
             doe_prob, doe_delta_hvs, doe_is_eval = _create_does(problem_, n_init, n_repeat, sampler=sampler(), seed=42)
@@ -316,7 +329,7 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
         do_run = not post_process
         exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max, doe=doe,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   run_if_exists=False)
+                   run_if_exists=False, do_plot=do_run)
         agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
         # # Investigate model fitting qualities
@@ -344,7 +357,7 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
 
     cat_name_map = {val: val for val in strat_map.values()}
     plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, cat_name_map=cat_name_map, save_path=f'{folder}/rank',
-                   quant_perf_col='delta_hv_regret')
+                   quant_perf_col='delta_hv_regret', n_col_split=7)
 
 
 def _compare_first_last_model_fit(exps: List[Experimenter], algo_models, does: List[List[Population]],
@@ -888,8 +901,8 @@ def exp_02_04_tunable_hier_dv_examples():
 if __name__ == '__main__':
     # exp_02_01_tpe()
     # exp_02_02a_model_fit()
-    exp_02_02_hier_strategies()
-    # exp_02_02_hier_strategies(sbo=True)
+    # exp_02_02_hier_strategies()
+    exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)

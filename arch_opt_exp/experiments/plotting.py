@@ -327,11 +327,17 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
             if hide_ranks:
                 rank_columns = []
                 df_rank_latex = df_rank_latex.iloc[:, -n_col_counts:]
+        count_perf_columns = (list(count_columns) or []) + (list(perf_columns) or [])
 
+        has_idx_name = False
+        if not isinstance(n_col_idx, int):
+            df_rank_latex.index.name = ' & '.join(n_col_idx)
+            has_idx_name = True
+            n_col_idx = len(n_col_idx)
         if n_col_split is None:
             n_col_split = len(df_rank_latex.columns)+n_col_idx
 
-        col_fmt = 'l'+'c'*len(df_rank_latex.columns)
+        col_fmt = 'l'*n_col_idx+'c'*len(df_rank_latex.columns)
         buffer = io.StringIO()
         for i_start_col in range(-n_col_idx, len(df_rank_latex.columns), n_col_split):
             if i_start_col >= 0:
@@ -339,7 +345,8 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
 
             df_sub = df_rank_latex.iloc[:, max(0, i_start_col):i_start_col+n_col_split]
             s = df_sub.style
-            s.hide(names=True)
+            if not has_idx_name:
+                s.hide(names=True)
             s.hide(names=True, axis=1)
             if i_start_col >= 0:
                 s.hide(axis='index')
@@ -363,14 +370,17 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
                 s.format('{:.0f}', subset=sub_rank_columns)
 
             if i_best is not None:
-                # s.set_properties(subset=pd.IndexSlice[df_sub.index[i_best], :], **{'underline': '--rwrap--latex'})
+                if add_counts:
+                    s.set_properties(subset=pd.IndexSlice[df_sub.index[i_best], df_sub.columns[-n_col_counts:]],
+                                     **{'underline': '--rwrap--latex'})
+
                 def style_idx_(s):
                     styles = np.array(['']*len(s), dtype=object)
                     styles[i_best] = 'underline: --rwrap--latex;'
                     return styles
                 s.apply_index(style_idx_)
 
-            s.to_latex(buffer, hrules=True, convert_css=True, column_format=col_fmt[i_start_col+1:][:n_col_split])
+            s.to_latex(buffer, hrules=True, convert_css=True, column_format=col_fmt[i_start_col+n_col_idx:][:n_col_split])
 
         with open(save_path+'.tex', 'w') as fp:
             buffer.seek(0)

@@ -790,7 +790,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
 
     if not sbo:
         eager_samplers = [
-            (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
+            # (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
             (HierarchicalRandomSampling(), 'HierRnd'),
             (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
             (NrActiveHierarchicalSampling(), 'HierNrAct'),
@@ -1013,7 +1013,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             n_eval_max = (n_init+n_infill) if sbo else ((n_gen-1)*n_init)
             exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max,
                        metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                       run_if_exists=False, restart_pool=True)
+                       run_if_exists=False, restart_pool=True, do_plot=do_run)
             agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
             plt.close('all')
 
@@ -1035,24 +1035,29 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
     if sbo:
         df_agg = df_agg[~df_agg.corr_only.isin(['Eager Rnd Cval', 'Lazy Rnd Cval'])]
 
+    nh, h = 'Non-hier.', 'Hier.'
+    n_act, x_act, mrd, n_xgrp = '$n_{act}$', '$x_{act}$', '$MRD$', '$n_{x,grp}$'
     sampler_map = {
-        'LHS': 'LHS', 'HierRnd': 'Random',
-        'HierNoGroup': 'Hier',
-        'HierNrAct': 'Hier $n_{act}$', 'HierNrActWt': 'Hier $n_{act}$ wt.', 'HierNrActWtGrp': 'Hier $n_{act}$ wt.g.',
-        'HierAct': 'Hier $x_{act}$', 'HierActWt': 'Hier $x_{act}$ wt.', 'HierActWtGrp': 'Hier $x_{act}$ wt.g.',
-        'HierArch': 'Hier $x_{arch}$', 'HierArchWt': 'Hier $x_{arch}$ wt.',
+        'LHS': ('LHS', '', ''), 'HierRnd': (nh, '', ''),
+        'HierNoGroup': (h, '', ''),
+        'HierNrAct': (h, n_act, ''), 'HierNrActWt': (h, n_act, n_act), 'HierNrActWtGrp': (h, n_act, n_xgrp),
+        'HierAct': (h, x_act, ''), 'HierActWt': (h, x_act, n_act), 'HierActWtGrp': (h, x_act, n_xgrp),
+        'HierArch': (h, '$x_{arch}$', ''), 'HierArchWt': (h, '$x_{arch}$', n_act),
         # 'HierMRD': 'Hier $MRD$', 'HierMRDWt': 'Hier $MRD$ wt.', 'HierMRDWtGrp': 'Hier $MRD$ wt.g.',
-        'HierMRD08': 'Hier $MRD$', 'HierMRDWt08': 'Hier $MRD$ wt.', 'HierMRDWtGrp08': 'Hier $MRD$ wt.g.',
+        'HierMRD08': (h, mrd, ''), 'HierMRDWt08': (h, mrd, n_act), 'HierMRDWtGrp08': (h, mrd, n_xgrp),
     }
+    corr_type_map = {'Specific': 'Problem-specific'}
     algo_map = {
         'Rnd': 'Any-select',
         'Greedy': 'Greedy',
         'Closest': 'Similar',
     }
+    n_col_idx = 3
+    n_col_split = None
     cat_name_map = {}
     for cls_sampler in df_agg.index.get_level_values(1).unique():
         parts = cls_sampler.split(' ')
-        corr_type = parts[0]
+        corr_type = corr_type_map.get(parts[0], parts[0])
         algo_type = parts[1]
         algo_name = algo_map.get(algo_type, algo_type)
 
@@ -1068,16 +1073,27 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
                 else:
                     config_str = 'Depth-f.'
 
-        sampler = sampler_map.get(parts[-1], parts[-1])
+        sampler, sampler_grp, sampler_wt = sampler_map.get(parts[-1], parts[-1])
 
-        # if sbo:
-        cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {config_str} & {sampler}'
-        # else:
-        #     cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {rand_str} & {cval_str} & {config_str} & {sampler}'
+        if sampling is True:
+            n_col_split = 6
+            n_col_idx = ['Strategy (grp.; wt.)']
+            sampler_idx = sampler
+            if sampler_grp:
+                sampler_idx += f' ({sampler_grp}'
+                if sampler_wt:
+                    sampler_idx += f'; {sampler_wt}'
+                sampler_idx += ')'
+
+            cat_name_map[cls_sampler] = sampler_idx  # f'{sampler} & {sampler_grp} & {sampler_wt}'
+
+        else:
+            n_col_split = 7
+            n_col_idx = ['Correction', 'Config', 'Sampling']
+            cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {config_str} & {sampler} {sampler_grp} {sampler_wt}'
     df_agg['idx_name'] = [cat_name_map.get(val, val) for val in df_agg.index.get_level_values(1)]
 
-    n_col_split, hide_ranks, qpc_name = None, False, 'delta_hv_regret'
-    n_col_idx = 3  # if sbo else 5
+    hide_ranks, qpc_name = False, 'delta_hv_regret'
     best_overall = plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
                                   save_path=f'{folder}/{out_pre}rank{folder_post}', n_col_split=n_col_split,
                                   n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
@@ -1603,7 +1619,7 @@ if __name__ == '__main__':
     # exp_01_05_correction(sbo=True, post_process=False)
     # exp_01_05_correction(sampling=True, sbo=False, post_process=False)
     # exp_01_05_correction(sampling=True, sbo=True, post_process=False)
-    # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
+    exp_01_05_correction(sampling=False, sbo=False, post_process=False)
     exp_01_05_correction(sampling=False, sbo=True, post_process=False)
     # exp_01_05a_arch_freq()
 
