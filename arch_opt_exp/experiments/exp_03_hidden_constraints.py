@@ -1113,14 +1113,14 @@ def exp_03_07_engine_arch(post_process=False):
         (SimpleTurbofanArch(), 300, 3, [
             # Gower, n_kpls (None = Hier GP; False = MD GP), naive, strategies
             # (False, None, False, reduced_strategies),
-            (True, None, False, reduced_strategies),
-            (True, False, False, reduced_strategies),
-            (True, False, True, reduced_strategies),
-            (True, False, 2, reduced_strategies),
-            (True, False, 3, reduced_strategies),
-            (True, 10, False, all_strategies),
-            (True, 5, False, reduced_strategies),
-            (True, 2, False, reduced_strategies),
+            (True, None, False, reduced_strategies),  # Hier GP
+            (True, False, False, all_strategies),  # MD GP
+            (True, False, True, reduced_strategies),  # Naive: repair
+            (True, False, 2, reduced_strategies),  # Naive: x out
+            (True, False, 3, reduced_strategies),  # Naive
+            # (True, 10, False, all_strategies),
+            # (True, 5, False, reduced_strategies),
+            # (True, 2, False, reduced_strategies),
         ]),
         # (RealisticTurbofanArch(noise_obj=False), 913, 5, [
         #     (True, 10, False, aggressive_strategies),
@@ -1275,7 +1275,11 @@ def exp_03_07_engine_arch(post_process=False):
 
                 infill_pop_size = None  # 200 if is_heavy else None
 
-                algo_problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=not naive)
+                if naive:
+                    algo_problem = NaiveProblem(
+                        problem, return_mod_x=naive < 3, correct=naive < 2, return_activeness=False)
+                else:
+                    algo_problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)
                 doe_problem = doe
                 if naive:
                     doe_problem = load_from_previous_results(problem, doe_folders[name, True])
