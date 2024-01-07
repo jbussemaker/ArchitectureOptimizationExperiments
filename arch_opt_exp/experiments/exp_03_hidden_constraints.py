@@ -1169,6 +1169,9 @@ def exp_03_07_engine_arch(post_process=False):
             doe_algo.setup(doe_problem)
             doe_algo.run()
 
+        if (name, False) not in doe_folders:
+            doe_folders[name, False] = prob_doe_folder
+
     def prob_add_cols(strat_data_, df_strat, algo_name):
         n_theta, kpls_n_dim, agg_g, kernel, strategy_, naive_ = model_settings[algo_name]
 
