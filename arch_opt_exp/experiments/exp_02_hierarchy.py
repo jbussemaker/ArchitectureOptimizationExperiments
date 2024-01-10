@@ -68,13 +68,20 @@ _exp_02_03_folder = '02_hier_03_sensitivities'
 _exp_02_04_folder = '02_hier_04_dv_examples'
 
 
-def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, repair=None, evaluator=None, seed=None):
+def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, repair=None, evaluator=None, seed=None,
+                 fr_correction=None):
+
+    n_doe_corr = n_doe
+    if fr_correction is not None:
+        fr_expected, fr_tgt = fr_correction
+        n_doe_corr = int(n_doe*(1-fr_tgt)/(1-fr_expected))
+
     doe: Dict[int, Population] = {}
     doe_delta_hvs = []
     is_eval = False
     for i_rep in range(n_repeat):
         for _ in range(10):
-            doe_algo = get_doe_algo(n_doe)
+            doe_algo = get_doe_algo(n_doe_corr)
             if sampler is not None or repair is not None:
                 doe_algo.initialization = Initialization(
                     sampler if sampler is not None else doe_algo.initialization.sampling,
@@ -88,23 +95,49 @@ def _create_does(problem: ArchOptProblemBase, n_doe, n_repeat, sampler=None, rep
             doe_algo.setup(problem)
 
             doe_algo.has_next()
+
+            # if fr_correction is None:
             pop = doe_algo.infill()
             delta_hv = 0
             break
 
-            # doe_algo.run()
-            # is_eval = True
-            # pop = doe_algo.pop
-            # doe_pf = DeltaHVMetric.get_pareto_front(doe_algo.pop.get('F'))
-            # doe_f = DeltaHVMetric.get_valid_pop(doe_algo.pop).get('F')
-            # delta_hv = DeltaHVMetric(problem.pareto_front()).calculate_delta_hv(doe_pf, doe_f)[0]
-            # if delta_hv < 1e-6:
-            #     continue
-            # break
+            # else:
+            #     doe_algo.run()
+            #     is_eval = True
+            #     pop = doe_algo.pop
+            #     if fr_correction is not None:
+            #         pop = correct_doe_failure_rate(pop, n_doe)
+            #
+            #     doe_pf = DeltaHVMetric.get_pareto_front(doe_algo.pop.get('F'))
+            #     doe_f = DeltaHVMetric.get_valid_pop(doe_algo.pop).get('F')
+            #     delta_hv = DeltaHVMetric(problem.pareto_front()).calculate_delta_hv(doe_pf, doe_f)[0]
+            #     if delta_hv < 1e-6:
+            #         continue
+            #     break
 
         doe[i_rep] = pop
         doe_delta_hvs.append(delta_hv)
     return doe, doe_delta_hvs, is_eval
+
+
+def correct_doe_failure_rate(pop: Population, n_doe_target):
+    i_select = np.ones((len(pop),), dtype=bool)
+
+    i_failed = np.where(ArchOptProblemBase.get_failed_points(pop))[0]
+    n_remove = len(pop)-n_doe_target
+    if n_remove < 0:
+        return pop
+
+    if len(i_failed) < n_remove:
+        i_remove = i_failed
+    else:
+        i_remove = i_failed[np.random.choice(np.arange(len(i_failed)), n_remove, replace=False)]
+
+    i_select[i_remove] = False
+    corr_pop = pop[i_select].copy()
+    # print(f'FR correction: {100*np.sum(ArchOptProblemBase.get_failed_points(pop))/len(pop):.1f}% -> '
+    #       f'{100*np.sum(ArchOptProblemBase.get_failed_points(corr_pop))/len(corr_pop)}%')
+    return corr_pop
 
 
 def _get_metrics(problem):
@@ -224,6 +257,13 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
         # Wt GNC problem is too easy, therefore gives skewed performance numbers
         problems = [prob_data for prob_data in problems if prob_data[2] != 'Wt GNC']
 
+    fr_correct_map = {
+        # 'Jet SM': (.67, .54),  # Expected & target failure rates
+    }
+    doe_k_map = {
+        'Jet SM': 10 if sbo else None,
+    }
+
     # for i, (problem_factory, _, _) in enumerate(problems):
     #     problem = problem_factory()
     #     problem.print_stats()
@@ -246,7 +286,8 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
         # if post_process:
         #     continue
 
-        n_init = int(np.ceil(doe_k*problem.n_var))
+        doe_k_prob = doe_k_map.get(title, doe_k)
+        n_init = int(np.ceil(doe_k_prob*problem.n_var))
         n_kpls = None
         # n_kpls = n_kpls if problem.n_var > n_kpls else None
         i_prob += 1
@@ -269,7 +310,7 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
 
         # sampler = lambda: ActiveVarHierarchicalSampling(weight_by_nr_active=True)
         # sampler = lambda: ActiveVarHierarchicalSampling()
-        sampler = lambda: MRDHierarchicalSampling(min_rd_split=.8)
+        sampler = lambda: MRDHierarchicalSampling(high_rd_split=.8, low_rd_split=.5)
 
         from arch_opt_exp.experiments.exp_01_sampling import CorrectorFactory, ProblemSpecificCorrector
         corrector_factory = CorrectorFactory(ProblemSpecificCorrector)
@@ -306,25 +347,35 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
             algorithms = [ArchOptNSGA2(pop_size=pop_size, sampling=sampler()) for _ in range(len(prob_and_settings))]
 
         doe = {}
-        doe_is_eval = False
         problems = [entry[0] for entry in prob_and_settings]
+        n_eval_max = np.ones((len(problems),), dtype=int)*n_eval_max
         problem_: NaiveProblem
         for j, problem_ in enumerate(problems):
             if post_process:
                 break
             problem_.design_space.corrector_factory = corrector_factory
 
-            doe_prob, doe_delta_hvs, doe_is_eval = _create_does(problem_, n_init, n_repeat, sampler=sampler(), seed=42)
+            fr_correct = None
+            is_hier_sampling = problem_._return_activeness
+            if is_hier_sampling:
+                fr_correct = fr_correct_map.get(title)
+
+            doe_prob, doe_delta_hvs, doe_is_eval = _create_does(
+                problem_, n_init, n_repeat, sampler=sampler(), seed=42, fr_correction=fr_correct)
             log.info(f'Naive DOE Delta HV for {name}: {np.median(doe_delta_hvs):.3g} '
                      f'(Q25 {np.quantile(doe_delta_hvs, .25):.3g}, Q75 {np.quantile(doe_delta_hvs, .75):.3g})')
             doe[algo_names[j]] = doe_prob
+
+            n_extra = len(doe_prob[0])-n_init
+            n_eval_max[j] += n_extra
+            if not doe_is_eval:
+                n_eval_max[j] += n_init
 
             # for prob in [problem_, problem_._problem]:
             #     if 'all_discrete_x' in prob.design_space.__dict__:
             #         del prob.design_space.__dict__['all_discrete_x']
 
-        if not doe_is_eval:
-            n_eval_max += n_init
+        n_eval_max = list(n_eval_max)
 
         do_run = not post_process
         exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max, doe=doe,
@@ -357,7 +408,7 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
 
     cat_name_map = {val: val for val in strat_map.values()}
     plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, cat_name_map=cat_name_map, save_path=f'{folder}/rank',
-                   quant_perf_col='delta_hv_regret', n_col_split=6 if sbo else 7)
+                   quant_perf_col='delta_hv_abs_regret', n_col_split=6 if sbo else 7)
 
 
 def _compare_first_last_model_fit(exps: List[Experimenter], algo_models, does: List[List[Population]],
@@ -902,7 +953,7 @@ if __name__ == '__main__':
     # exp_02_01_tpe()
     # exp_02_02a_model_fit()
     # exp_02_02_hier_strategies()
-    exp_02_02_hier_strategies(sbo=True)
+    exp_02_02_hier_strategies(sbo=True, post_process=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)

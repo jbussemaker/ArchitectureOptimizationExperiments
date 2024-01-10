@@ -168,26 +168,47 @@ class ArchVarHierarchicalSampling(HierarchicalSamplingTestBase):
 class MRDHierarchicalSampling(HierarchicalSamplingTestBase):
     """Groups by recursively inspecting max rate diversity"""
 
-    def __init__(self, min_rd_split=.8, **kwargs):
+    def __init__(self, high_rd_split=.8, low_rd_split=.5, **kwargs):
         super().__init__(**kwargs)
-        self.min_rd_split = min_rd_split
+        self.high_rd_split = high_rd_split
+        self.low_rd_split = low_rd_split
 
     def group_design_vectors(self, x_all: np.ndarray, is_act_all: np.ndarray, is_cont_mask) -> List[np.ndarray]:
         is_discrete_mask = ~is_cont_mask
-        min_rd_split = self.min_rd_split
+        high_rd_split = self.high_rd_split
+        low_rd_split = self.low_rd_split
+        i_low_rd_split = None
 
         def recursive_get_groups(group_i: np.ndarray) -> List[np.ndarray]:
+            nonlocal i_low_rd_split
+
             x_grp = x_all[group_i, :]
             x_min = np.min(x_grp, axis=0).astype(int)
             is_act_grp = is_act_all[group_i, :]
             counts, diversity, active_diversity, i_opts = \
                 ArchDesignSpace.calculate_discrete_rates_raw(x_grp - x_min, is_act_grp, is_discrete_mask)
 
-            rd_split_rates, = np.where(active_diversity >= min_rd_split)
-            if len(rd_split_rates) == 0:
-                return [group_i]
+            # Check low split rate
+            xi_split = None
+            if low_rd_split is not None:
+                rd_split_rates, = np.where(active_diversity >= low_rd_split)
+                if i_low_rd_split is None:  # If no low-split variable has been set
+                    if len(rd_split_rates) == 0:
+                        i_low_rd_split = -1  # Set to "no low-split var"
+                    else:
+                        i_low_rd_split = rd_split_rates[0]  # Choose first var
+                        xi_split = rd_split_rates[0]
 
-            xi_split = rd_split_rates[0]  # rd_split_rates[np.argmax(active_diversity[rd_split_rates])]
+                elif i_low_rd_split != -1 and len(rd_split_rates) > 0 and rd_split_rates[0] == i_low_rd_split:
+                    xi_split = rd_split_rates[0]
+
+            # Check high split rate
+            if xi_split is None:
+                rd_split_rates, = np.where(active_diversity >= high_rd_split)
+                if len(rd_split_rates) == 0:
+                    return [group_i]
+                xi_split = rd_split_rates[0]
+
             opt_rates = counts[1:, xi_split]
             i_opt_min = np.nanargmin(opt_rates) + x_min[xi_split]
 

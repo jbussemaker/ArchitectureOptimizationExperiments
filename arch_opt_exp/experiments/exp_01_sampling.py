@@ -801,9 +801,9 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             (ActiveVarHierarchicalSampling(weight_by_group_size=True), 'HierActWtGrp'),
             # (ArchVarHierarchicalSampling([]), 'HierArch'),
             # (ArchVarHierarchicalSampling([], weight_by_nr_active=True), 'HierArchWt'),
-            (MRDHierarchicalSampling(min_rd_split=.8), 'HierMRD08'),
-            (MRDHierarchicalSampling(min_rd_split=.8, weight_by_nr_active=True), 'HierMRDWt08'),
-            (MRDHierarchicalSampling(min_rd_split=.8, weight_by_group_size=True), 'HierMRDWtGrp08'),
+            (MRDHierarchicalSampling(high_rd_split=.8), 'HierMRD08'),
+            (MRDHierarchicalSampling(high_rd_split=.8, weight_by_nr_active=True), 'HierMRDWt08'),
+            (MRDHierarchicalSampling(high_rd_split=.8, weight_by_group_size=True), 'HierMRDWtGrp08'),
         ]
     else:
         eager_samplers = [
@@ -811,13 +811,13 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
             (NrActiveHierarchicalSampling(), 'HierNrAct'),
             (ActiveVarHierarchicalSampling(), 'HierAct'),
-            (MRDHierarchicalSampling(min_rd_split=.8), 'HierMRD08'),
+            (MRDHierarchicalSampling(high_rd_split=.8), 'HierMRD08'),
         ]
     specific_samplers = eager_samplers.copy()
     if sampling is False:
         eager_samplers = [
             # (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
-            (MRDHierarchicalSampling(min_rd_split=.8), 'HierMRD08'),
+            (MRDHierarchicalSampling(high_rd_split=.8), 'HierMRD08'),
         ]
         specific_samplers = eager_samplers.copy()
         specific_samplers += [
@@ -1093,7 +1093,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {config_str} & {sampler} {sampler_grp} {sampler_wt}'
     df_agg['idx_name'] = [cat_name_map.get(val, val) for val in df_agg.index.get_level_values(1)]
 
-    hide_ranks, qpc_name = False, 'delta_hv_regret'
+    hide_ranks, qpc_name = False, 'delta_hv_abs_regret'
     best_overall = plot_perf_rank(df_agg, 'corr', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
                                   save_path=f'{folder}/{out_pre}rank{folder_post}', n_col_split=n_col_split,
                                   n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
@@ -1619,9 +1619,9 @@ if __name__ == '__main__':
     # exp_01_05_correction(sbo=True, post_process=False)
     # exp_01_05_correction(sampling=True, sbo=False, post_process=False)
     # exp_01_05_correction(sampling=True, sbo=True, post_process=False)
-    exp_01_05_correction(sampling=False, sbo=False, post_process=False)
-    exp_01_05_correction(sampling=False, sbo=True, post_process=False)
-    # exp_01_05a_arch_freq()
+    # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
+    # exp_01_05_correction(sampling=False, sbo=True, post_process=False)
+    exp_01_05a_arch_freq()
 
     # exp_01_06_opt()
     # exp_01_06_opt(sbo=False)
