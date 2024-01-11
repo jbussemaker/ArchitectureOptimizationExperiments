@@ -286,7 +286,7 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
         # if post_process:
         #     continue
 
-        doe_k_prob = doe_k_map.get(title, doe_k)
+        doe_k_prob = doe_k_map.get(title) or doe_k
         n_init = int(np.ceil(doe_k_prob*problem.n_var))
         n_kpls = None
         # n_kpls = n_kpls if problem.n_var > n_kpls else None
@@ -344,7 +344,15 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
 
             pop_size = n_init
             n_eval_max = (n_gen-1)*pop_size
-            algorithms = [ArchOptNSGA2(pop_size=pop_size, sampling=sampler()) for _ in range(len(prob_and_settings))]
+            algorithms = []
+            for problem_, ignore_hierarchy in prob_and_settings:
+                algorithm = ArchOptNSGA2(pop_size=pop_size, sampling=sampler())
+
+                if ignore_hierarchy:
+                    algorithm.mating.repair = algorithm.repair = NoRepair()
+                    algorithm.evaluator = NaiveArchOptEvaluator()
+
+                algorithms.append(algorithm)
 
         doe = {}
         problems = [entry[0] for entry in prob_and_settings]
@@ -952,8 +960,8 @@ def exp_02_04_tunable_hier_dv_examples():
 if __name__ == '__main__':
     # exp_02_01_tpe()
     # exp_02_02a_model_fit()
-    # exp_02_02_hier_strategies()
-    exp_02_02_hier_strategies(sbo=True, post_process=True)
+    exp_02_02_hier_strategies()
+    # exp_02_02_hier_strategies(sbo=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)

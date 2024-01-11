@@ -18,8 +18,10 @@ import timeit
 import numpy as np
 from sb_arch_opt.problem import *
 from sb_arch_opt.design_space import *
+from sb_arch_opt.algo.pymoo_interface.storage_restart import ArchOptEvaluator
+from pymoo.core.repair import NoRepair
 
-__all__ = ['NaiveProblem']
+__all__ = ['NaiveProblem', 'NoRepair', 'NaiveArchOptEvaluator']
 
 
 class NaiveDesignSpace(ImplicitArchDesignSpace):
@@ -147,3 +149,14 @@ class NaiveProblem(ArchOptProblemBase):
     def __repr__(self):
         return f'{self.__class__.__name__}({self._problem!r}, return_mod_x={self._return_mod_x}, ' \
                f'correct={self._do_correct}, return_activeness={self._return_activeness})'
+
+
+class NaiveArchOptEvaluator(ArchOptEvaluator):
+
+    def _eval(self, problem, pop, evaluate_values_of, **kwargs):
+        x_in = pop.get('X').copy()
+
+        pop = super()._eval(problem, pop, evaluate_values_of, **kwargs)
+
+        pop.set('X', x_in)
+        return pop
