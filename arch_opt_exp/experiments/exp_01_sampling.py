@@ -17,6 +17,7 @@ Contact: jasper.bussemaker@dlr.de
 import os
 import pickle
 import logging
+import itertools
 import numpy as np
 import pandas as pd
 from typing import *
@@ -59,6 +60,7 @@ _exp_01_03_folder = '01_sampling_03_doe_accuracy'
 _exp_01_04_folder = '01_sampling_04_activeness_diversity'
 _exp_01_05_folder = '01_sampling_05_correction'
 _exp_01_05a_folder = '01_sampling_05a_freq'
+_exp_01_05b_folder = '01_sampling_05b_mrd_params'
 _exp_01_06_folder = '01_sampling_06_optimization'
 
 _all_problems = lambda: [
@@ -801,9 +803,9 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             (ActiveVarHierarchicalSampling(weight_by_group_size=True), 'HierActWtGrp'),
             # (ArchVarHierarchicalSampling([]), 'HierArch'),
             # (ArchVarHierarchicalSampling([], weight_by_nr_active=True), 'HierArchWt'),
-            (MRDHierarchicalSampling(high_rd_split=.8), 'HierMRD08'),
-            (MRDHierarchicalSampling(high_rd_split=.8, weight_by_nr_active=True), 'HierMRDWt08'),
-            (MRDHierarchicalSampling(high_rd_split=.8, weight_by_group_size=True), 'HierMRDWtGrp08'),
+            (MRDHierarchicalSampling(high_rd_split=.8, low_rd_split=.5), 'HierMRD08'),
+            (MRDHierarchicalSampling(high_rd_split=.8, low_rd_split=.5, weight_by_nr_active=True), 'HierMRDWt08'),
+            (MRDHierarchicalSampling(high_rd_split=.8, low_rd_split=.5, weight_by_group_size=True), 'HierMRDWtGrp08'),
         ]
     else:
         eager_samplers = [
@@ -811,13 +813,13 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
             (NrActiveHierarchicalSampling(), 'HierNrAct'),
             (ActiveVarHierarchicalSampling(), 'HierAct'),
-            (MRDHierarchicalSampling(high_rd_split=.8), 'HierMRD08'),
+            (MRDHierarchicalSampling(high_rd_split=.8, low_rd_split=.5), 'HierMRD08'),
         ]
     specific_samplers = eager_samplers.copy()
     if sampling is False:
         eager_samplers = [
             # (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
-            (MRDHierarchicalSampling(high_rd_split=.8), 'HierMRD08'),
+            (MRDHierarchicalSampling(high_rd_split=.8, low_rd_split=.5), 'HierMRD08'),
         ]
         specific_samplers = eager_samplers.copy()
         specific_samplers += [
@@ -1404,6 +1406,183 @@ def _plot_pf_arch_freq(problem: ArchOptProblemBase, pops: List[Population], name
     return n_ps_rel, n_rel_target
 
 
+def exp_01_05b_mrd_params(sbo=False, post_process=False):
+    """
+    Determine the best MRD sampler parameters.
+    """
+    folder_post = '_sbo' if sbo else '_nsga2'
+    folder = set_results_folder(_exp_01_05b_folder+folder_post)
+    n_infill = 40
+    n_gen = 25
+    n_repeat = 16 if sbo else 40
+    doe_k = 3 if sbo else 10
+
+    if sbo:
+        high_low_rd_split_test = [
+            (.6, None),
+            (.7, None), (.7, .5),
+            (.8, None), (.8, .5),
+        ]
+    else:
+        high_rd_split_test = [.5, .6, .7, .8]
+        low_rd_split_test = [None, .5, .6]
+        high_low_rd_split_test = list(itertools.product(high_rd_split_test, low_rd_split_test))
+
+    samplers = []
+    for high_rd_split, low_rd_split in high_low_rd_split_test:
+        if low_rd_split is not None and low_rd_split >= high_rd_split:
+            continue
+
+        sampler_name = f'MRD_{high_rd_split*100:.0f}_'
+        sampler_name += 'NA' if low_rd_split is None else f'{low_rd_split*100:.0f}'
+        kwargs = dict(high_rd_split=high_rd_split, low_rd_split=low_rd_split)
+        samplers_ = [
+            (MRDHierarchicalSampling(**kwargs), f'{sampler_name}_NA'),
+            (MRDHierarchicalSampling(weight_by_nr_active=True, **kwargs), f'{sampler_name}_NACT'),
+            # (MRDHierarchicalSampling(weight_by_group_size=True, **kwargs), f'{sampler_name}_XGRP'),
+        ]
+        if sbo:
+            samplers_ = samplers_[:1]
+        samplers += samplers_
+    log.info(f'Testing {len(samplers)} samplers')
+
+    corrector_factory = CorrectorFactory(ProblemSpecificCorrector)
+
+    prob_data = {}
+
+    def prob_add_cols(strat_data_, df_strat, algo_name):
+        strat_data_['sampler'] = algo_name
+        strat_data_['high_rd'] = int(algo_name.split('_')[1])
+        low_rd = algo_name.split('_')[2]
+        strat_data_['low_rd'] = 0 if low_rd == 'NA' else int(low_rd)
+        strat_data_['grouping'] = algo_name.split('_')[3]
+
+        data_key = name
+        if data_key in prob_data:
+            for key, value in prob_data[data_key].items():
+                strat_data_[key] = value
+            return
+
+        discrete_rates = problem.get_discrete_rates(force=True)
+
+        prob_data[data_key] = data = {
+            'is_mo': problem.n_obj > 1,
+            'imp_ratio': problem.get_imputation_ratio(),
+            'imp_ratio_d': problem.get_discrete_imputation_ratio(),
+            'imp_ratio_c': problem.get_continuous_imputation_ratio(),
+            'n_discr': problem.get_n_valid_discrete(),
+            'n_doe': n_init,
+            'max_dr': discrete_rates.loc['diversity'].max(),
+            'max_adr': discrete_rates.loc['active-diversity'].max(),
+        }
+        for key, value in data.items():
+            strat_data_[key] = value
+
+    problems = get_hier_test_problems()
+    # for i, (problem_factory, _, _) in enumerate(problems):
+    #     problem_factory().print_stats()  # problem_factory(0).print_stats()
+    # exit()
+    if sbo:
+        # Wt GNC problem is too easy, therefore gives skewed performance numbers
+        problems = [prob_data for prob_data in problems if prob_data[2] != 'Wt GNC']
+
+    doe_k_map = {
+        'Jet SM': 10 if sbo else None,
+    }
+
+    problem_paths = []
+    problem_names = []
+    prob_name_map = {}
+    i_prob = 0
+    problem: ArchOptProblemBase
+    for i, (problem_factory, category, title) in enumerate(problems):
+        problem = problem_factory()
+        name = f'{category} {problem.__class__.__name__} {title}'
+        problem_names.append(name)
+        prob_name_map[name] = title
+        problem_path = f'{folder}/{secure_filename(name)}'
+        problem_paths.append(problem_path)
+        # if post_process:
+        #     continue
+
+        doe_k_prob = doe_k_map.get(title) or doe_k
+        n_init = int(np.ceil(doe_k_prob * problem.n_var))
+        n_kpls = None
+        ignore_hierarchy = True
+        # n_kpls = n_kpls if problem.n_var > n_kpls else None
+        i_prob += 1
+        log.info(f'Running optimizations for {i_prob}/{len(problems)}: {name} '
+                 f'(n_init = {n_init}, n_kpls = {n_kpls})')
+        problem.pareto_front()
+
+        metrics, additional_plot = _get_metrics(problem)
+        additional_plot['delta_hv'] = ['ratio', 'regret', 'delta_hv', 'abs_regret']
+        metrics.append(CorrectionTimeMetric())
+        additional_plot['corr_time'] = ['mean']
+
+        problems = []
+        algorithms = []
+        algo_names = []
+        for cls_sampler, sampler_name in samplers:
+            problem = problem_factory()
+            problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)
+            problem.design_space.corrector_factory = corrector_factory
+            problems.append(problem)
+
+            if sbo:
+                model, norm = ModelFactory(problem).get_md_kriging_model(
+                    kpls_n_comp=n_kpls, ignore_hierarchy=ignore_hierarchy)
+                infill, n_batch = get_default_infill(problem)
+                sbo_algo = SBOInfill(
+                    model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
+                sbo_algo = sbo_algo.algorithm(infill_size=1, sampler=cls_sampler, init_size=n_init)
+                algorithms.append(sbo_algo)
+            else:
+                algorithms.append(ArchOptNSGA2(pop_size=n_init, sampling=cls_sampler))
+            algo_names.append(sampler_name)
+
+        do_run = not post_process
+        n_eval_max = (n_init+n_infill) if sbo else ((n_gen-1)*n_init)
+        exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max,
+                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
+                   run_if_exists=False, restart_pool=False, do_plot=do_run)
+        agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
+        plt.close('all')
+
+    def _add_cols(df_agg_):
+        analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat)
+        analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat, prefix='grp_na', df_subset=df_agg_.grouping == 'NA')
+
+        for low_rd_ in df_agg_.low_rd.unique():
+            analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat, prefix=f'low_{low_rd_}',
+                              df_subset=(df_agg_.grouping == 'NA') & (df_agg_.low_rd == low_rd_))
+
+        return df_agg_
+
+    df_agg = agg_opt_exp(problem_names, problem_paths, folder, _add_cols)
+
+    n_col_idx = 3
+    n_col_split = None
+    cat_name_map = {}
+    # df_agg['idx_name'] = [cat_name_map.get(val, val) for val in df_agg.index.get_level_values(1)]
+
+    hide_ranks, qpc_name = False, 'delta_hv_abs_regret'
+    plot_perf_rank(df_agg, 'sampler', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
+                   save_path=f'{folder}/rank{folder_post}', n_col_split=n_col_split,
+                   n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
+
+    plot_perf_rank(df_agg[df_agg.grouping == 'NA'], 'sampler', prefix='grp_na', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
+                   save_path=f'{folder}/rank_grouping_na{folder_post}', n_col_split=n_col_split,
+                   n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
+
+    for low_rd in df_agg.low_rd.unique():
+        plot_perf_rank(df_agg[(df_agg.grouping == 'NA') & (df_agg.low_rd == low_rd)], 'sampler', prefix=f'low_{low_rd}',
+                       cat_name_map=cat_name_map, idx_name_map=prob_name_map, save_path=f'{folder}/rank_grouping_low_{low_rd}{folder_post}',
+                       n_col_split=n_col_split, n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
+
+    plt.close('all')
+
+
 def exp_01_06_opt(sbo=True, post_process=False):
     """
     Run optimizations with different sampling strategies for different sub-problem properties and optimum locations:
@@ -1615,13 +1794,16 @@ if __name__ == '__main__':
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
 
+    # exp_01_05b_mrd_params(sbo=False, post_process=False)
+    exp_01_05b_mrd_params(sbo=True, post_process=False)
+
     # exp_01_05_correction(sbo=False, post_process=False)
     # exp_01_05_correction(sbo=True, post_process=False)
     # exp_01_05_correction(sampling=True, sbo=False, post_process=False)
     # exp_01_05_correction(sampling=True, sbo=True, post_process=False)
     # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
     # exp_01_05_correction(sampling=False, sbo=True, post_process=False)
-    exp_01_05a_arch_freq()
+    # exp_01_05a_arch_freq()
 
     # exp_01_06_opt()
     # exp_01_06_opt(sbo=False)
