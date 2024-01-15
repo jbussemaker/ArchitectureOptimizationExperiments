@@ -29,6 +29,7 @@ class NaiveDesignSpace(ImplicitArchDesignSpace):
     def __init__(self, *args, **kwargs):
         self.last_corr_times = []
         super().__init__(*args, **kwargs)
+        self.use_auto_corrector = True
         self.corrector_factory = None
 
     def __deepcopy__(self, memodict=None):
@@ -48,7 +49,6 @@ class NaiveDesignSpace(ImplicitArchDesignSpace):
     def _get_corrector(self):
         if self.corrector_factory is not None:
             return self.corrector_factory(self, self._is_correct)
-        return super()._get_corrector()
 
     def _is_correct(self, xi: np.ndarray):
         x_corr = np.array([xi.copy()])
