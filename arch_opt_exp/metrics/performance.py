@@ -178,7 +178,7 @@ class DeltaHVMetric(Metric):
 
             # Get the relative distance of the current best point to the optimal point
             f_rel_dist = (f_opt-self.pf_0)/true_dist
-            f_rel_min_dist = np.min(np.sqrt(np.sum(f_rel_dist**2, axis=1)))
+            f_rel_min_dist = np.min(np.sum(f_rel_dist, axis=1))
 
             if self.delta_hv0 is None:
                 self.delta_hv0 = f_rel_min_dist
