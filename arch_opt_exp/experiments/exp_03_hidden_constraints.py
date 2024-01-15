@@ -1110,7 +1110,7 @@ def exp_03_07_engine_arch(post_process=False):
     ]
     problems = [
         # problem, n_budget, k_doe, strategies
-        (SimpleTurbofanArch(), 300, 3, [
+        (SimpleTurbofanArch(), 400, 5, [
             # Gower, n_kpls (None = Hier GP; False = MD GP), naive, strategies
             # (False, None, False, reduced_strategies),
             (True, None, False, reduced_strategies),  # Hier GP
@@ -1154,10 +1154,11 @@ def exp_03_07_engine_arch(post_process=False):
             if post_process:
                 continue
 
-            doe_problem = problem
             if is_naive:
                 doe_problem = NaiveProblem(
                     problem, return_mod_x=is_naive < 3, correct=is_naive < 2, return_activeness=False)
+            else:
+                doe_problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)
 
             # Rule of thumb: k*n_dim --> corrected for expected fail rate (unknown before running a problem, of course)
             n_init = int(np.ceil(k_doe*problem.n_var/(1-expected_fail_rate)))
@@ -1308,8 +1309,8 @@ def exp_03_07_engine_arch(post_process=False):
         for exp in exps:
             eff_res = exp.get_effectiveness_results()
             eff_res[0].plot_compare_metrics(
-                eff_res, 'delta_hv', plot_value_names=['ratio', 'regret'], plot_evaluations=True, show=False,
-                save_filename=exp.get_problem_algo_results_path('delta_hv_sep'))
+                eff_res, 'delta_hv', plot_value_names=['ratio', 'regret', 'delta_hv', 'abs_regret'],
+                plot_evaluations=True, show=False, save_filename=exp.get_problem_algo_results_path('delta_hv_sep'))
 
             for i_res, metric in enumerate(eff_res):
                 if metric.opt is None or problem.n_obj < 2:
@@ -1336,19 +1337,19 @@ def exp_03_07_engine_arch(post_process=False):
         exps_md_gp_gower = [exp for i_exp, exp in enumerate(exps) if i_exp in i_md_gp_gower]
         if len(exps_md_gp_gower) > 0:
             plot_for_pub_sb(exps_md_gp_gower, met_plot_map={
-                'delta_hv': ['ratio'],
+                'delta_hv': ['delta_hv'],
             }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower')
 
         exps_md_gp_naive = [exp for i_exp, exp in enumerate(exps) if i_exp in i_md_gp_naive]
         if len(exps_md_gp_naive) > 0:
             plot_for_pub_sb(exps_md_gp_naive, met_plot_map={
-                'delta_hv': ['ratio'],
+                'delta_hv': ['delta_hv'],
             }, algo_name_map=md_gp_naive_algo_name_map, prefix='md_gp_naive')
 
         exps_hc_strat = [exp for i_exp, exp in enumerate(exps) if i_exp in i_hc_strat]
         if len(exps_hc_strat) > 0:
             plot_for_pub_sb(exps_hc_strat, met_plot_map={
-                'delta_hv': ['ratio'],
+                'delta_hv': ['delta_hv'],
             }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat')
 
         plt.close('all')
