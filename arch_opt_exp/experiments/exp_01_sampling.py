@@ -1414,7 +1414,7 @@ def exp_01_05b_mrd_params(sbo=False, post_process=False):
     folder = set_results_folder(_exp_01_05b_folder+folder_post)
     n_infill = 40
     n_gen = 25
-    n_repeat = 16 if sbo else 40
+    n_repeat = 16 if sbo else 100
     doe_k = 3 if sbo else 10
 
     if sbo:
@@ -1551,11 +1551,15 @@ def exp_01_05b_mrd_params(sbo=False, post_process=False):
 
     def _add_cols(df_agg_):
         analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat)
-        analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat, prefix='grp_na', df_subset=df_agg_.grouping == 'NA')
 
-        for low_rd_ in df_agg_.low_rd.unique():
-            analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat, prefix=f'low_{low_rd_}',
-                              df_subset=(df_agg_.grouping == 'NA') & (df_agg_.low_rd == low_rd_))
+        for grouping_ in df_agg_.grouping.unique():
+            g = grouping_.lower()
+            analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat, prefix=f'grp_{g}',
+                              df_subset=df_agg_.grouping == grouping_)
+
+            for low_rd_ in df_agg_.low_rd.unique():
+                analyze_perf_rank(df_agg_, 'delta_hv_abs_regret', n_repeat, prefix=f'low_{g}_{low_rd_}',
+                                  df_subset=(df_agg_.grouping == grouping_) & (df_agg_.low_rd == low_rd_))
 
         return df_agg_
 
@@ -1571,14 +1575,17 @@ def exp_01_05b_mrd_params(sbo=False, post_process=False):
                    save_path=f'{folder}/rank{folder_post}', n_col_split=n_col_split,
                    n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
 
-    plot_perf_rank(df_agg[df_agg.grouping == 'NA'], 'sampler', prefix='grp_na', cat_name_map=cat_name_map, idx_name_map=prob_name_map,
-                   save_path=f'{folder}/rank_grouping_na{folder_post}', n_col_split=n_col_split,
-                   n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
+    for grouping in df_agg.grouping.unique():
+        plot_perf_rank(df_agg[df_agg.grouping == grouping], 'sampler', prefix=f'grp_{grouping.lower()}',
+                       cat_name_map=cat_name_map, idx_name_map=prob_name_map,
+                       save_path=f'{folder}/rank_grouping_{grouping.lower()}{folder_post}', n_col_split=n_col_split,
+                       n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
 
-    for low_rd in df_agg.low_rd.unique():
-        plot_perf_rank(df_agg[(df_agg.grouping == 'NA') & (df_agg.low_rd == low_rd)], 'sampler', prefix=f'low_{low_rd}',
-                       cat_name_map=cat_name_map, idx_name_map=prob_name_map, save_path=f'{folder}/rank_grouping_low_{low_rd}{folder_post}',
-                       n_col_split=n_col_split, n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
+        for low_rd in df_agg.low_rd.unique():
+            plot_perf_rank(df_agg[(df_agg.grouping == grouping) & (df_agg.low_rd == low_rd)], 'sampler',
+                           prefix=f'low_{grouping.lower()}_{low_rd}', cat_name_map=cat_name_map,
+                           idx_name_map=prob_name_map, save_path=f'{folder}/rank_grouping_{grouping.lower()}_low_{low_rd}{folder_post}',
+                           n_col_split=n_col_split, n_col_idx=n_col_idx, hide_ranks=hide_ranks, quant_perf_col=qpc_name)
 
     plt.close('all')
 
@@ -1794,8 +1801,8 @@ if __name__ == '__main__':
     # exp_01_04_activeness_diversity_ratio()
     # exp_01_05_performance_influence()
 
-    # exp_01_05b_mrd_params(sbo=False, post_process=False)
-    exp_01_05b_mrd_params(sbo=True, post_process=False)
+    exp_01_05b_mrd_params(sbo=False, post_process=False)
+    # exp_01_05b_mrd_params(sbo=True, post_process=False)
 
     # exp_01_05_correction(sbo=False, post_process=False)
     # exp_01_05_correction(sbo=True, post_process=False)
