@@ -219,6 +219,7 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_l
                 n_eval = [np.array(res.n_eval)-res.n_eval[0] for res, _ in results]
                 metrics = [(res.metrics[metric_base], algo_name) for res, algo_name in results]
                 data = []
+                data_y = []
                 cols = []
                 for metric, algo_name in metrics:
                     if metric.values_agg is None:
@@ -227,8 +228,10 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_l
                     y_q25 = np.atleast_1d(metric.values_agg[value_col]['q25'])
                     y_q75 = np.atleast_1d(metric.values_agg[value_col]['q75'])
                     data.append(np.concatenate([y, y_q25, y_q75]))
+                    data_y.append(y)
 
                     cols.append(algo_name_map.get(algo_name, algo_name))
+                data_y = np.array(data_y).T
 
                 df = pd.DataFrame(index=np.tile(n_eval[0], 3), data=np.column_stack(data), columns=cols)
                 with sb_theme():
@@ -241,7 +244,7 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_l
                     if y_log:
                         ax.set(yscale='log')
                     if do_zoom:
-                        min_val, mean_val, max_val = df.iloc[-1, :].min(), df.iloc[-1, :].mean(), df.iloc[-1, :].max()
+                        min_val, mean_val, max_val = np.min(data_y[-1, :]), np.mean(data_y[-1, :]), np.max(data_y[-1, :])
                         range_val = (max_val - min_val)*1.2
                         min_val, max_val = mean_val-.5*range_val, mean_val+.5*range_val
                         ax.set_ylim(min_val, max_val)
