@@ -203,7 +203,7 @@ def plot_for_pub(exps, met_plot_map, algo_name_map=None, colors=None, styles=Non
             plot_callback=_plot_callback, save_svg=True, colors=colors, styles=styles, show=False)
 
 
-def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_log=False, palette=None):
+def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_log=False, palette=None, zoom=False):
     if algo_name_map is None:
         algo_name_map = {}
 
@@ -211,40 +211,49 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_l
     base_path = exps[0].get_problem_results_path()
     for metric_base, metric_values in met_plot_map.items():
         for value_col in metric_values:
-            metric_name = _col_names[f'{metric_base}_{value_col}']
+            for do_zoom in [False, True]:
+                if do_zoom and not zoom:
+                    continue
+                metric_name = _col_names[f'{metric_base}_{value_col}']
 
-            n_eval = [np.array(res.n_eval)-res.n_eval[0] for res, _ in results]
-            metrics = [(res.metrics[metric_base], algo_name) for res, algo_name in results]
-            data = []
-            cols = []
-            for metric, algo_name in metrics:
-                if metric.values_agg is None:
-                    raise ValueError('No aggregate values!')
-                y = np.atleast_1d(metric.values_agg[value_col]['median'])
-                y_q25 = np.atleast_1d(metric.values_agg[value_col]['q25'])
-                y_q75 = np.atleast_1d(metric.values_agg[value_col]['q75'])
-                data.append(np.concatenate([y, y_q25, y_q75]))
+                n_eval = [np.array(res.n_eval)-res.n_eval[0] for res, _ in results]
+                metrics = [(res.metrics[metric_base], algo_name) for res, algo_name in results]
+                data = []
+                cols = []
+                for metric, algo_name in metrics:
+                    if metric.values_agg is None:
+                        raise ValueError('No aggregate values!')
+                    y = np.atleast_1d(metric.values_agg[value_col]['median'])
+                    y_q25 = np.atleast_1d(metric.values_agg[value_col]['q25'])
+                    y_q75 = np.atleast_1d(metric.values_agg[value_col]['q75'])
+                    data.append(np.concatenate([y, y_q25, y_q75]))
 
-                cols.append(algo_name_map.get(algo_name, algo_name))
+                    cols.append(algo_name_map.get(algo_name, algo_name))
 
-            df = pd.DataFrame(index=np.tile(n_eval[0], 3), data=np.column_stack(data), columns=cols)
-            with sb_theme():
-                if palette is None:
-                    palette = sns.color_palette('mako', n_colors=len(df.columns))
-                plt.figure(figsize=(5, 3))
-                ax = sns.lineplot(data=df, estimator=lambda s: s.iloc[0], errorbar=lambda s: (s.iloc[1], s.iloc[2]),
-                                  palette=palette, sort=False)
-                ax.set(xlabel='Infill points', ylabel=metric_name)
-                if y_log:
-                    ax.set(yscale='log')
-                sns.despine()
-                sns.move_legend(ax, 'center left', bbox_to_anchor=(1, .5), frameon=False)
-                plt.tight_layout()
+                df = pd.DataFrame(index=np.tile(n_eval[0], 3), data=np.column_stack(data), columns=cols)
+                with sb_theme():
+                    if palette is None:
+                        palette = sns.color_palette('mako', n_colors=len(df.columns))
+                    plt.figure(figsize=(5, 3))
+                    ax = sns.lineplot(data=df, estimator=lambda s: s.iloc[0], errorbar=lambda s: (s.iloc[1], s.iloc[2]),
+                                      palette=palette, sort=False)
+                    ax.set(xlabel='Infill points', ylabel=metric_name)
+                    if y_log:
+                        ax.set(yscale='log')
+                    if do_zoom:
+                        min_val, mean_val, max_val = df.iloc[-1, :].min(), df.iloc[-1, :].mean(), df.iloc[-1, :].max()
+                        range_val = (max_val - min_val)*1.2
+                        min_val, max_val = mean_val-.5*range_val, mean_val+.5*range_val
+                        ax.set_ylim(min_val, max_val)
+                    sns.despine()
+                    sns.move_legend(ax, 'center left', bbox_to_anchor=(1, .5), frameon=False)
+                    plt.tight_layout()
 
-            # plt.show()
-            save_filename = f'{base_path}/{secure_filename(f"{prefix}_{metric_base}_{value_col}")}'
-            plt.savefig(save_filename+'.png')
-            plt.savefig(save_filename+'.svg')
+                # plt.show()
+                postfix = '_zoom' if do_zoom else ''
+                save_filename = f'{base_path}/{secure_filename(f"{prefix}_{metric_base}_{value_col}{postfix}")}'
+                plt.savefig(save_filename+postfix+'.png')
+                plt.savefig(save_filename+postfix+'.svg')
 
 
 @contextlib.contextmanager

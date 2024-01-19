@@ -1269,7 +1269,7 @@ def exp_03_07_engine_arch(post_process=False):
                                 md_gp_naive_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
                                 # md_gp_naive_algo_name_map[algo_name] = 'Hierarchical'
 
-                if kpls_n_dim == 10:
+                if len(strategies) > 1:
                     i_hc_strat.append(len(algo_names))
                     hc_strat_name = 'NA'
                     if isinstance(strategy, PredictionHCStrategy):
@@ -1338,19 +1338,19 @@ def exp_03_07_engine_arch(post_process=False):
         if len(exps_md_gp_gower) > 0:
             plot_for_pub_sb(exps_md_gp_gower, met_plot_map={
                 'delta_hv': ['delta_hv'],
-            }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower')
+            }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower', zoom=True)
 
         exps_md_gp_naive = [exp for i_exp, exp in enumerate(exps) if i_exp in i_md_gp_naive]
         if len(exps_md_gp_naive) > 0:
             plot_for_pub_sb(exps_md_gp_naive, met_plot_map={
                 'delta_hv': ['delta_hv'],
-            }, algo_name_map=md_gp_naive_algo_name_map, prefix='md_gp_naive')
+            }, algo_name_map=md_gp_naive_algo_name_map, prefix='md_gp_naive', zoom=True)
 
         exps_hc_strat = [exp for i_exp, exp in enumerate(exps) if i_exp in i_hc_strat]
         if len(exps_hc_strat) > 0:
             plot_for_pub_sb(exps_hc_strat, met_plot_map={
                 'delta_hv': ['delta_hv'],
-            }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat')
+            }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat', zoom=True)
 
         plt.close('all')
 
