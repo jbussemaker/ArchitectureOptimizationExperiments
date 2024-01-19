@@ -1242,10 +1242,13 @@ def exp_03_07_engine_arch(post_process=False):
                 if is_nsga2:
                     algorithm = get_nsga2(pop_size=n_init)
                     n_infill_total = n_budget-n_init
-                    n_gen = np.ceil(n_infill_total/n_init)
-                    algorithm.n_offspring = n_offspring = np.ceil(n_infill_total/n_gen)
+                    n_gen = int(np.ceil(n_infill_total/n_init))
+                    algorithm.n_offsprings = n_offspring = int(np.ceil(n_infill_total/n_gen))
                     log.info(f'Using NSGA2 with n_offspring = {n_offspring} (n_init + n_gen*n_offspring = '
                              f'{n_init} + {n_gen}*{n_offspring} = {n_init+n_gen*n_offspring} > {n_budget})')
+
+                    algorithm.initialization = Initialization(doe_problem)
+                    algorithms.append(algorithm)
 
                     algo_name = f'NSGA2'
                     if naive:
