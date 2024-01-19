@@ -1111,13 +1111,14 @@ def exp_03_07_engine_arch(post_process=False):
     problems = [
         # problem, n_budget, k_doe, strategies
         (SimpleTurbofanArch(), 400, 5, [
-            # Gower, n_kpls (None = Hier GP; False = MD GP), naive, strategies
+            # Gower (-1 = NSGA2), n_kpls (None = Hier GP; False = MD GP), naive, strategies
             # (False, None, False, reduced_strategies),
             (True, None, False, reduced_strategies),  # Hier GP
             (True, False, False, all_strategies),  # MD GP
             (True, False, True, reduced_strategies),  # Naive: repair
             (True, False, 2, reduced_strategies),  # Naive: x out
             (True, False, 3, reduced_strategies),  # Naive
+            (-1, None, False, reduced_strategies),  # NSGA2
             # (True, 10, False, all_strategies),
             # (True, 5, False, reduced_strategies),
             # (True, 2, False, reduced_strategies),
@@ -1220,68 +1221,11 @@ def exp_03_07_engine_arch(post_process=False):
         hc_strat_algo_name_map = {}
         model_settings = {}
         for use_gower, n_kpls, naive, strategies in strategies_settings:
+            is_nsga2 = use_gower == -1
+            if is_nsga2:
+                use_gower = False
+
             for strategy in strategies:
-                agg_g = sbao_infill.ConstraintAggregation.ELIMINATE if (use_gower or bool(n_kpls)) else None
-                cont = False  # is_heavy
-
-                min_pof = None
-                if isinstance(problem, RealisticTurbofanArch):
-                    min_pof = .25
-
-                md_gp = n_kpls is False
-                kpls_n_dim = n_kpls if not md_gp else None
-
-                kwargs = dict(
-                    ignore_hierarchy=md_gp,
-                )
-                kernel = 'Gower'
-                if not use_gower:
-                    kwargs.update(
-                        categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
-                    )
-                    kernel = 'EHH'
-                    kpls_n_dim = None
-
-                algo_name = f'{strategy!s} {kernel}'
-                if kpls_n_dim is not None:
-                    algo_name += f' KPLS {kpls_n_dim}'
-                elif md_gp:
-                    algo_name += ' MD'
-                if naive:
-                    algo_name += ' '+['Naive', 'Naive (mod x)', 'Naive (none)'][int(naive)-1]
-
-                if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
-                    strategy.predictor._kpls_n_dim = kpls_n_dim
-                    if use_gower:
-                        if not naive:
-                            i_md_gp_gower.append(len(algo_names))
-                            if kpls_n_dim is not None:
-                                md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
-                            else:
-                                md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
-                                if not md_gp:
-                                    i_hier_gp = len(algo_names)
-                        if kpls_n_dim is None:
-                            if naive:
-                                if int(naive) == 1:
-                                    i_md_gp_naive.append(len(algo_names))
-                                    md_gp_naive_algo_name_map[algo_name] = 'Naive'
-                                # i_md_gp_naive.append(len(algo_names))
-                                # md_gp_naive_algo_name_map[algo_name] = ['Naive (repair)', 'Naive (mod $x$)', 'Naive'][int(naive)-1]
-                            else:
-                                i_md_gp_naive.append(len(algo_names))
-                                md_gp_naive_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
-                                # md_gp_naive_algo_name_map[algo_name] = 'Hierarchical'
-
-                if len(strategies) > 1:
-                    i_hc_strat.append(len(algo_names))
-                    hc_strat_name = 'NA'
-                    if isinstance(strategy, PredictionHCStrategy):
-                        hc_strat_name = {MDGPRegressor.__name__: 'MD GP',
-                                         RandomForestClassifier.__name__: 'RFC'}[strategy.predictor.__class__.__name__]
-                    hc_strat_algo_name_map[algo_name] = hc_strat_name
-
-                infill_pop_size = None  # 200 if is_heavy else None
 
                 if naive:
                     algo_problem = NaiveProblem(
@@ -1295,14 +1239,96 @@ def exp_03_07_engine_arch(post_process=False):
                 if isinstance(problem, RealisticTurbofanArch) and not problem.noise_obj:
                     doe_problem.set('F', doe_problem.get('F')[:, :2])
 
-                sbo, model = _get_sbo(algo_problem, strategy, doe_problem, verbose=True, g_aggregation=agg_g,
-                                      infill_pop_size=infill_pop_size, kpls_n_dim=kpls_n_dim, cont=cont,
-                                      min_pof=min_pof, **kwargs)
-                algorithms.append(sbo)
-                algo_names.append(algo_name)
+                if is_nsga2:
+                    algorithm = get_nsga2(pop_size=n_init)
+                    n_infill_total = n_budget-n_init
+                    n_gen = np.ceil(n_infill_total/n_init)
+                    algorithm.n_offspring = n_offspring = np.ceil(n_infill_total/n_gen)
+                    log.info(f'Using NSGA2 with n_offspring = {n_offspring} (n_init + n_gen*n_offspring = '
+                             f'{n_init} + {n_gen}*{n_offspring} = {n_init+n_gen*n_offspring} > {n_budget})')
 
-                model_settings[algo_name] = \
-                    (ModelFactory.get_n_theta(algo_problem, model), kpls_n_dim, agg_g, kernel, strategy, naive)
+                    algo_name = f'NSGA2'
+                    if naive:
+                        algo_name += ' '+['Naive', 'Naive (mod x)', 'Naive (none)'][int(naive)-1]
+
+                    n_theta, kpls_n_dim, agg_g, kernel = 0, None, None, 'NSGA2'
+
+                    i_md_gp_naive.append(len(algo_names))  # Hier vs naive comparison
+                    md_gp_naive_algo_name_map[algo_name] = 'NSGA-II'
+                    # i_md_gp_gower.append(len(algo_names))  # Hier vs MD GP comparison
+                    # md_gp_gower_algo_name_map[algo_name] = 'NSGA-II'
+
+                else:
+                    agg_g = sbao_infill.ConstraintAggregation.ELIMINATE if (use_gower or bool(n_kpls)) else None
+                    cont = False  # is_heavy
+
+                    min_pof = None
+                    if isinstance(problem, RealisticTurbofanArch):
+                        min_pof = .25
+
+                    md_gp = n_kpls is False
+                    kpls_n_dim = n_kpls if not md_gp else None
+
+                    kwargs = dict(
+                        ignore_hierarchy=md_gp,
+                    )
+                    kernel = 'Gower'
+                    if not use_gower:
+                        kwargs.update(
+                            categorical_kernel=MixIntKernelType.EXP_HOMO_HSPHERE,
+                        )
+                        kernel = 'EHH'
+                        kpls_n_dim = None
+
+                    algo_name = f'{strategy!s} {kernel}'
+                    if kpls_n_dim is not None:
+                        algo_name += f' KPLS {kpls_n_dim}'
+                    elif md_gp:
+                        algo_name += ' MD'
+                    if naive:
+                        algo_name += ' '+['Naive', 'Naive (mod x)', 'Naive (none)'][int(naive)-1]
+
+                    if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
+                        strategy.predictor._kpls_n_dim = kpls_n_dim
+                        if use_gower:
+                            if not naive:
+                                i_md_gp_gower.append(len(algo_names))
+                                if kpls_n_dim is not None:
+                                    md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
+                                else:
+                                    md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
+                                    if not md_gp:
+                                        i_hier_gp = len(algo_names)
+                            if kpls_n_dim is None:
+                                if naive:
+                                    if int(naive) == 1:
+                                        i_md_gp_naive.append(len(algo_names))
+                                        md_gp_naive_algo_name_map[algo_name] = 'Naive'
+                                    # i_md_gp_naive.append(len(algo_names))
+                                    # md_gp_naive_algo_name_map[algo_name] = ['Naive (repair)', 'Naive (mod $x$)', 'Naive'][int(naive)-1]
+                                else:
+                                    i_md_gp_naive.append(len(algo_names))
+                                    md_gp_naive_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
+                                    # md_gp_naive_algo_name_map[algo_name] = 'Hierarchical'
+
+                    if len(strategies) > 1:
+                        i_hc_strat.append(len(algo_names))
+                        hc_strat_name = 'NA'
+                        if isinstance(strategy, PredictionHCStrategy):
+                            hc_strat_name = {MDGPRegressor.__name__: 'MD GP',
+                                             RandomForestClassifier.__name__: 'RFC'}[strategy.predictor.__class__.__name__]
+                        hc_strat_algo_name_map[algo_name] = hc_strat_name
+
+                    infill_pop_size = None  # 200 if is_heavy else None
+
+                    sbo, model = _get_sbo(algo_problem, strategy, doe_problem, verbose=True, g_aggregation=agg_g,
+                                          infill_pop_size=infill_pop_size, kpls_n_dim=kpls_n_dim, cont=cont,
+                                          min_pof=min_pof, **kwargs)
+                    algorithms.append(sbo)
+                    n_theta = ModelFactory.get_n_theta(algo_problem, model)
+
+                algo_names.append(algo_name)
+                model_settings[algo_name] = (n_theta, kpls_n_dim, agg_g, kernel, strategy, naive)
                 problems.append(algo_problem)
 
         do_run = not post_process

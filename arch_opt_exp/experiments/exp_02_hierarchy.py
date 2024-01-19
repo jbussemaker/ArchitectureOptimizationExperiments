@@ -417,7 +417,7 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
 
     cat_name_map = {val: val for val in strat_map.values()}
     plot_perf_rank(df_agg, 'strategy', idx_name_map=p_name_map, cat_name_map=cat_name_map, save_path=f'{folder}/rank',
-                   quant_perf_col='delta_hv_abs_regret', n_col_split=6 if sbo else 7)
+                   quant_perf_col='delta_hv_abs_regret')  # , n_col_split=6 if sbo else 7)
 
 
 def _compare_first_last_model_fit(exps: List[Experimenter], algo_models, does: List[List[Population]],
@@ -865,12 +865,17 @@ def exp_02_04_tunable_hier_dv_examples():
     x_imp[~is_act_corr] = 0
     _, i_unique = np.unique(x_imp, axis=0, return_index=True)
 
+    x_cr_ex = np.array([[0, 0], [0, 1], [1, 0], [1, 2], [2, 0], [3, 0]], dtype=int)
+    x_cr_ex_act = np.ones(x_cr_ex.shape, dtype=bool)
+    x_cr_ex_act[-2:, 1] = False
+
     additional = [
         # x, is_active, is_cont_mask, name
         (x_cart, is_act_cart, is_cont_mask, is_corr_cart, 'example_0_cartesian'),
         (x_corr, is_act_corr, is_cont_mask, is_corr_corr, 'example_1_corrected'),
         (x_imp, is_act_corr, is_cont_mask, is_corr_corr, 'example_2_imputed'),
         (x_imp[i_unique, :], is_act_corr[i_unique, :], is_cont_mask, is_corr_corr[i_unique, :], 'example_3_valid'),
+        (x_cr_ex, x_cr_ex_act, np.zeros((x_cr_ex.shape[1],), dtype=bool), np.zeros(x_cr_ex.shape, dtype=bool), 'example_4_cr'),
     ]
 
     def _store_dvs(problem: ArchOptProblemBase, name: str, incl_cont=False):

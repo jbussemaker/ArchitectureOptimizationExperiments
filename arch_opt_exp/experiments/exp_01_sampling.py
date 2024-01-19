@@ -775,7 +775,7 @@ def get_hier_test_problems():
 def get_test_hc_strategy():
     from sb_arch_opt.algo.arch_sbo.hc_strategy import PredictionHCStrategy
     from sb_arch_opt.algo.arch_sbo.hc_strategy import RandomForestClassifier
-    return PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10), min_pov=.5)
+    return PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10), min_pov=.25)
 
 
 def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
@@ -1091,7 +1091,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
         sampler, sampler_grp, sampler_wt = sampler_map.get(parts[-1], parts[-1])
 
         if sampling is True:
-            n_col_split = 6
+            # n_col_split = 6
             n_col_idx = ['Strategy (grp.; wt.)']
             sampler_idx = sampler
             if sampler_grp:
@@ -1103,7 +1103,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             cat_name_map[cls_sampler] = sampler_idx  # f'{sampler} & {sampler_grp} & {sampler_wt}'
 
         else:
-            n_col_split = 7
+            # n_col_split = 7
             n_col_idx = ['Correction', 'Config', 'Sampling']
             cat_name_map[cls_sampler] = f'{corr_type} {algo_name} & {config_str} & {sampler} {sampler_grp} {sampler_wt}'
     df_agg['idx_name'] = [cat_name_map.get(val, val) for val in df_agg.index.get_level_values(1)]
