@@ -55,7 +55,8 @@ from arch_opt_exp.md_mo_hier.sampling import *
 from arch_opt_exp.md_mo_hier.hier_problems import *
 from arch_opt_exp.md_mo_hier.infill import *
 from arch_opt_exp.md_mo_hier.naive import *
-from arch_opt_exp.experiments.exp_01_sampling import agg_opt_exp, agg_prob_exp, get_hier_test_problems
+from arch_opt_exp.experiments.exp_01_sampling import agg_opt_exp, agg_prob_exp, get_hier_test_problems, \
+    get_test_hc_strategy
 from arch_opt_exp.experiments.experimenter import Experimenter
 
 log = logging.getLogger('arch_opt_exp.02_hier')
@@ -332,7 +333,7 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
                 model, norm = ModelFactory(problem_).get_md_kriging_model(**kwargs)
                 algo_models.append((model, norm))
                 algorithms.append(get_sbo(model, infill, infill_size=n_batch, init_size=n_init, normalization=norm,
-                                          init_sampling=sampler()))
+                                          init_sampling=sampler(), hc_strategy=get_test_hc_strategy()))
         else:
             algo_names_ = []
             prob_and_settings_ = []

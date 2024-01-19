@@ -772,6 +772,12 @@ def get_hier_test_problems():
     return problems
 
 
+def get_test_hc_strategy():
+    from sb_arch_opt.algo.arch_sbo.hc_strategy import PredictionHCStrategy
+    from sb_arch_opt.algo.arch_sbo.hc_strategy import RandomForestClassifier
+    return PredictionHCStrategy(RandomForestClassifier(n=100, n_dim=10), min_pov=.5)
+
+
 def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
     """
     Run optimizations with different correction strategies for different sub-problem properties and optimum locations.
@@ -945,6 +951,10 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
         'Jet SM': np.array([0, 3, 10, 12]),  # fan, nr shafts, gearbox, mixed nozzle
     }
 
+    doe_k_map = {
+        'Jet SM': 10 if sbo else None,
+    }
+
     problem_paths = []
     problem_names = []
     prob_name_map = {}
@@ -961,7 +971,8 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             # if post_process:
             #     continue
 
-            n_init = int(np.ceil(doe_k*problem.n_var))
+            doe_k_prob = doe_k_map.get(title) or doe_k
+            n_init = int(np.ceil(doe_k_prob * problem.n_var))
             n_kpls = None
             ignore_hierarchy = True
             # n_kpls = n_kpls if problem.n_var > n_kpls else None
@@ -1003,8 +1014,9 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
                         model, norm = ModelFactory(problem).get_md_kriging_model(
                             kpls_n_comp=n_kpls, ignore_hierarchy=ignore_hierarchy)
                         infill, n_batch = get_default_infill(problem)
-                        sbo_algo = SBOInfill(
-                            model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
+                        hc_strategy = get_test_hc_strategy()
+                        sbo_algo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm,
+                                             hc_strategy=hc_strategy, verbose=True)
                         sbo_algo = sbo_algo.algorithm(infill_size=1, sampler=cls_sampler, init_size=n_init)
                         algorithms.append(sbo_algo)
                     else:
@@ -1534,8 +1546,9 @@ def exp_01_05b_mrd_params(sbo=False, post_process=False):
                 model, norm = ModelFactory(problem).get_md_kriging_model(
                     kpls_n_comp=n_kpls, ignore_hierarchy=ignore_hierarchy)
                 infill, n_batch = get_default_infill(problem)
-                sbo_algo = SBOInfill(
-                    model, infill, pop_size=100, termination=100, normalization=norm, verbose=True)
+                hc_strategy = get_test_hc_strategy()
+                sbo_algo = SBOInfill(model, infill, pop_size=100, termination=100, normalization=norm,
+                                     hc_strategy=hc_strategy, verbose=True)
                 sbo_algo = sbo_algo.algorithm(infill_size=1, sampler=cls_sampler, init_size=n_init)
                 algorithms.append(sbo_algo)
             else:
@@ -1807,7 +1820,7 @@ if __name__ == '__main__':
 
     # exp_01_05_correction(sbo=False, post_process=False)
     # exp_01_05_correction(sbo=True, post_process=False)
-    exp_01_05_correction(sampling=True, sbo=False, post_process=False)
+    # exp_01_05_correction(sampling=True, sbo=False, post_process=False)
     exp_01_05_correction(sampling=True, sbo=True, post_process=False)
     # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
     # exp_01_05_correction(sampling=False, sbo=True, post_process=False)
