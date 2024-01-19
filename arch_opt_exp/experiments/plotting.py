@@ -228,7 +228,7 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_l
                     y_q25 = np.atleast_1d(metric.values_agg[value_col]['q25'])
                     y_q75 = np.atleast_1d(metric.values_agg[value_col]['q75'])
                     data.append(np.concatenate([y, y_q25, y_q75]))
-                    data_y.append(y)
+                    data_y += [y, y_q25, y_q75]
 
                     cols.append(algo_name_map.get(algo_name, algo_name))
                 data_y = np.array(data_y).T

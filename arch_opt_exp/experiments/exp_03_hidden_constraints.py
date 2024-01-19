@@ -1262,10 +1262,14 @@ def exp_03_07_engine_arch(post_process=False):
                                 if not md_gp:
                                     i_hier_gp = len(algo_names)
                         if kpls_n_dim is None:
-                            i_md_gp_naive.append(len(algo_names))
                             if naive:
-                                md_gp_naive_algo_name_map[algo_name] = ['Naive (repair)', 'Naive (mod $x$)', 'Naive'][int(naive)-1]
+                                if int(naive) == 1:
+                                    i_md_gp_naive.append(len(algo_names))
+                                    md_gp_naive_algo_name_map[algo_name] = 'Naive'
+                                # i_md_gp_naive.append(len(algo_names))
+                                # md_gp_naive_algo_name_map[algo_name] = ['Naive (repair)', 'Naive (mod $x$)', 'Naive'][int(naive)-1]
                             else:
+                                i_md_gp_naive.append(len(algo_names))
                                 md_gp_naive_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
                                 # md_gp_naive_algo_name_map[algo_name] = 'Hierarchical'
 
