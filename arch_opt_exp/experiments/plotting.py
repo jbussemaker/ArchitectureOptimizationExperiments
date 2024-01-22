@@ -219,35 +219,44 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_l
                 n_eval = [np.array(res.n_eval)-res.n_eval[0] for res, _ in results]
                 metrics = [(res.metrics[metric_base], algo_name) for res, algo_name in results]
                 data = []
-                data_y = []
+                algo_names = []
+                n_evals = []
+                y_end = []
                 cols = []
-                for metric, algo_name in metrics:
+                for k, (metric, algo_name) in enumerate(metrics):
                     if metric.values_agg is None:
                         raise ValueError('No aggregate values!')
                     y = np.atleast_1d(metric.values_agg[value_col]['median'])
                     y_q25 = np.atleast_1d(metric.values_agg[value_col]['q25'])
                     y_q75 = np.atleast_1d(metric.values_agg[value_col]['q75'])
-                    data.append(np.concatenate([y, y_q25, y_q75]))
-                    data_y += [y, y_q25, y_q75]
+                    y_concat = np.concatenate([y, y_q25, y_q75])
+                    data.append(y_concat)
+                    y_end += [y[-1], y_q25[-1], y_q75[-1]]
 
-                    cols.append(algo_name_map.get(algo_name, algo_name))
-                data_y = np.array(data_y).T
+                    a_name = algo_name_map.get(algo_name, algo_name)
+                    cols.append(a_name)
+                    algo_names += [a_name for _ in range(len(y_concat))]
+                    n_evals += np.tile(n_eval[k], 3).tolist()
+                y_end = np.array(y_end)
 
-                df = pd.DataFrame(index=np.tile(n_eval[0], 3), data=np.column_stack(data), columns=cols)
+                # df = pd.DataFrame(index=np.tile(n_eval[0], 3), data=np.column_stack(data), columns=cols)
+                df = pd.DataFrame(data={'y': np.concatenate(data), 'algo': algo_names, 'n_eval': n_evals})
                 with sb_theme():
                     if palette is None:
-                        palette = sns.color_palette('mako', n_colors=len(df.columns))
+                        palette = sns.color_palette('mako', n_colors=len(cols))
                     plt.figure(figsize=(5, 3))
                     ax = sns.lineplot(data=df, estimator=lambda s: s.iloc[0], errorbar=lambda s: (s.iloc[1], s.iloc[2]),
-                                      palette=palette, sort=False)
+                                      palette=palette, sort=False, x='n_eval', y='y', hue='algo')
                     ax.set(xlabel='Infill points', ylabel=metric_name)
                     if y_log:
                         ax.set(yscale='log')
                     if do_zoom:
-                        min_val, mean_val, max_val = np.min(data_y[-1, :]), np.mean(data_y[-1, :]), np.max(data_y[-1, :])
+                        min_val, mean_val, max_val = np.min(y_end), np.mean(y_end), np.max(y_end)
                         range_val = (max_val - min_val)*1.2
                         min_val, max_val = mean_val-.5*range_val, mean_val+.5*range_val
                         ax.set_ylim(min_val, max_val)
+                        min_x, max_x = np.min(n_evals), np.max(n_evals)
+                        ax.set_xlim(np.mean([min_x, max_x]), max_x)
                     sns.despine()
                     sns.move_legend(ax, 'center left', bbox_to_anchor=(1, .5), frameon=False)
                     plt.tight_layout()

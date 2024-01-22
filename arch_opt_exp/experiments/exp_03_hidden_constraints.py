@@ -1102,7 +1102,8 @@ def exp_03_07_engine_arch(post_process=False):
         PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
     reduced_strategies: List[HiddenConstraintStrategy] = [
-        PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
+        PredictionHCStrategy(RandomForestClassifier(), min_pov=.25),
+        # PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
     aggressive_strategies: List[HiddenConstraintStrategy] = [
         PredictionHCStrategy(MDGPRegressor(), min_pov=.1),
@@ -1256,10 +1257,10 @@ def exp_03_07_engine_arch(post_process=False):
 
                     n_theta, kpls_n_dim, agg_g, kernel = 0, None, None, 'NSGA2'
 
-                    i_md_gp_naive.append(len(algo_names))  # Hier vs naive comparison
-                    md_gp_naive_algo_name_map[algo_name] = 'NSGA-II'
-                    # i_md_gp_gower.append(len(algo_names))  # Hier vs MD GP comparison
-                    # md_gp_gower_algo_name_map[algo_name] = 'NSGA-II'
+                    # i_md_gp_naive.append(len(algo_names))  # Hier vs naive comparison
+                    # md_gp_naive_algo_name_map[algo_name] = 'NSGA-II'
+                    i_md_gp_gower.append(len(algo_names))  # Hier vs MD GP comparison
+                    md_gp_gower_algo_name_map[algo_name] = 'NSGA-II'
 
                 else:
                     agg_g = sbao_infill.ConstraintAggregation.ELIMINATE if (use_gower or bool(n_kpls)) else None
@@ -1291,7 +1292,7 @@ def exp_03_07_engine_arch(post_process=False):
                     if naive:
                         algo_name += ' '+['Naive', 'Naive (mod x)', 'Naive (none)'][int(naive)-1]
 
-                    if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, MDGPRegressor):
+                    if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, RandomForestClassifier):
                         strategy.predictor._kpls_n_dim = kpls_n_dim
                         if use_gower:
                             if not naive:
@@ -1337,7 +1338,7 @@ def exp_03_07_engine_arch(post_process=False):
         do_run = not post_process
         exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_budget-n_init,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   return_exp=post_process, n_parallel=2, run_if_exists=False)
+                   return_exp=post_process, n_parallel=3, run_if_exists=False, do_plot=True)
 
         for exp in exps:
             eff_res = exp.get_effectiveness_results()
