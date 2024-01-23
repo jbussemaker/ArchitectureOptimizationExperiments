@@ -795,7 +795,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
     doe_k = 3 if sbo else 10
     n_sub, n_opts = 9, 3
     i_opt_test = [0]  # [0, n_sub-1]
-    mrd_kwargs = dict(high_rd_split=.8, low_rd_split=.5)
+    mrd_kwargs = dict(high_rd_split=.8, low_rd_split=None)
 
     if not sbo:
         eager_samplers = [
@@ -810,9 +810,9 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             (ActiveVarHierarchicalSampling(weight_by_group_size=True), 'HierActWtGrp'),
             # (ArchVarHierarchicalSampling([]), 'HierArch'),
             # (ArchVarHierarchicalSampling([], weight_by_nr_active=True), 'HierArchWt'),
-            (MRDHierarchicalSampling(**mrd_kwargs), 'HierMRD8050'),
-            (MRDHierarchicalSampling(**mrd_kwargs, weight_by_nr_active=True), 'HierMRDWt8050'),
-            (MRDHierarchicalSampling(**mrd_kwargs, weight_by_group_size=True), 'HierMRDWtGrp8050'),
+            (MRDHierarchicalSampling(**mrd_kwargs), 'HierMRD80'),
+            (MRDHierarchicalSampling(**mrd_kwargs, weight_by_nr_active=True), 'HierMRDWt80'),
+            (MRDHierarchicalSampling(**mrd_kwargs, weight_by_group_size=True), 'HierMRDWtGrp80'),
         ]
     else:
         eager_samplers = [
@@ -820,13 +820,13 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
             (NrActiveHierarchicalSampling(), 'HierNrAct'),
             (ActiveVarHierarchicalSampling(), 'HierAct'),
-            (MRDHierarchicalSampling(**mrd_kwargs), 'HierMRD8050'),
+            (MRDHierarchicalSampling(**mrd_kwargs), 'HierMRD80'),
         ]
     specific_samplers = eager_samplers.copy()
     if sampling is False:
         eager_samplers = [
             # (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
-            (MRDHierarchicalSampling(**mrd_kwargs), 'HierMRD8050'),
+            (MRDHierarchicalSampling(**mrd_kwargs), 'HierMRD80'),
         ]
         specific_samplers = eager_samplers.copy()
         specific_samplers += [
@@ -1059,6 +1059,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
         'HierAct': (h, x_act, ''), 'HierActWt': (h, x_act, n_act), 'HierActWtGrp': (h, x_act, n_xgrp),
         'HierArch': (h, '$x_{arch}$', ''), 'HierArchWt': (h, '$x_{arch}$', n_act),
         # 'HierMRD': 'Hier $MRD$', 'HierMRDWt': 'Hier $MRD$ wt.', 'HierMRDWtGrp': 'Hier $MRD$ wt.g.',
+        'HierMRD80': (h, mrd, ''), 'HierMRDWt80': (h, mrd, n_act), 'HierMRDWtGrp80': (h, mrd, n_xgrp),
         'HierMRD8050': (h, mrd, ''), 'HierMRDWt8050': (h, mrd, n_act), 'HierMRDWtGrp8050': (h, mrd, n_xgrp),
     }
     corr_type_map = {'Specific': 'Problem-specific'}
@@ -1427,7 +1428,7 @@ def exp_01_05b_mrd_params(sbo=False, post_process=False):
     folder = set_results_folder(_exp_01_05b_folder+folder_post)
     n_infill = 40
     n_gen = 25
-    n_repeat = 16 if sbo else 100
+    n_repeat = 24 if sbo else 100
     doe_k = 3 if sbo else 10
 
     if sbo:
@@ -1820,7 +1821,7 @@ if __name__ == '__main__':
 
     # exp_01_05_correction(sbo=False, post_process=False)
     # exp_01_05_correction(sbo=True, post_process=False)
-    # exp_01_05_correction(sampling=True, sbo=False, post_process=False)
+    exp_01_05_correction(sampling=True, sbo=False, post_process=False)
     exp_01_05_correction(sampling=True, sbo=True, post_process=False)
     # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
     # exp_01_05_correction(sampling=False, sbo=True, post_process=False)
