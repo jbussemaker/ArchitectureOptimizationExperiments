@@ -795,7 +795,9 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
     doe_k = 3 if sbo else 10
     n_sub, n_opts = 9, 3
     i_opt_test = [0]  # [0, n_sub-1]
-    mrd_kwargs = dict(high_rd_split=.8, low_rd_split=None)
+    # mrd_kwargs, mrd_names = dict(high_rd_split=.8, low_rd_split=.6, exclusive=True), ['HierMRD80Ex', 'HierMRDWt80Ex', 'HierMRDWtGrp80Ex']
+    # mrd_kwargs, mrd_names = dict(high_rd_split=.8, low_rd_split=.5), ['HierMRD8050', 'HierMRDWt8050', 'HierMRDWtGrp8050']
+    mrd_kwargs, mrd_names = dict(high_rd_split=.8, low_rd_split=None), ['HierMRD80', 'HierMRDWt80', 'HierMRDWtGrp80']
 
     if not sbo:
         eager_samplers = [
@@ -810,9 +812,9 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             (ActiveVarHierarchicalSampling(weight_by_group_size=True), 'HierActWtGrp'),
             # (ArchVarHierarchicalSampling([]), 'HierArch'),
             # (ArchVarHierarchicalSampling([], weight_by_nr_active=True), 'HierArchWt'),
-            (MRDHierarchicalSampling(**mrd_kwargs), 'HierMRD80'),
-            (MRDHierarchicalSampling(**mrd_kwargs, weight_by_nr_active=True), 'HierMRDWt80'),
-            (MRDHierarchicalSampling(**mrd_kwargs, weight_by_group_size=True), 'HierMRDWtGrp80'),
+            (MRDHierarchicalSampling(**mrd_kwargs), mrd_names[0]),
+            (MRDHierarchicalSampling(**mrd_kwargs, weight_by_nr_active=True), mrd_names[1]),
+            (MRDHierarchicalSampling(**mrd_kwargs, weight_by_group_size=True), mrd_names[2]),
         ]
     else:
         eager_samplers = [
@@ -820,13 +822,13 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
             (NoGroupingHierarchicalSampling(), 'HierNoGroup'),
             (NrActiveHierarchicalSampling(), 'HierNrAct'),
             (ActiveVarHierarchicalSampling(), 'HierAct'),
-            (MRDHierarchicalSampling(**mrd_kwargs), 'HierMRD80'),
+            (MRDHierarchicalSampling(**mrd_kwargs), mrd_names[0]),
         ]
     specific_samplers = eager_samplers.copy()
     if sampling is False:
         eager_samplers = [
             # (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
-            (MRDHierarchicalSampling(**mrd_kwargs), 'HierMRD80'),
+            (MRDHierarchicalSampling(**mrd_kwargs), mrd_names[0]),
         ]
         specific_samplers = eager_samplers.copy()
         specific_samplers += [
@@ -1060,6 +1062,7 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
         'HierArch': (h, '$x_{arch}$', ''), 'HierArchWt': (h, '$x_{arch}$', n_act),
         # 'HierMRD': 'Hier $MRD$', 'HierMRDWt': 'Hier $MRD$ wt.', 'HierMRDWtGrp': 'Hier $MRD$ wt.g.',
         'HierMRD80': (h, mrd, ''), 'HierMRDWt80': (h, mrd, n_act), 'HierMRDWtGrp80': (h, mrd, n_xgrp),
+        'HierMRD80Ex': (h, mrd, ''), 'HierMRDWt80Ex': (h, mrd, n_act), 'HierMRDWtGrp80Ex': (h, mrd, n_xgrp),
         'HierMRD8050': (h, mrd, ''), 'HierMRDWt8050': (h, mrd, n_act), 'HierMRDWtGrp8050': (h, mrd, n_xgrp),
     }
     corr_type_map = {'Specific': 'Problem-specific'}
@@ -1288,6 +1291,9 @@ def exp_01_05a_arch_freq():
         (MRDHierarchicalSampling(), 'HierMRD'),
         (MRDHierarchicalSampling(weight_by_nr_active=True), 'HierMRDWt'),
         (MRDHierarchicalSampling(weight_by_group_size=True), 'HierMRDWtGrp'),
+        (MRDHierarchicalSampling(exclusive=True), 'HierMRDEx'),
+        (MRDHierarchicalSampling(exclusive=True, weight_by_nr_active=True), 'HierMRDExWt'),
+        (MRDHierarchicalSampling(exclusive=True, weight_by_group_size=True), 'HierMRDExWtGrp'),
     ]
     lazy_samplers = [
         (RepairedSampler(LatinHypercubeSampling()), 'LHS'),
@@ -1433,23 +1439,27 @@ def exp_01_05b_mrd_params(sbo=False, post_process=False):
 
     if sbo:
         high_low_rd_split_test = [
-            (.6, None),
-            (.7, None), (.7, .5),
-            (.8, None), (.8, .5),
+            (.6, None, False),
+            (.7, None, False), (.7, .5, False),
+            (.8, None, False), (.8, .5, False),
+            # (.8, .5, True),
+            (.8, .6, True),
         ]
     else:
         high_rd_split_test = [.5, .6, .7, .8]
         low_rd_split_test = [None, .5, .6]
-        high_low_rd_split_test = list(itertools.product(high_rd_split_test, low_rd_split_test))
+        high_low_rd_split_test = list(itertools.product(high_rd_split_test, low_rd_split_test, [False]))
+        high_low_rd_split_test += [(.8, .5, True), (.8, .6, True)]
 
     samplers = []
-    for high_rd_split, low_rd_split in high_low_rd_split_test:
+    for high_rd_split, low_rd_split, exclusive in high_low_rd_split_test:
         if low_rd_split is not None and low_rd_split >= high_rd_split:
             continue
 
         sampler_name = f'MRD_{high_rd_split*100:.0f}_'
         sampler_name += 'NA' if low_rd_split is None else f'{low_rd_split*100:.0f}'
-        kwargs = dict(high_rd_split=high_rd_split, low_rd_split=low_rd_split)
+        sampler_name += '_EX' if exclusive else ''
+        kwargs = dict(high_rd_split=high_rd_split, low_rd_split=low_rd_split, exclusive=exclusive)
         samplers_ = [
             (MRDHierarchicalSampling(**kwargs), f'{sampler_name}_NA'),
             (MRDHierarchicalSampling(weight_by_nr_active=True, **kwargs), f'{sampler_name}_NACT'),
@@ -1469,7 +1479,8 @@ def exp_01_05b_mrd_params(sbo=False, post_process=False):
         strat_data_['high_rd'] = int(algo_name.split('_')[1])
         low_rd = algo_name.split('_')[2]
         strat_data_['low_rd'] = 0 if low_rd == 'NA' else int(low_rd)
-        strat_data_['grouping'] = algo_name.split('_')[3]
+        strat_data_['mrd_ex'] = '_EX' in algo_name
+        strat_data_['grouping'] = algo_name.split('_')[-1]
 
         data_key = name
         if data_key in prob_data:
@@ -1821,10 +1832,10 @@ if __name__ == '__main__':
 
     # exp_01_05_correction(sbo=False, post_process=False)
     # exp_01_05_correction(sbo=True, post_process=False)
-    exp_01_05_correction(sampling=True, sbo=False, post_process=False)
-    exp_01_05_correction(sampling=True, sbo=True, post_process=False)
-    # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
-    # exp_01_05_correction(sampling=False, sbo=True, post_process=False)
+    # exp_01_05_correction(sampling=True, sbo=False, post_process=False)
+    # exp_01_05_correction(sampling=True, sbo=True, post_process=False)
+    exp_01_05_correction(sampling=False, sbo=False, post_process=False)
+    exp_01_05_correction(sampling=False, sbo=True, post_process=False)
     # exp_01_05a_arch_freq()
 
     # exp_01_06_opt()

@@ -310,8 +310,8 @@ def exp_02_02_hier_strategies(sbo=False, post_process=False):
         ])
 
         # sampler = lambda: ActiveVarHierarchicalSampling(weight_by_nr_active=True)
-        # sampler = lambda: ActiveVarHierarchicalSampling()
-        sampler = lambda: MRDHierarchicalSampling(high_rd_split=.8, low_rd_split=.5)
+        sampler = lambda: ActiveVarHierarchicalSampling()
+        # sampler = lambda: MRDHierarchicalSampling(high_rd_split=.8, low_rd_split=None)
 
         from arch_opt_exp.experiments.exp_01_sampling import CorrectorFactory, ProblemSpecificCorrector
         corrector_factory = CorrectorFactory(ProblemSpecificCorrector)
