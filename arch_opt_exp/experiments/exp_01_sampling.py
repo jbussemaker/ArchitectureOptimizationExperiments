@@ -827,8 +827,9 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
     specific_samplers = eager_samplers.copy()
     if sampling is False:
         eager_samplers = [
+            (ActiveVarHierarchicalSampling(), 'HierAct'),
             # (ActiveVarHierarchicalSampling(weight_by_nr_active=True), 'HierActWt'),
-            (MRDHierarchicalSampling(**mrd_kwargs), mrd_names[0]),
+            # (MRDHierarchicalSampling(**mrd_kwargs), mrd_names[0]),
         ]
         specific_samplers = eager_samplers.copy()
         specific_samplers += [
@@ -886,10 +887,9 @@ def exp_01_05_correction(sampling=None, sbo=False, post_process=False):
         sbo_specific_samplers = [
             (RepairedSampler(LatinHypercubeSampling()), 'LHS')] if sampling is None else specific_samplers.copy()
         sbo_corr = {
-            'Eager Greedy': sbo_eager_samplers,  # Best eager (close)
-            'Eager Closest': sbo_eager_samplers,  # Best eager
-            'Eager Closest Euc': sbo_eager_samplers,  # Best eager (close)
-            'Lazy Closest Dist': lazy_samplers,  # Best lazy
+            'Eager Rnd': sbo_eager_samplers,  # Best eager
+            'Eager Closest': sbo_eager_samplers,  # Best eager (close)
+            'Lazy Closest': lazy_samplers,  # Best lazy
             'Specific ': sbo_specific_samplers,
         }
         correctors = [(factory, name, sbo_corr[name]) for factory, name, _ in correctors if name in sbo_corr]
@@ -1834,7 +1834,7 @@ if __name__ == '__main__':
     # exp_01_05_correction(sbo=True, post_process=False)
     # exp_01_05_correction(sampling=True, sbo=False, post_process=False)
     # exp_01_05_correction(sampling=True, sbo=True, post_process=False)
-    exp_01_05_correction(sampling=False, sbo=False, post_process=False)
+    # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
     exp_01_05_correction(sampling=False, sbo=True, post_process=False)
     # exp_01_05a_arch_freq()
 
