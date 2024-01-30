@@ -1832,10 +1832,10 @@ if __name__ == '__main__':
 
     # exp_01_05_correction(sbo=False, post_process=False)
     # exp_01_05_correction(sbo=True, post_process=False)
-    # exp_01_05_correction(sampling=True, sbo=False, post_process=False)
-    # exp_01_05_correction(sampling=True, sbo=True, post_process=False)
-    # exp_01_05_correction(sampling=False, sbo=False, post_process=False)
-    exp_01_05_correction(sampling=False, sbo=True, post_process=False)
+    exp_01_05_correction(sampling=True, sbo=False, post_process=True)
+    exp_01_05_correction(sampling=True, sbo=True, post_process=True)
+    exp_01_05_correction(sampling=False, sbo=False, post_process=True)
+    exp_01_05_correction(sampling=False, sbo=True, post_process=True)
     # exp_01_05a_arch_freq()
 
     # exp_01_06_opt()

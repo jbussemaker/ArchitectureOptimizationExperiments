@@ -248,10 +248,12 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_l
                     ax = sns.lineplot(data=df, estimator=lambda s: s.iloc[0], errorbar=lambda s: (s.iloc[1], s.iloc[2]),
                                       palette=palette, sort=False, x='n_eval', y='y', hue='algo')
                     ax.set(xlabel='Infill points', ylabel=metric_name)
+                    ax.legend().set_title('')
                     if y_log:
                         ax.set(yscale='log')
                     if do_zoom:
-                        min_val, mean_val, max_val = np.min(y_end), np.mean(y_end), np.max(y_end)
+                        min_val, max_val = np.min(y_end), np.max(y_end)
+                        mean_val = .5*(min_val+max_val)
                         range_val = (max_val - min_val)*1.2
                         min_val, max_val = mean_val-.5*range_val, mean_val+.5*range_val
                         ax.set_ylim(min_val, max_val)

@@ -1095,7 +1095,7 @@ def exp_03_07_engine_arch(post_process=False):
     # post_process = True
     folder = set_results_folder(_exp_03_07_folder)
     expected_fail_rate = .6
-    n_repeat = 10
+    n_repeat = 16
 
     all_strategies: List[HiddenConstraintStrategy] = [
         PredictionHCStrategy(RandomForestClassifier(), min_pov=.25),
@@ -1386,6 +1386,9 @@ def exp_03_07_engine_arch(post_process=False):
                 'delta_hv': ['delta_hv'],
             }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat', zoom=True)
 
+        if problem.n_obj == 1:
+            pass
+
         plt.close('all')
 
     def _add_cols(df_agg_):
@@ -1404,4 +1407,4 @@ if __name__ == '__main__':
     # exp_03_05_optimization()
     # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    exp_03_07_engine_arch()
+    exp_03_07_engine_arch(post_process=True)

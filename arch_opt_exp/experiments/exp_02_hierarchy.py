@@ -966,8 +966,8 @@ def exp_02_04_tunable_hier_dv_examples():
 if __name__ == '__main__':
     # exp_02_01_tpe()
     # exp_02_02a_model_fit()
-    exp_02_02_hier_strategies()
-    # exp_02_02_hier_strategies(sbo=True)
+    exp_02_02_hier_strategies(post_process=True)
+    exp_02_02_hier_strategies(sbo=True, post_process=True)
     # exp_02_03_sensitivities()
     # exp_02_03_sensitivities(mrd=True)
     # exp_02_03_sensitivities(sbo=True)
