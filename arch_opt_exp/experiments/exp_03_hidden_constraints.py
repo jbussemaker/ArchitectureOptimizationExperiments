@@ -1163,7 +1163,7 @@ def exp_03_07_engine_arch(post_process=False):
             if is_naive > 1:
                 prob_doe_folder += str(is_naive)
             doe_folders[name, is_naive] = prob_doe_folder
-            if post_process:
+            if post_process or not shared_doe:
                 continue
 
             if is_naive:
