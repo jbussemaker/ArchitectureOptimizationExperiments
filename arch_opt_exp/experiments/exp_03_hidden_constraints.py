@@ -403,8 +403,8 @@ _strategies: List[Tuple[HiddenConstraintStrategy, str]] = [
 ]
 
 
-def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Population, verbose=False,
-             g_aggregation: sbao_infill.ConstraintAggregation = None, kpls_n_dim: int = None, cont=False,
+def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, doe_pop: Union[Population, int],
+             verbose=False, g_aggregation: sbao_infill.ConstraintAggregation = None, kpls_n_dim: int = None, cont=False,
              infill_pop_size=None, ignore_hierarchy=True, sampler=None, min_pof=None, **kwargs):
     kpls_n_comp = kpls_n_dim if kpls_n_dim is not None and problem.n_var > kpls_n_dim else None
     if cont:
@@ -415,10 +415,12 @@ def _get_sbo(problem: ArchOptProblemBase, strategy: HiddenConstraintStrategy, do
             kpls_n_comp=kpls_n_comp, ignore_hierarchy=ignore_hierarchy, **kwargs)
     infill, n_batch = sbao_infill.get_default_infill(problem, g_aggregation=g_aggregation, min_pof=min_pof)
 
-    sbo = HiddenConstraintsSBO(model, infill, init_size=len(doe_pop), hc_strategy=strategy, normalization=norm,
+    n_init = len(doe_pop) if isinstance(doe_pop, Population) else doe_pop
+    sbo = HiddenConstraintsSBO(model, infill, init_size=n_init, hc_strategy=strategy, normalization=norm,
                                verbose=verbose, pop_size=infill_pop_size)\
-        .algorithm(infill_size=n_batch, init_size=len(doe_pop), init_sampling=sampler)
-    sbo.initialization = Initialization(doe_pop)
+        .algorithm(infill_size=n_batch, init_size=n_init, init_sampling=sampler)
+    if isinstance(doe_pop, Population):
+        sbo.initialization = Initialization(doe_pop)
     return sbo, model
 
 
@@ -1029,7 +1031,7 @@ def exp_03_06_engine_arch_surrogate():
     problems = [
         # problem, n_doe, pop_size, n_gen
         # (Branin(), 10, 5, 10),
-        (SimpleTurbofanArch(), 1000, 75, 30),
+        (SimpleTurbofanArch(), 1000, 75, 30),  # 1000 + 75*30 = 3250
         (RealisticTurbofanArch(), 2000, 205, 25),
     ]
 
@@ -1096,6 +1098,7 @@ def exp_03_07_engine_arch(post_process=False):
     folder = set_results_folder(_exp_03_07_folder)
     expected_fail_rate = .6
     n_repeat = 16
+    shared_doe = False
 
     all_strategies: List[HiddenConstraintStrategy] = [
         PredictionHCStrategy(RandomForestClassifier(), min_pov=.25),
@@ -1111,19 +1114,26 @@ def exp_03_07_engine_arch(post_process=False):
     ]
     problems = [
         # problem, n_budget, k_doe, strategies
-        (SimpleTurbofanArch(), 400, 5, [
+        (SimpleTurbofanArch(), 300, 3, [
             # Gower (-1 = NSGA2), n_kpls (None = Hier GP; False = MD GP), naive, strategies
-            # (False, None, False, reduced_strategies),
+            # (False, None, False, reduced_strategies),  # EHH Hier GP
             (True, None, False, reduced_strategies),  # Hier GP
             (True, False, False, all_strategies),  # MD GP
             (True, False, True, reduced_strategies),  # Naive: repair
-            (True, False, 2, reduced_strategies),  # Naive: x out
-            (True, False, 3, reduced_strategies),  # Naive
+            # (True, False, 2, reduced_strategies),  # Naive: x out
+            # (True, False, 3, reduced_strategies),  # Naive
             (-1, None, False, reduced_strategies),  # NSGA2
-            # (True, 10, False, all_strategies),
-            # (True, 5, False, reduced_strategies),
-            # (True, 2, False, reduced_strategies),
+            # (True, 10, False, all_strategies),  # KPLS 10
+            # (True, 5, False, reduced_strategies),  # KPLS 5
+            # (True, 2, False, reduced_strategies),  # KPLS 2
         ]),
+        # (SimpleTurbofanArchModel(), 200, 3, [
+        #     # Gower (-1 = NSGA2), n_kpls (None = Hier GP; False = MD GP), naive, strategies
+        #     (True, None, False, reduced_strategies),  # Hier GP
+        #     (True, False, False, reduced_strategies),  # MD GP
+        #     (True, False, True, reduced_strategies),  # Naive: repair
+        #     (-1, None, False, reduced_strategies),  # NSGA2
+        # ]),
         # (RealisticTurbofanArch(noise_obj=False), 913, 5, [
         #     (True, 10, False, aggressive_strategies),
         # ]),
@@ -1189,13 +1199,14 @@ def exp_03_07_engine_arch(post_process=False):
         strat_data_['is_pred'] = is_pred = isinstance(strategy_, PredictionHCStrategy)
         strat_data_['pred'] = str(strategy_.predictor) if is_pred else ''
 
-    for i, (problem, n_budget, _, strategies_settings) in enumerate(problems):
+    for i, (problem, n_budget, k_doe, strategies_settings) in enumerate(problems):
+        is_model = isinstance(problem, SimpleTurbofanArchModel)
         name = problem_names[i]
         problem_path = problem_paths[i]
 
         prob_doe_folder = doe_folders[name, False]
-        doe = load_from_previous_results(problem, prob_doe_folder)
-        n_init = len(doe)
+        doe = load_from_previous_results(problem, prob_doe_folder) if shared_doe else None
+        n_init = int(np.ceil(k_doe*problem.n_var/(1-expected_fail_rate)))
         log.info(f'Running optimizations for {i+1}/{len(problems)}: {name} (n_init = {n_init})')
         f_pf_known = problem.pareto_front()
 
@@ -1221,6 +1232,7 @@ def exp_03_07_engine_arch(post_process=False):
         i_hc_strat = []
         hc_strat_algo_name_map = {}
         model_settings = {}
+        n_eval_max = []
         for use_gower, n_kpls, naive, strategies in strategies_settings:
             is_nsga2 = use_gower == -1
             if is_nsga2:
@@ -1233,22 +1245,34 @@ def exp_03_07_engine_arch(post_process=False):
                         problem, return_mod_x=naive < 3, correct=naive < 2, return_activeness=False)
                 else:
                     algo_problem = NaiveProblem(problem, return_mod_x=True, correct=True, return_activeness=True)
-                doe_problem = doe
-                if naive:
-                    doe_problem = load_from_previous_results(problem, doe_folders[name, True])
 
-                if isinstance(problem, RealisticTurbofanArch) and not problem.noise_obj:
+                doe_problem = None
+                if shared_doe:
+                    doe_problem = doe
+                    if naive:
+                        doe_problem = load_from_previous_results(problem, doe_folders[name, True])
+
+                if doe_problem is not None and isinstance(problem, RealisticTurbofanArch) and not problem.noise_obj:
                     doe_problem.set('F', doe_problem.get('F')[:, :2])
+                if not shared_doe:
+                    doe_problem = n_init
 
+                n_eval_max_algo = (n_budget-n_init) if shared_doe else n_budget
                 if is_nsga2:
-                    algorithm = get_nsga2(pop_size=n_init)
-                    n_infill_total = n_budget-n_init
-                    n_gen = int(np.ceil(n_infill_total/n_init))
+                    pop_size = 75 if is_model else n_init
+                    algorithm = get_nsga2(pop_size=pop_size)
+
+                    n_budget_nsga2 = 3000 if is_model else n_budget
+                    n_eval_max_algo = (n_budget_nsga2-pop_size) if shared_doe else n_budget_nsga2
+                    n_infill_total = n_budget_nsga2-pop_size
+
+                    n_gen = int(np.ceil(n_infill_total/pop_size))
                     algorithm.n_offsprings = n_offspring = int(np.ceil(n_infill_total/n_gen))
                     log.info(f'Using NSGA2 with n_offspring = {n_offspring} (n_init + n_gen*n_offspring = '
-                             f'{n_init} + {n_gen}*{n_offspring} = {n_init+n_gen*n_offspring} > {n_budget})')
+                             f'{pop_size} + {n_gen}*{n_offspring} = {pop_size+n_gen*n_offspring} > {n_budget_nsga2})')
 
-                    algorithm.initialization = Initialization(doe_problem)
+                    if isinstance(doe_problem, Population):
+                        algorithm.initialization = Initialization(doe_problem)
                     algorithms.append(algorithm)
 
                     algo_name = f'NSGA2'
@@ -1300,19 +1324,19 @@ def exp_03_07_engine_arch(post_process=False):
                                 if kpls_n_dim is not None:
                                     md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
                                 else:
-                                    md_gp_gower_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
+                                    md_gp_gower_algo_name_map[algo_name] = 'Hier. sampl.' if md_gp else 'Activeness'
                                     if not md_gp:
                                         i_hier_gp = len(algo_names)
                             if kpls_n_dim is None:
                                 if naive:
                                     if int(naive) == 1:
                                         i_md_gp_naive.append(len(algo_names))
-                                        md_gp_naive_algo_name_map[algo_name] = 'Naive'
+                                        md_gp_naive_algo_name_map[algo_name] = 'Repair'
                                     # i_md_gp_naive.append(len(algo_names))
                                     # md_gp_naive_algo_name_map[algo_name] = ['Naive (repair)', 'Naive (mod $x$)', 'Naive'][int(naive)-1]
                                 else:
                                     i_md_gp_naive.append(len(algo_names))
-                                    md_gp_naive_algo_name_map[algo_name] = 'MD GP' if md_gp else 'Hier. GP'
+                                    md_gp_naive_algo_name_map[algo_name] = 'Hier. sampl.' if md_gp else 'Activeness'
                                     # md_gp_naive_algo_name_map[algo_name] = 'Hierarchical'
 
                     if len(strategies) > 1:
@@ -1334,11 +1358,14 @@ def exp_03_07_engine_arch(post_process=False):
                 algo_names.append(algo_name)
                 model_settings[algo_name] = (n_theta, kpls_n_dim, agg_g, kernel, strategy, naive)
                 problems.append(algo_problem)
+                n_eval_max.append(n_eval_max_algo)
+
+        n_parallel = None if is_model else 3
 
         do_run = not post_process
-        exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_budget-n_init,
+        exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max,
                    metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   return_exp=post_process, n_parallel=3, run_if_exists=False, do_plot=True)
+                   return_exp=post_process, n_parallel=n_parallel, run_if_exists=False, do_plot=True)
 
         for exp in exps:
             eff_res = exp.get_effectiveness_results()
@@ -1354,6 +1381,10 @@ def exp_03_07_engine_arch(post_process=False):
                                              save_filename=exp.get_problem_algo_results_path('pf'))
                 metric.plot_obj_progress(
                     f_pf_known=f_pf_known, save_filename=exp.get_problem_algo_results_path(f'pf_{i_res}'), show=False)
+
+            if problem.n_obj == 1:
+                f = [res.F[0] for res in eff_res]
+                print(f'Mean f: {np.mean(f):.2f} ({exp.algorithm_name})')
 
         df_prob = _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
@@ -1385,9 +1416,6 @@ def exp_03_07_engine_arch(post_process=False):
             plot_for_pub_sb(exps_hc_strat, met_plot_map={
                 'delta_hv': ['delta_hv'],
             }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat', zoom=True)
-
-        if problem.n_obj == 1:
-            pass
 
         plt.close('all')
 
