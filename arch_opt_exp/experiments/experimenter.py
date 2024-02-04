@@ -363,8 +363,12 @@ class Experimenter:
             elif self.algorithm_name in self.doe and repeat_idx in self.doe[self.algorithm_name]:
                 doe_pop = self.doe[self.algorithm_name][repeat_idx]
             else:
-                raise RuntimeError(f'DOE not found for {self.algorithm_name} @ {repeat_idx}')
-            algorithm.initialization = Initialization(doe_pop)
+                doe_pop = None
+
+            if doe_pop is None:
+                log.info(f'DOE not found for {self.algorithm_name} @ {repeat_idx}')
+            else:
+                algorithm.initialization = Initialization(doe_pop)
 
         # Run the algorithm
         log.info('Running effectiveness experiment:  %s / %s / %d' %

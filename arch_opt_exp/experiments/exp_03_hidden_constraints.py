@@ -1199,6 +1199,7 @@ def exp_03_07_engine_arch(post_process=False):
         strat_data_['is_pred'] = is_pred = isinstance(strategy_, PredictionHCStrategy)
         strat_data_['pred'] = str(strategy_.predictor) if is_pred else ''
 
+    doe_multi_reuse = {}
     for i, (problem, n_budget, k_doe, strategies_settings) in enumerate(problems):
         is_model = isinstance(problem, SimpleTurbofanArchModel)
         name = problem_names[i]
@@ -1221,9 +1222,9 @@ def exp_03_07_engine_arch(post_process=False):
         metrics.append(CorrectionTimeMetric())
         additional_plot['corr_time'] = ['mean']
 
-        algorithms = []
-        algo_names = []
-        problems = []
+        all_algorithms = []
+        all_algo_names = []
+        all_problems = []
         i_md_gp_gower = []
         md_gp_gower_algo_name_map = {}
         i_hier_gp = None
@@ -1232,13 +1233,17 @@ def exp_03_07_engine_arch(post_process=False):
         i_hc_strat = []
         hc_strat_algo_name_map = {}
         model_settings = {}
-        n_eval_max = []
         for use_gower, n_kpls, naive, strategies in strategies_settings:
             is_nsga2 = use_gower == -1
             if is_nsga2:
                 use_gower = False
 
             for strategy in strategies:
+                algo_doe = None
+                algorithms = []
+                algo_names = []
+                problems = []
+                n_eval_max = []
 
                 if naive:
                     algo_problem = NaiveProblem(
@@ -1252,18 +1257,19 @@ def exp_03_07_engine_arch(post_process=False):
                     if naive:
                         doe_problem = load_from_previous_results(problem, doe_folders[name, True])
 
-                if doe_problem is not None and isinstance(problem, RealisticTurbofanArch) and not problem.noise_obj:
-                    doe_problem.set('F', doe_problem.get('F')[:, :2])
+                    if doe_problem is not None and isinstance(problem, RealisticTurbofanArch) and not problem.noise_obj:
+                        doe_problem.set('F', doe_problem.get('F')[:, :2])
                 if not shared_doe:
+                    algo_doe = doe_multi_reuse.get(naive)
                     doe_problem = n_init
 
-                n_eval_max_algo = (n_budget-n_init) if shared_doe else n_budget
+                n_eval_max_algo = (n_budget-n_init) if shared_doe or algo_doe is not None else n_budget
                 if is_nsga2:
-                    pop_size = 75 if is_model else n_init
+                    pop_size = n_init  # 75 if is_model else n_init
                     algorithm = get_nsga2(pop_size=pop_size)
 
-                    n_budget_nsga2 = 3000 if is_model else n_budget
-                    n_eval_max_algo = (n_budget_nsga2-pop_size) if shared_doe else n_budget_nsga2
+                    n_budget_nsga2 = n_budget  # 3000 if is_model else n_budget
+                    n_eval_max_algo = (n_budget_nsga2-pop_size) if shared_doe or algo_doe is not None else n_budget_nsga2
                     n_infill_total = n_budget_nsga2-pop_size
 
                     n_gen = int(np.ceil(n_infill_total/pop_size))
@@ -1271,8 +1277,8 @@ def exp_03_07_engine_arch(post_process=False):
                     log.info(f'Using NSGA2 with n_offspring = {n_offspring} (n_init + n_gen*n_offspring = '
                              f'{pop_size} + {n_gen}*{n_offspring} = {pop_size+n_gen*n_offspring} > {n_budget_nsga2})')
 
-                    if isinstance(doe_problem, Population):
-                        algorithm.initialization = Initialization(doe_problem)
+                    # if isinstance(doe_problem, Population):
+                    #     algorithm.initialization = Initialization(doe_problem)
                     algorithms.append(algorithm)
 
                     algo_name = f'NSGA2'
@@ -1281,9 +1287,9 @@ def exp_03_07_engine_arch(post_process=False):
 
                     n_theta, kpls_n_dim, agg_g, kernel = 0, None, None, 'NSGA2'
 
-                    # i_md_gp_naive.append(len(algo_names))  # Hier vs naive comparison
+                    # i_md_gp_naive.append(len(all_algo_names))  # Hier vs naive comparison
                     # md_gp_naive_algo_name_map[algo_name] = 'NSGA-II'
-                    i_md_gp_gower.append(len(algo_names))  # Hier vs MD GP comparison
+                    i_md_gp_gower.append(len(all_algo_names))  # Hier vs MD GP comparison
                     md_gp_gower_algo_name_map[algo_name] = 'NSGA-II'
 
                 else:
@@ -1320,27 +1326,29 @@ def exp_03_07_engine_arch(post_process=False):
                         strategy.predictor._kpls_n_dim = kpls_n_dim
                         if use_gower:
                             if not naive:
-                                i_md_gp_gower.append(len(algo_names))
+                                i_md_gp_gower.append(len(all_algo_names))
                                 if kpls_n_dim is not None:
                                     md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
                                 else:
                                     md_gp_gower_algo_name_map[algo_name] = 'Hier. sampl.' if md_gp else 'Activeness'
                                     if not md_gp:
-                                        i_hier_gp = len(algo_names)
+                                        i_hier_gp = len(all_algo_names)
                             if kpls_n_dim is None:
                                 if naive:
                                     if int(naive) == 1:
-                                        i_md_gp_naive.append(len(algo_names))
+                                        i_md_gp_naive.append(len(all_algo_names))
                                         md_gp_naive_algo_name_map[algo_name] = 'Repair'
-                                    # i_md_gp_naive.append(len(algo_names))
+                                        i_md_gp_gower.append(len(all_algo_names))
+                                        md_gp_gower_algo_name_map[algo_name] = 'Repair'
+                                    # i_md_gp_naive.append(len(all_algo_names))
                                     # md_gp_naive_algo_name_map[algo_name] = ['Naive (repair)', 'Naive (mod $x$)', 'Naive'][int(naive)-1]
                                 else:
-                                    i_md_gp_naive.append(len(algo_names))
+                                    i_md_gp_naive.append(len(all_algo_names))
                                     md_gp_naive_algo_name_map[algo_name] = 'Hier. sampl.' if md_gp else 'Activeness'
                                     # md_gp_naive_algo_name_map[algo_name] = 'Hierarchical'
 
                     if len(strategies) > 1:
-                        i_hc_strat.append(len(algo_names))
+                        i_hc_strat.append(len(all_algo_names))
                         hc_strat_name = 'NA'
                         if isinstance(strategy, PredictionHCStrategy):
                             hc_strat_name = {MDGPRegressor.__name__: 'MD GP',
@@ -1360,12 +1368,44 @@ def exp_03_07_engine_arch(post_process=False):
                 problems.append(algo_problem)
                 n_eval_max.append(n_eval_max_algo)
 
-        n_parallel = None if is_model else 3
+                n_parallel = None if is_model else 3
 
-        do_run = not post_process
-        exps = run(folder, problems, algorithms, algo_names, n_repeat=n_repeat, n_eval_max=n_eval_max,
-                   metrics=metrics, additional_plot=additional_plot, problem_name=name, do_run=do_run,
-                   return_exp=post_process, n_parallel=n_parallel, run_if_exists=False, do_plot=True)
+                do_run = not post_process
+                log.info(f'Running {algo_name}')
+                if algo_doe is not None:
+                    log.info(f'Using previous DOEs (naive = {naive})')
+                exps_ = run(folder, problems, algorithms, algo_names, doe=algo_doe, n_repeat=n_repeat,
+                            n_eval_max=n_eval_max, metrics=metrics, additional_plot=additional_plot, problem_name=name,
+                            do_run=do_run, return_exp=post_process, n_parallel=n_parallel, run_if_exists=False,
+                            do_plot=False)
+
+                all_problems += problems
+                all_algorithms += algorithms
+                all_algo_names += algo_names
+
+                assert len(exps_) == 1
+                if naive not in doe_multi_reuse:
+                    doe_multi_reuse[naive] = {i: res.pop[:n_init].copy()
+                                              for i, res in enumerate(exps_[0].get_effectiveness_results())}
+
+        exps = run(folder, all_problems, all_algorithms, all_algo_names, n_repeat=n_repeat,
+                    metrics=metrics, additional_plot=additional_plot, problem_name=name,
+                    do_run=False, return_exp=False, run_if_exists=False, do_plot=True)
+
+        if problem.n_obj == 1:
+            pf = problem.pareto_front()[0, 0]
+            print(f'Optimum: {pf:.3f}')
+
+            f_ref = regret_ref = None
+            for exp in exps:
+                eff_res = exp.get_effectiveness_results()
+                f = np.median([res.F[0] for res in eff_res])
+                regret = np.median([res.metrics['delta_hv'].values['abs_regret'][-1] for res in eff_res])
+                print(f'Mean f: {f:.3f}; regret {regret:.3f} ({exp.algorithm_name})')
+                if f_ref is None:
+                    f_ref, regret_ref = f, regret
+                else:
+                    print(f'        {100*(f-f_ref)/f_ref:+.3f}%; regret {100*(regret-regret_ref)/regret_ref:.1f}%')
 
         for exp in exps:
             eff_res = exp.get_effectiveness_results()
@@ -1381,10 +1421,6 @@ def exp_03_07_engine_arch(post_process=False):
                                              save_filename=exp.get_problem_algo_results_path('pf'))
                 metric.plot_obj_progress(
                     f_pf_known=f_pf_known, save_filename=exp.get_problem_algo_results_path(f'pf_{i_res}'), show=False)
-
-            if problem.n_obj == 1:
-                f = [res.F[0] for res in eff_res]
-                print(f'Mean f: {np.mean(f):.2f} ({exp.algorithm_name})')
 
         df_prob = _agg_prob_exp(problem, problem_path, exps, add_cols_callback=prob_add_cols)
 
@@ -1435,4 +1471,4 @@ if __name__ == '__main__':
     # exp_03_05_optimization()
     # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    exp_03_07_engine_arch(post_process=True)
+    exp_03_07_engine_arch(post_process=False)
