@@ -1,5 +1,3 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4964341.svg)](https://doi.org/10.5281/zenodo.4964341)
-
 # Architecture Optimization Experiments
 
 Code for experimenting with algorithms for system architecture optimization. System architectures describe how system
@@ -10,72 +8,38 @@ For an overview of and practical implementation of architecture optimization, re
 [SBArchOpt](https://github.com/jbussemaker/SBArchOpt).
 
 This repository aims to create a reproducible set of experiments to help explain the salient features of architecture
-optimization, and investigate effectiveness and efficiency of optimization algorithms. Effectiveness represents how
-well an algorithm is able to find a Pareto front (e.g. how close it is to some pre-known Pareto front, and how well
-spread it is along this front). Efficiency represents the trade-off between effectiveness and number of function
-evaluations (i.e. system simulations) needed to get to a certain result quality.
+optimization, and investigate effectiveness and efficiency of optimization algorithms.
 
 Optimization is done using the [SBArchOpt](https://github.com/jbussemaker/SBArchOpt), which under the hood uses
 [pymoo](https://pymoo.org/) (multi-objective optimization in python) framework. This framework includes many
 multi-objective evolutionary algorithms..
 
-## Citing
+## Reproducibility
 
-For the accompanying paper, please refer to:
-[Effectiveness of Surrogate-Based Optimization Algorithms for System Architecture Optimization](https://arc.aiaa.org/doi/10.2514/6.2021-3095)
+This version of the repository was used to generate results for two papers.
+Here, we list which results were generated with which experiment function.
+Experiment files are found in the `arch_opt_exp.experiments` module.
 
-Please cite this paper if you are using this code in your work.
+Note: `sbo=x` refers to `sbo=False` for the NSGA-II results and `sbo=True` for the BO results.
+
+### Paper 1: Bussemaker, J.H., et al., "System Architecture Optimization Strategies: Dealing with Expensive Hierarchical Problems", 2024.
+
+1. Hierarchical sampling (Tables 10 and 11): `exp_01_sampling.exp_01_05_correction(sampling=True, sbo=x)`
+2. Hierarchical correction (Tables 13 and 14): `exp_01_sampling.exp_01_05_correction(sampling=False, sbo=x)`
+3. Hierarchical integration strategies (Tables 17 and 18): `exp_02_hierarchy.exp_02_02_hier_strategies(sbo=x)`
+4. Jet engine application (Figures 7 and 9, Table 19): `exp_03_hidden_constraints.exp_03_07_engine_arch()`
+
+### Paper 2: Bussemaker, J.H., et al., "Surrogate-Based Optimization of System Architectures Subject to Hidden Constraints", AIAA Aviation Forum 2024.
+
+1. Example optimization steps (Figure 3): `exp_03_hidden_constraints.exp_03_04_simple_optimization()`
+2. Strategy performances (Tables 4 and 5): `exp_03_hidden_constraints.exp_03_05_optimization()`
+3. Detailed strategy configurations (Table 6 and Figure 4): `exp_03_hidden_constraints.exp_03_04a_doe_size_min_pov()`
+4. Jet engine application (Figure 5): `exp_03_hidden_constraints.exp_03_07_engine_arch()`
 
 ## Installing
 
 ```
-conda create --name opt python=3.9
+conda create --name opt python=3.9 numpy
 conda activate opt
-conda install numpy
 pip install -r requirements.txt
-```
-
-## Analytical Test Problems
-
-There are two main architecture benchmark problems. Both are based on the Goldstein problem, and include mixed-discrete
-and hierarchical design variables, and have two objectives. They are implemented in SBArchOpt.
-
-### Test Problem
-
-![Pareto front](resources/pf_an_prob.svg)
-
-Properties:
-- 2 objectives
-- 27 design variables
-  - 16 continuous
-  - 6 integer
-  - 5 categorical
-- ~42% of design variables are active in the initial DOE
-
-```python
-from sb_arch_opt.problems.hierarchical import MOHierarchicalTestProblem
-
-problem = MOHierarchicalTestProblem()
-problem.print_stats()
-
-# Run an optimization using NSGA2 to visualize the Pareto front
-problem.plot_pf()
-```
-
-### Test Problem with Hidden Constraints
-
-![Pareto front](resources/pf_an_prob_hc.svg)
-
-Properties:
-- Same as above
-- ~60% of evaluations failed in the initial DOE
-
-```python
-from sb_arch_opt.problems.hidden_constraints import HCMOHierarchicalTestProblem
-
-problem = HCMOHierarchicalTestProblem()
-problem.print_stats()
-
-# Run an optimization using NSGA2 to visualize the Pareto front
-problem.plot_pf()
 ```
