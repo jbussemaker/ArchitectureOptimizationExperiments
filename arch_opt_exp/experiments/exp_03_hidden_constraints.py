@@ -94,6 +94,7 @@ _test_problems = lambda: [
     (HierarchicalRosenbrockHC(), '11_HIER_G', 1, 'H/HC Rosenbr.'),
     # (MOHierMueller08(), '12_HIER_MO_HFR', 2, 'MO/H Müller 8'),
     (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 1, 'MO/H/HC Rbr.'),
+    (SimpleTurbofanArchModel(), '13_HIER_MO_G_HFR', 1, 'Jet SM'),
 ]
 
 
@@ -585,7 +586,7 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
     folder = set_results_folder(_exp_03_04a_folder)
     expected_fail_rate = .6
     k_doe_test = [2]
-    mul_test = [.75, 1, 1.25, 2]
+    mul_test = [1, 1.5, 2]
     min_pov_test = [.1, .25, .5, .75, .9, -1]
     n_infill = 50
     n_repeat = 16
@@ -595,9 +596,10 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
         (Mueller01(), '02_HFR', 'Müller 1'),
         (MDCarsideHC(), '09_MD_MO_G_HFR', 'MD/HC Carside'),
         (HierAlimo(), '10_HIER', 'H Alimo'),
-        (HierMueller02(), '10_HIER', 'H Müller 2'),
+        # (HierMueller02(), '10_HIER', 'H Müller 2'),
         (HierarchicalRosenbrockHC(), '11_HIER_G', 'H/HC Rbr.'),
         (MOHierarchicalRosenbrockHC(), '13_HIER_MO_G_HFR', 'MO/H/HC Rbr.'),
+        (SimpleTurbofanArchModel(), '13_HIER_MO_G_HFR', 'Jet SM'),
     ]
     # post_process = True
 
@@ -674,7 +676,8 @@ def exp_03_04a_doe_size_min_pov(post_process=False):
                          for strat in df_agg[(df_agg.cls != 'Predicted Worst') & (df_agg.min_pov == 'F')].strategy.unique()})
     cat_name_map = {key: val[1:].replace('& b$', '& $').replace('& a$', '& $')
                     for key, val in sorted(cat_name_map.items(), key=lambda v: v[1])}
-    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=15)
+    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=None, n_col_idx=['Strategy', 'Config'],
+              quant_perf_col='delta_hv_regret')
     plot_perf_rank(df_agg, 'strategy', save_path=f'{folder}/rank', **kw)
 
     df_agg_ = df_agg.copy()
@@ -784,7 +787,7 @@ def exp_03_05_optimization(post_process=False):
     folder = set_results_folder(_exp_03_05_folder)
     expected_fail_rate = .6
     n_infill = 50
-    n_repeat = 8
+    n_repeat = 16
 
     problems = _test_problems()
     problem_paths = []
@@ -1468,7 +1471,7 @@ if __name__ == '__main__':
     # exp_03_03_hc_predictors()
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
-    # exp_03_05_optimization()
-    # exp_03_04a_doe_size_min_pov()
+    exp_03_05_optimization()
+    exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    exp_03_07_engine_arch(post_process=False)
+    # exp_03_07_engine_arch(post_process=False)

@@ -350,7 +350,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
             if hide_ranks:
                 rank_columns = []
                 df_rank_latex = df_rank_latex.iloc[:, -n_col_counts:]
-        count_perf_columns = (list(count_columns) or []) + (list(perf_columns) or [])
+        # count_perf_columns = (list(count_columns) or []) + (list(perf_columns) or [])
 
         has_idx_name = False
         if not isinstance(n_col_idx, int):
@@ -426,6 +426,7 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
         df_rank.index = [val.replace('$', '') for val in df_rank.index]
         ax = sns.heatmap(df_rank, annot=True, fmt='.0f', linewidths=0, cmap=cmap, cbar=False)
         if df_cnts is not None:
+            df_cnts.index = [val.replace('$', '') for val in df_cnts.index]
             if df_perf is not None:
                 df_perf_heatmap = df_cnts.copy()
                 df_perf_heatmap.iloc[:, :-1] = np.nan
@@ -433,7 +434,6 @@ def plot_perf_rank(df: pd.DataFrame, cat_col: str, cat_name_map=None, idx_name_m
                             cbar=False, vmin=0, vmax=vmax_perf)
                 df_cnts.iloc[:, -1:] = np.nan
 
-            df_cnts.index = [val.replace('$', '') for val in df_cnts.index]
             sns.heatmap(df_cnts, annot=df_counts_an, fmt='s', linewidths=0, cmap=cmap_cnt,
                         cbar=False, vmin=0, vmax=100)
 
