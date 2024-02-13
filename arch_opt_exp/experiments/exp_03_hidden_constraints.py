@@ -1100,17 +1100,18 @@ def exp_03_07_engine_arch(post_process=False):
     # post_process = True
     folder = set_results_folder(_exp_03_07_folder)
     expected_fail_rate = .6
-    n_repeat = 16
+    n_repeat = 24
     shared_doe = False
 
     all_strategies: List[HiddenConstraintStrategy] = [
         PredictionHCStrategy(RandomForestClassifier(), min_pov=.25),
         PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
-    reduced_strategies: List[HiddenConstraintStrategy] = [
+    reduced_strategies: List[PredictionHCStrategy] = [
         PredictionHCStrategy(RandomForestClassifier(), min_pov=.25),
         # PredictionHCStrategy(MDGPRegressor(), min_pov=.25),
     ]
+    reduced_cls = reduced_strategies[0].predictor.__class__
     aggressive_strategies: List[HiddenConstraintStrategy] = [
         PredictionHCStrategy(MDGPRegressor(), min_pov=.1),
         PredictionHCStrategy(RandomForestClassifier(), min_pov=.1),
@@ -1120,8 +1121,8 @@ def exp_03_07_engine_arch(post_process=False):
         (SimpleTurbofanArch(), 300, 3, [
             # Gower (-1 = NSGA2), n_kpls (None = Hier GP; False = MD GP), naive, strategies
             # (False, None, False, reduced_strategies),  # EHH Hier GP
-            (True, None, False, reduced_strategies),  # Hier GP
             (True, False, False, all_strategies),  # MD GP
+            (True, None, False, reduced_strategies),  # Hier GP
             (True, False, True, reduced_strategies),  # Naive: repair
             # (True, False, 2, reduced_strategies),  # Naive: x out
             # (True, False, 3, reduced_strategies),  # Naive
@@ -1325,7 +1326,7 @@ def exp_03_07_engine_arch(post_process=False):
                     if naive:
                         algo_name += ' '+['Naive', 'Naive (mod x)', 'Naive (none)'][int(naive)-1]
 
-                    if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, RandomForestClassifier):
+                    if isinstance(strategy, PredictionHCStrategy) and isinstance(strategy.predictor, reduced_cls):
                         strategy.predictor._kpls_n_dim = kpls_n_dim
                         if use_gower:
                             if not naive:
@@ -1471,7 +1472,7 @@ if __name__ == '__main__':
     # exp_03_03_hc_predictors()
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
-    exp_03_05_optimization()
-    exp_03_04a_doe_size_min_pov()
+    # exp_03_05_optimization()
+    # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    # exp_03_07_engine_arch(post_process=False)
+    exp_03_07_engine_arch()
