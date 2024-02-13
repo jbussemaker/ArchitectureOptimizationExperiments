@@ -83,24 +83,34 @@ class PredictedWorstReplacement(ReplacementHCStrategyBase):
         norm[norm < 1e-6] = 1e-6
         y_norm = (y_valid - y_min) / norm
 
-        # Train MD Kriging surrogate model
-        kwargs = {}
-        if self._kpls_n_dim is not None and x_valid.shape[1] > self._kpls_n_dim:
-            kwargs['kpls_n_comp'] = self._kpls_n_dim
+        # Special case if there are not enough valid points
+        if y_valid.shape[0] <= 1:
+            if y_valid.shape[0] == 1:
+                y_replace = np.repeat(y_norm, repeats=x_failed.shape[0], axis=0)
+            else:
+                y_replace = np.zeros((x_failed.shape[0], y_valid.shape[1]))
 
-        model, normalization = ModelFactory(self._problem).get_md_kriging_model(
-            corr='abs_exp', theta0=[1e-2], ignore_hierarchy=self._ignore_hierarchy, **kwargs)
-        model.set_training_values(normalization.forward(x_valid), y_norm)
-        model.train()
+            y_replace += self.mul
 
-        # Predict values of failed points
-        y_predict = model.predict_values(normalization.forward(x_failed))
-        y_predict_var = model.predict_variances(normalization.forward(x_failed))
+        else:
+            # Train MD Kriging surrogate model
+            kwargs = {}
+            if self._kpls_n_dim is not None and x_valid.shape[1] > self._kpls_n_dim:
+                kwargs['kpls_n_comp'] = self._kpls_n_dim
 
-        # Replace failed points with mean + sigma*var of the prediction
-        y_replace = y_predict + self.mul * np.sqrt(y_predict_var)
+            model, normalization = ModelFactory(self._problem).get_md_kriging_model(
+                corr='abs_exp', theta0=[1e-2], ignore_hierarchy=self._ignore_hierarchy, **kwargs)
+            model.set_training_values(normalization.forward(x_valid), y_norm)
+            model.train()
+
+            # Predict values of failed points
+            y_predict = model.predict_values(normalization.forward(x_failed))
+            y_predict_var = model.predict_variances(normalization.forward(x_failed))
+
+            # Replace failed points with mean + sigma*var of the prediction
+            y_replace = y_predict + self.mul * np.sqrt(y_predict_var)
+
         y_replace = y_replace*norm + y_min
-
         return y_replace
 
     def get_replacement_strategy_name(self) -> str:
