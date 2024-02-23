@@ -869,7 +869,7 @@ def exp_03_05_optimization(post_process=False):
     plot_problem_bars(df_agg, folder, 'pw_strat', 'fail_ratio')
 
     cat_name_map = {str(strat): title for strat, title in _strategies}
-    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=10)
+    kw = dict(idx_name_map=p_name_map, cat_name_map=cat_name_map, n_col_split=11)
     plot_perf_rank(df_agg, 'strat_name', save_path=f'{folder}/rank', **kw)
     plot_perf_rank(df_agg[df_agg.strategy == 'replacement'], 'strat_name', save_path=f'{folder}/rank_replace', **kw)
     plot_perf_rank(df_agg[df_agg.strategy == 'prediction'],
@@ -1334,7 +1334,7 @@ def exp_03_07_engine_arch(post_process=False):
                                 if kpls_n_dim is not None:
                                     md_gp_gower_algo_name_map[algo_name] = f'$n_{{kpls}} = {kpls_n_dim}$'
                                 else:
-                                    md_gp_gower_algo_name_map[algo_name] = 'Hier. sampl.' if md_gp else 'Activeness'
+                                    md_gp_gower_algo_name_map[algo_name] = 'Hierarchical sampling' if md_gp else 'Activeness'
                                     if not md_gp:
                                         i_hier_gp = len(all_algo_names)
                             if kpls_n_dim is None:
@@ -1348,7 +1348,7 @@ def exp_03_07_engine_arch(post_process=False):
                                     # md_gp_naive_algo_name_map[algo_name] = ['Naive (repair)', 'Naive (mod $x$)', 'Naive'][int(naive)-1]
                                 else:
                                     i_md_gp_naive.append(len(all_algo_names))
-                                    md_gp_naive_algo_name_map[algo_name] = 'Hier. sampl.' if md_gp else 'Activeness'
+                                    md_gp_naive_algo_name_map[algo_name] = 'Hierarchical sampling' if md_gp else 'Activeness'
                                     # md_gp_naive_algo_name_map[algo_name] = 'Hierarchical'
 
                     if len(strategies) > 1:
@@ -1473,6 +1473,6 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     # exp_03_05_optimization()
-    # exp_03_04a_doe_size_min_pov()
+    exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    exp_03_07_engine_arch()
+    # exp_03_07_engine_arch()
