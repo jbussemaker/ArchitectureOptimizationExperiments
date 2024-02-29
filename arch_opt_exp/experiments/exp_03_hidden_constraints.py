@@ -1443,7 +1443,7 @@ def exp_03_07_engine_arch(post_process=False):
         if len(exps_md_gp_gower) > 0:
             plot_for_pub_sb(exps_md_gp_gower, met_plot_map={
                 'delta_hv': ['delta_hv'],
-            }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower', zoom=True)
+            }, algo_name_map=md_gp_gower_algo_name_map, prefix='md_gp_gower', zoom=True, y_log=1e-3)
 
         exps_md_gp_naive = [exp for i_exp, exp in enumerate(exps) if i_exp in i_md_gp_naive]
         if len(exps_md_gp_naive) > 0:
@@ -1455,7 +1455,7 @@ def exp_03_07_engine_arch(post_process=False):
         if len(exps_hc_strat) > 0:
             plot_for_pub_sb(exps_hc_strat, met_plot_map={
                 'delta_hv': ['delta_hv'],
-            }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat', zoom=True)
+            }, algo_name_map=hc_strat_algo_name_map, prefix='hc_strat', zoom=True, y_log=1e-3)
 
         plt.close('all')
 
@@ -1473,6 +1473,6 @@ if __name__ == '__main__':
     # exp_03_03a_knn_predictor()
     # exp_03_04_simple_optimization()
     # exp_03_05_optimization()
-    exp_03_04a_doe_size_min_pov()
+    # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    # exp_03_07_engine_arch()
+    exp_03_07_engine_arch()

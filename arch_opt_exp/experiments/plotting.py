@@ -250,7 +250,8 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_l
                     ax.set(xlabel='Infill points', ylabel=metric_name)
                     ax.legend().set_title('')
                     if y_log:
-                        ax.set(yscale='log')
+                        ax.set_yscale('symlog', linthresh=1e-3 if y_log is True else y_log)
+                        # ax.set(yscale='symlog', linthresh=1e-4)
                     if do_zoom:
                         min_val, max_val = np.min(y_end), np.max(y_end)
                         mean_val = .5*(min_val+max_val)
