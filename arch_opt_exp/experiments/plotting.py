@@ -203,7 +203,8 @@ def plot_for_pub(exps, met_plot_map, algo_name_map=None, colors=None, styles=Non
             plot_callback=_plot_callback, save_svg=True, colors=colors, styles=styles, show=False)
 
 
-def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_log=False, palette=None, zoom=False):
+def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_log=False, palette=None, zoom=False,
+                    vary_style=False):
     if algo_name_map is None:
         algo_name_map = {}
 
@@ -245,12 +246,18 @@ def plot_for_pub_sb(exps, met_plot_map, algo_name_map=None, prefix='pub_sb', y_l
                     if palette is None:
                         palette = sns.color_palette('mako', n_colors=len(cols))
                     plt.figure(figsize=(5, 3))
+                    kw = {}
+                    if vary_style:
+                        kw['style'] = 'algo'
                     ax = sns.lineplot(data=df, estimator=lambda s: s.iloc[0], errorbar=lambda s: (s.iloc[1], s.iloc[2]),
-                                      palette=palette, sort=False, x='n_eval', y='y', hue='algo')
+                                      palette=palette, sort=False, x='n_eval', y='y', hue='algo', **kw)
                     ax.set(xlabel='Infill points', ylabel=metric_name)
                     ax.legend().set_title('')
                     if y_log:
-                        ax.set_yscale('symlog', linthresh=1e-3 if y_log is True else y_log)
+                        if np.any(df['y'] <= 0):
+                            ax.set_yscale('symlog', linthresh=1e-3 if y_log is True else y_log)
+                        else:
+                            ax.set_yscale('log')
                         # ax.set(yscale='symlog', linthresh=1e-4)
                     if do_zoom:
                         min_val, max_val = np.min(y_end), np.max(y_end)
