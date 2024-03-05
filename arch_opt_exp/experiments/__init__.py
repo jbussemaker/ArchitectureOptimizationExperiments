@@ -1,1 +1,1 @@
-N_PARALLEL = None
+N_PARALLEL = 8
