@@ -1121,8 +1121,9 @@ def exp_03_07_engine_arch(post_process=False):
         (SimpleTurbofanArch(), 300, 3, [
             # Gower (-1 = NSGA2), n_kpls (None = Hier GP; False = MD GP), naive, strategies
             # (False, None, False, reduced_strategies),  # EHH Hier GP
+            (True, None, False, reduced_strategies),  # Hier GP  !!!! ENABLE FOR PLOTTING !!!!
             (True, False, False, all_strategies),  # MD GP
-            (True, None, False, reduced_strategies),  # Hier GP
+            # (True, None, False, reduced_strategies),  # Hier GP  !!!! ENABLE FOR OBTAINING RESULTS !!!!
             (True, False, True, reduced_strategies),  # Naive: repair
             # (True, False, 2, reduced_strategies),  # Naive: x out
             # (True, False, 3, reduced_strategies),  # Naive
@@ -1475,4 +1476,4 @@ if __name__ == '__main__':
     # exp_03_05_optimization()
     # exp_03_04a_doe_size_min_pov()
     # exp_03_06_engine_arch_surrogate()
-    exp_03_07_engine_arch()
+    exp_03_07_engine_arch(post_process=True)
